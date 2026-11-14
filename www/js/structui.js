@@ -9,7 +9,8 @@ var SU = (function () {
     crack: true, pcCol: 2, pcBeam: 1, kcol: 1.2,
     ff: 1.5, ll: 3, ffRoof: 2.5, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0,
     eq: true, zone: "V", I: 1.2, R: 5, soil: "II", sys: "rc", wind: false, vbp: "Srinagar", terrain: 2, cf: 1.3, trib: 4,
-    pdir: 0, ppat: "parabolic", pdrift: 4, ppd: true, pev: 80, secOver: "", loadOver: ""
+    pdir: 0, ppat: "parabolic", pdrift: 4, ppd: true, pev: 80, secOver: "", loadOver: "",
+    accTor: true, rsa: true, nModes: 12, rsComb: "cqc", ortho: false, rsScaleDisp: false
   };
   /* defaults that depend on the frame material */
   var MATDEF = { rcc: { colSec: "400x400", beamSec: "300x450", sys: "rc" }, steel: { colSec: "ISMB 300", beamSec: "ISMB 250", sys: "steel" } };
@@ -58,6 +59,7 @@ var SU = (function () {
     p.vb = D.vb[P.vbp] || 39; p.terrain = +P.terrain; p.pdir = +P.pdir; p.zone = String(P.zone); p.soil = String(P.soil); p.I = +P.I; p.R = +P.R;
     p.fck = +P.fck; p.fy = +P.fy; p.fys = +P.fys; p.mesh = P.mesh > 0 ? P.mesh : 1; p.dmesh = P.dmesh > 0 ? P.dmesh : 1;
     p.entered = Object.keys(DEF).filter(given);
+    p.rsa = !!(P.rsa && P.eq); p.nModes = Math.max(1, Math.round(P.nModes > 0 ? P.nModes : 12)); p.accTor = !!(P.accTor && P.eq);
     return p;
   }
 
@@ -148,6 +150,10 @@ var SU = (function () {
       chk("eq", "Seismic — IS 1893 (Part 1):2016 equivalent static") + sel("zone", "Seismic zone", [["II", "II (0.10)"], ["III", "III (0.16)"], ["IV", "IV (0.24)"], ["V", "V (0.36) — Kashmir valley"]]) +
       sel("I", "Importance factor I", [[1, "1.0 ordinary"], [1.2, "1.2 important / offices >200"], [1.5, "1.5 critical"]]) + sel("R", "Response reduction R", [[3, "3 OMRF"], [4, "4 braced steel"], [5, "5 SMRF / ductile"], [4.5, "4.5 dual (walls)"]]) +
       sel("soil", "Soil type", [["I", "I rock/hard"], ["II", "II medium"], ["III", "III soft"]]) + sel("sys", "Period formula", [["rc", "RC MRF 0.075h^0.75"], ["steel", "Steel MRF 0.085h^0.75"], ["other", "With infill/walls 0.09h/√d"]]) +
+      chk("accTor", "Accidental torsion, design eccentricity 1.5esi ± 0.05bi (cl 7.8.2, 3D models)") +
+      chk("rsa", "Modal & response spectrum analysis (cl 7.7)") + num("nModes", "Number of modes", "", "cl 7.7.5.2: enough for ≥ 90 % mass participation") +
+      sel("rsComb", "Modal combination", [["cqc", "CQC, 5 % damping (cl 7.7.5.4)"], ["srss", "SRSS"]]) + chk("ortho", "Orthogonal effects 100 % + 30 % (cl 6.3.4.2)") +
+      chk("rsScaleDisp", "Also scale spectrum displacements to the static base shear (off = IS 1893 Amendment 2, cl 7.7.3.2)") +
       chk("wind", "Wind — IS 875 (Part 3):2015") + sel("vbp", "Basic wind speed", Object.keys(D.vb).filter(function (k) { return k !== "Custom"; }).map(function (k) { return [k, k + " — " + D.vb[k] + " m/s"]; })) +
       sel("terrain", "Terrain category", [[1, "1 open sea/flat"], [2, "2 open terrain"], [3, "3 suburban"], [4, "4 city centre"]]) + num("cf", "Net force coefficient Cf") + num("trib", "Frame spacing (2D only)", "m") +
       '<div class="btns full"><button type="button" class="rstd" data-p="p3">Clear my entries (use defaults)</button></div><div class="note full">Combinations (IS 456 Table 18 / IS 875 Pt 5): 1.5(DL+LL), 1.2(DL+LL±EL), 1.5(DL±EL), 0.9DL±1.5EL. Seismic weight = DL + 25% LL (50% if LL>3 kN/m²), roof LL excluded. Lateral loads to nodes ∝ W·h² (cl 7.6.3).</div></div>';
@@ -210,16 +216,29 @@ var SU = (function () {
     var p = params(); S.p = p; MD._pm = {};
     S.m = MD.make(S.geo, p);
     busy("Assembling stiffness matrix and solving…");
-    setTimeout(function () {
-      try {
-        var t0 = Date.now();
+    var t0 = Date.now(), steps = [
+      ["Solving load cases and combinations…", function () {
         S.L = MD.cases(S.m, p); S.cb = MD.combos(S.L.cases, p.method);
-        S.res = FE.linear(S.m, S.L.cases, S.cb, { pdelta: pd }); S.res.pd = pd; S.res.ms = Date.now() - t0; S.res.incMap = {}; S.cb.forEach(function (c) { S.res.incMap[c.name] = c.inc || 1; });
-        S.des = MD.design(S.m, S.res, p); S.drift = MD.drift(S.m, S.res); S.po = null;
+        S.res = FE.linear(S.m, S.L.cases, S.cb, { pdelta: pd, caseReac: true }); S.res.pd = pd; S.res.incMap = {}; S.cb.forEach(function (c) { S.res.incMap[c.name] = c.inc || 1; });
+        S.se = null;
+      }],
+      [p.rsa ? "Modal analysis and response spectrum…" : "Seismic checks…", function () {
+        if (!p.eq) return;
+        S.se = SE.run(S.m, S, p);
+        S.se.irr = SE.irregular(S.m, S, S.se); S.se.tc = SE.torsionCheck(S.m, S, S.se);
+        if (S.se.md) { var low = S.se.md.modes.length; ["X", "Y"].forEach(function (D0, d) { var rs = S.se.rs[d]; if (rs && rs.cum < 0.9) S.res.warn.push("Modal mass participation in " + D0 + " is " + (rs.cum * 100).toFixed(1) + " % with " + low + " modes — IS 1893 cl 7.7.5.2 requires ≥ 90 %: increase the number of modes."); }); }
+      }],
+      ["Designing members (" + "IS 456 / IS 800)…", function () {
+        S.res.ms = Date.now() - t0;
+        S.des = MD.design(S.m, S.res, p); S.drift = MD.drift(S.m, S.res).concat(S.se && S.se.drift ? S.se.drift : []); S.po = null;
         S.state = S.cb[0].name; S.disp = "def"; S.sel = null;
         drawViewer(); renderResults(); status(); $("viewer").scrollIntoView({ behavior: "smooth" });
-      } catch (e) { err(e); $("results").innerHTML = ""; }
-    }, 30);
+      }]];
+    (function next(i) {
+      if (i >= steps.length) return;
+      busy(steps[i][0]);
+      setTimeout(function () { try { steps[i][1](); next(i + 1); } catch (e) { err(e); $("results").innerHTML = ""; } }, 30);
+    })(0);
   }
   function runPushover() {
     grab(document.getElementById("app"));
@@ -260,6 +279,8 @@ var SU = (function () {
   /* ---------- state (case / combo) ---------- */
   function stateOf(name) {
     var r = S.res; if (!r) return null;
+    var mm = /^Mode (\d+)/.exec(name);
+    if (mm && S.se && S.se.md) { var mo = S.se.md.modes[+mm[1] - 1]; if (mo) { var fc = []; return { U: mo.U, fr: function (k) { return fc[k] || (fc[k] = FE.frameForces(S.m, k, mo.U, null, 0)); }, sh: function (k) { return FE.shellForces(S.m, k, mo.U); } }; } }
     var cb = r.combos.filter(function (c) { return c.name === name; })[0];
     if (cb) return { U: cb.U, fr: function (k) { return cb.fr[k]; }, sh: function (k) { return cb.sh[k]; }, reac: cb.reac };
     var c = r.cases[name]; if (!c) return null;
@@ -275,6 +296,7 @@ var SU = (function () {
     if (S.po) opts.push(["hinge", "Pushover hinges & deformed"]);
     if (!opts.some(function (o) { return o[0] === S.disp; })) S.disp = S.res ? "def" : S.po ? "hinge" : "model";
     var states = S.res ? Object.keys(S.res.cases).concat(S.cb.map(function (c) { return c.name; })) : [];
+    if (S.res && S.se && S.se.md) states = states.concat(S.se.md.modes.map(function (mo) { return "Mode " + mo.k + " (T = " + mo.T.toFixed(3) + " s, " + mo.kind + ")"; }));
     var h = '<div class="rep viewer"><div class="vbar"><select id="vDisp">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === S.disp ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>' +
       (states.length ? '<select id="vState">' + states.map(function (s) { return '<option' + (s === S.state ? " selected" : "") + '>' + esc(s) + '</option>'; }).join("") + '</select>' : '') +
       '<button type="button" id="vFit" title="Reset view">⟲</button><button type="button" id="vTop" title="Plan">Plan</button><button type="button" id="vFront" title="Elevation">Elev</button></div>' +
@@ -494,6 +516,7 @@ var SU = (function () {
       if (r.warn && r.warn.length) h += '<div class="note"><b>Model warnings:</b> ' + r.warn.map(esc).join("<br>") + '</div>';
       Object.keys(S.L.eq).forEach(function (k) { var q = S.L.eq[k]; h += '<div class="eq">' + k + ': h = ' + f(q.H, 2) + ' m, d = ' + f(q.d, 1) + ' m, Ta = ' + f(q.T, 3) + ' s, Sa/g = ' + f(q.Sa, 3) + ', Ah = Z/2 · Sa/g / (R/I) = ' + f(q.Ah, 4) + (q.Ahd > q.Ah ? ' → min ' + f(q.Ahd, 4) + ' (Table 7)' : '') + ', W = ' + f(q.W, 0) + ' kN, <b>Vb = ' + f(q.Vb, 1) + ' kN</b></div>'; });
       Object.keys(S.L.wind).forEach(function (k) { var q = S.L.wind[k]; h += '<div class="eq">' + k + ': exposed width ' + f(q.B, 1) + ' m, total wind force ' + f(q.F, 1) + ' kN (pd = 0.7·pz min, Cf ' + S.p.cf + ')</div>'; });
+      if (S.se) h += seismicBlock();
       if (S.drift.length) h += '<h4>Storey drift at corresponding locations (unfactored lateral load, IS 1893 cl 7.11.1, limit 0.004h)</h4>' + tbl(["Case", "Storey (z, m)", "Governing nodes (top/bottom)", "Δu (mm)", "Drift Δu/h", "Δmax/Δave floor", ""], S.drift.map(function (d) { return [d.c, f(d.zb, 2) + "–" + f(d.z, 2), (d.top + 1) + " / " + (d.bot + 1) + (d.stacked ? "" : " (nearest)"), f(Math.abs(d.ut - d.ub) * 1000, 2), f(d.dr, 5), m.twoD ? "—" : f(d.tr, 2), d.lim ? (d.ok ? '<span class="okt">OK</span>' : '<span class="not">EXCEEDS</span>') : '']; })) +
         '<div class="note">Drift = relative lateral displacement of the node at the top of a storey and the node directly below it, ÷ storey height; the largest value on each storey is shown. ' + (m.twoD ? '' : 'Δmax/Δave = largest ÷ average of the extreme floor displacements — an indicator for torsional irregularity (IS 1893 (Part 1):2016 Table 5 (i); Amendment 2 (2020) uses Δmax/Δave with 1.2 and 1.4 thresholds) computed without accidental eccentricity; values above 1.2 need review.') + '</div>';
       h += designTables() + basisBlock();
@@ -531,8 +554,30 @@ var SU = (function () {
     });
     return h;
   }
+  function seismicBlock() {
+    var se = S.se, h = "", m = S.m;
+    if (se.md) {
+      var md = se.md, cx = 0, cy = 0, cr = 0;
+      h += '<h4>Modal analysis (' + md.modes.length + ' modes, subspace iteration ' + (md.conv ? 'converged in ' + md.iter + ' iterations' : 'NOT converged') + ')</h4>' +
+        tbl(["Mode", "T (s)", "f (Hz)", "Type", "Mass X %", "Mass Y %", "Torsion %", "Σ X %", "Σ Y %"], md.modes.map(function (mo) { cx += mo.pct[0]; cy += mo.pct[1] || 0; return [mo.k, f(mo.T, 3), f(mo.f, 2), mo.kind, f(mo.pct[0] * 100, 1), m.twoD ? "—" : f(mo.pct[1] * 100, 1), m.twoD ? "—" : f(mo.pctR * 100, 1), f(cx * 100, 1), m.twoD ? "—" : f(cy * 100, 1)]; }));
+      var first2 = md.modes.slice(0, 2).map(function (mo) { return mo.kind; });
+      if (!m.twoD) h += '<div class="note">First two modes: ' + first2.join(", ") + (first2.indexOf("Torsion") >= 0 ? ' — <b>a torsional mode is among the first two</b>; IS 1893 Table 5 (i) requires the configuration to be revised so that the first two modes are translational where torsional irregularity exists.' : ' — translational (preferred).') + ' Tap a mode in the viewer list to see its shape.</div>';
+      h += '<h4>Response spectrum analysis (cl 7.7, ' + (se.rs[0].meth === "cqc" ? "CQC, ζ = 5 %" : "SRSS") + ')</h4>' +
+        tbl(["Direction", "Vb dynamic (kN)", "Vb static (kN)", "Scale factor", "Σ mass participation", "Displacements"], Object.keys(se.rs).map(function (d) { var r = se.rs[d]; return ["RS" + (+d ? "Y" : "X"), f(r.Vb, 1), f(r.VbS, 1), f(r.scale, 3), '<span class="' + (r.cum >= 0.9 ? "okt" : "not") + '">' + f(r.cum * 100, 1) + ' %</span>', r.sD > 1 ? "scaled" : "unscaled"]; })) +
+        '<div class="note">Ak = (Z/2)(Sa/g)/(R/I) for each mode; modal responses combined by ' + (se.rs[0].meth === "cqc" ? "CQC (cl 7.7.5.4)" : "SRSS") + '. When the dynamic base shear is below the static Vb (Ta formula), member forces are scaled up by Vb/VBd (cl 7.7.3); ' + (S.p.rsScaleDisp ? "displacements are scaled as well." : "displacements are not scaled (Amendment 2, cl 7.7.3.2).") + (S.p.accTor && !m.twoD ? " Accidental torsion torques are added as absolute responses." : "") + (S.p.ortho ? " Orthogonal effects: 100 % + 30 % of the other direction." : "") + ' Response-spectrum combinations are added to the design: ' + S.cb.filter(function (c) { return c.rs; }).map(function (c) { return c.name; }).join(", ") + '.</div>';
+    }
+    if (!m.twoD && se.floors && se.floors.length && se.floors[0].cr) {
+      h += '<h4>Centre of mass, centre of rigidity and design eccentricity (cl 7.8.2)</h4>' + tbl(["Floor z (m)", "W (kN)", "CM x, y (m)", "CR x, y (m)", "esi x, y (m)", "b x, y (m)"], se.floors.map(function (fl) { return [f(fl.z, 2), f(fl.W, 0), f(fl.cm.x, 2) + ", " + f(fl.cm.y, 2), fl.cr ? f(fl.cr.x, 2) + ", " + f(fl.cr.y, 2) : "-", f(fl.esx || 0, 3) + ", " + f(fl.esy || 0, 3), f(fl.bx, 2) + ", " + f(fl.by, 2)]; }));
+      if (S.L.tor) h += '<div class="note">Static method: torques Qi·(0.5esi + 0.05bi) and Qi·(−0.05bi) are applied as load cases TXa/TXb, TYa/TYb and combined with EQX/EQY, so the design eccentricities 1.5esi + 0.05bi and esi − 0.05bi are covered (the 3D model already carries esi).</div>';
+    }
+    if (se.tc && se.tc.length) h += '<h4>Torsional irregularity — IS 1893 Table 5 (i)</h4>' + tbl(["Floor z", "Dir", "Δmax/Δave", "Amendment 2 (2020)", "Δmax/Δmin", "2016 as published"], se.tc.map(function (r) { return [f(r.z, 2), r.dir, f(r.ave, 3), r.amd2, isFinite(r.min) ? f(r.min, 2) : "∞", r.orig]; })) +
+      '<div class="note">Δ = lateral displacement of the floor extremes under the equivalent static load including accidental eccentricity. The thresholds differ between IS 1893 (Part 1):2016 as published (Δmax/Δmin: 1.5, 2.0) and Amendment 2 (Δmax/Δave: 1.2, 1.4) — apply the edition in force.</div>';
+    if (se.irr && se.irr.length) h += '<h4>Vertical irregularity — IS 1893:2016 Table 6</h4>' + tbl(["Dir", "Floor z", "W (kN)", "Storey shear (kN)", "Storey stiffness (kN/m)", "k / k above", "Soft storey", "W / W below", "Mass irregular"], se.irr.map(function (r) { return [r.dir, f(r.z, 2), f(r.W, 0), f(r.V, 1), isFinite(r.k) ? f(r.k, 0) : "∞", r.kr === null ? "—" : f(r.kr, 2), r.kr === null ? "—" : (r.soft ? '<span class="not">yes</span>' : '<span class="okt">no</span>'), r.wr === null ? "—" : f(r.wr, 2), r.wr === null ? "—" : (r.mass ? '<span class="not">yes</span>' : '<span class="okt">no</span>')]; })) +
+      '<div class="note">Storey stiffness = storey shear ÷ inter-storey drift at the centre of mass (static EQ). IS 1893:2016 Table 6: soft storey if lateral stiffness is less than that of the storey above; mass irregularity if seismic weight exceeds 150 % of the floor below. In Zones III–V such buildings need dynamic analysis (Amendment 2).</div>';
+    return h;
+  }
   function basisBlock() {
-    var d = S.des, has = function (g) { g = g.replace(/RCC beams/, "beams"); return /Loads|Serviceability/.test(g) || (/beams/.test(g) && d.beams.length) || (/columns/.test(g) && d.cols.length) || (/Slabs/.test(g) && (d.slabs.length || d.walls.length)) || (/steel/.test(g) && d.steel.length); };
+    var d = S.des, has = function (g) { g = g.replace(/RCC beams/, "beams"); return /Loads|Serviceability/.test(g) || (/Dynamic/.test(g) && S.se && S.se.md) || (/beams/.test(g) && d.beams.length) || (/columns/.test(g) && d.cols.length) || (/Slabs/.test(g) && (d.slabs.length || d.walls.length)) || (/steel/.test(g) && d.steel.length); };
     var W = S.p.method === "wsm";
     var h = '<h4>Design basis — ' + (W ? 'working stress method' : 'limit state method') + ': equations and IS code limits used</h4>' + CALC.basisHtml(esc, has, W);
     h += '<h4>Worked calculations — most critical member of each type</h4>';

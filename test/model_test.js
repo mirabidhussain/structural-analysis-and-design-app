@@ -12,7 +12,7 @@ const res=FE.linear(m,L.cases,cb,{}); console.log('neq',res.info.neq,'sky',res.i
 let Rz=0; Object.values(res.combos[0].reac).forEach(r=>Rz+=r[2]);
 const Fz=-1.5*(Array.from(res.cases.DL.lv.Ffull).filter((v,i)=>i%6==2).reduce((a,b)=>a+b,0)+Array.from(res.cases.LL.lv.Ffull).filter((v,i)=>i%6==2).reduce((a,b)=>a+b,0));
 chk('Gravity equilibrium sum Rz = applied',Math.abs(Rz-Fz)<1e-6*Fz,Rz.toFixed(2)+' vs '+Fz.toFixed(2));
-let Rx=0; const eqc=res.combos.find(c=>c.name==='1.5(DL+EQX)'); Object.values(eqc.reac).forEach(r=>Rx+=r[0]);
+let Rx=0; const eqc=res.combos.find(c=>c.name.startsWith('1.5(DL+EQX')); Object.values(eqc.reac).forEach(r=>Rx+=r[0]);
 chk('Base shear reaction = -1.5Vb',Math.abs(Rx+1.5*L.eq.EQX.Vb)<1e-6*L.eq.EQX.Vb,Rx.toFixed(2)+' vs '+(-1.5*L.eq.EQX.Vb).toFixed(2));
 const des=MD.design(m,res,p); console.log('fails',des.fails,'beams',des.beams.length,'cols',des.cols.length,'slabs',des.slabs.length);
 console.log(des.beams.slice(0,2).map(b=>JSON.stringify({Ms:b.Ms.toFixed(1),Mh:b.Mh.toFixed(1),V:b.V.toFixed(1),Ab:b.Ab|0,At:b.At|0,sv:b.sv,ok:b.ok,msg:b.msg})).join('\n'));

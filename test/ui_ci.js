@@ -21,6 +21,11 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   await pg.evaluate(() => { location.hash = '#model'; }); await pg.waitForTimeout(300);
   await pg.click('#bAna'); await pg.waitForSelector('#results .rh', { timeout: 60000 });
   ok('Frame & FE analysis (linear) runs on the default 3D model', await pg.$('#results table.basis') !== null);
+  const seis = await pg.evaluate(() => { const h = [...document.querySelectorAll('#results h4')].map(x => x.textContent); return { modal: h.some(t => /Modal analysis/.test(t)), rs: h.some(t => /Response spectrum/.test(t)), cr: h.some(t => /Centre of mass/.test(t)), irr: h.some(t => /Vertical irregularity/.test(t)), modes: [...document.querySelectorAll('#vState option')].filter(o => /^Mode /.test(o.textContent)).length }; });
+  ok('Seismic results: modal, response spectrum, CM/CR, irregularity', seis.modal && seis.rs && seis.cr && seis.irr, JSON.stringify(seis));
+  const modeOpt = await pg.evaluate(() => [...document.querySelectorAll('#vState option')].find(o => /^Mode 1/.test(o.textContent)).textContent);
+  await pg.selectOption('#vDisp', 'def'); await pg.selectOption('#vState', modeOpt); await pg.waitForTimeout(200);
+  ok('Mode shape can be displayed', /Max displacement/.test(await pg.textContent('#leg')), modeOpt);
   const [dl] = await Promise.all([pg.waitForEvent('download', { timeout: 60000 }), pg.click('#results .bXls')]);
   ok('Excel export downloads an .xlsx', /\.xlsx$/.test(dl.suggestedFilename()), dl.suggestedFilename());
   await pg.click('#p2 > h3'); await pg.selectOption('[data-k=method]', 'wsm');

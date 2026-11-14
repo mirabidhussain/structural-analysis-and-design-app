@@ -266,7 +266,7 @@ RCC.colMcap = function (b, Dd, As, Pu, fck, fy, dc, arr) {
   var lo = 0.01 * Dd, hi = 50 * Dd;
   var Pmax = RCC.colPM(b, Dd, lay, hi, fck, fy).P;
   if (Pu > Pmax) return 0;
-  for (var k = 0; k < 80; k++) {
+  for (var k = 0; k < 80 && hi - lo > 1e-5 * Dd; k++) {   /* bisection on the neutral-axis depth (≈ 23 steps) */
     var mid = (lo + hi) / 2, pm = RCC.colPM(b, Dd, lay, mid, fck, fy);
     if (pm.P > Pu) hi = mid; else lo = mid;
   }

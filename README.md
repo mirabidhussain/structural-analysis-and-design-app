@@ -41,21 +41,29 @@ Home → **Frame & FE analysis**.
 - `dist/index.html` - single-file version (open in any browser).
 - `test/` - Node tests: `node test/verify.js` (20 checks against code tables and statics), `node test/smoke.js`.
 
+## Earthquake analysis (v2.7) — IS 1893 (Part 1):2016
+- **Modal analysis:** lumped masses from the seismic weight, subspace iteration on the factored stiffness; periods, frequencies, mass participation in X, Y and torsion, mode type; mode shapes in the 3D viewer.
+- **Response spectrum (cl 7.7):** Ak = (Z/2)(Sa/g)/(R/I) per mode, CQC (5 % damping) or SRSS, scaling to the static base shear (forces; displacements per Amendment 2 cl 7.7.3.2 unless chosen), optional 100 % + 30 % orthogonal effects, ≥ 90 % mass-participation check. RS combinations (1.2(DL+LL±RS), 1.5(DL±RS), 0.9DL±1.5RS, or the WSM set) go into member design.
+- **Accidental torsion (cl 7.8.2):** centre of mass and centre of rigidity of every floor; extra torques giving design eccentricities 1.5esi + 0.05bi and esi − 0.05bi, combined with EQX/EQY.
+- **Irregularity indicators:** torsional (Table 5 (i), both the 2016 text and Amendment 2 thresholds), soft storey and mass irregularity (Table 6, 2016 definitions), first-two-modes-translational check.
+- **Excel:** a Seismic sheet with live formulas for Sa/g, Ak, modal base shears, scale factor, eccentricities, torques and irregularity ratios.
+
 ## Verification & testing (v2.6)
 Run `npm test` (Node 18+) or let GitHub Actions run it on every push:
 - `test/fem_verify.js` — 16 closed-form checks (cantilever, fixed beam, portal sway, P-Delta amplification, SS & clamped plates, shear wall, truss).
 - `test/po_verify.js` — plastic collapse loads (portal 4Mp/h, propped cantilever 6Mp/L), P–M hinges, P-Delta equilibrium.
 - `test/model_test.js` — equilibrium of a 3D building, DXF import/export round trip.
 - `test/verify.js` — design-module checks against hand calculations.
-- `test/acceptance.js` — 61 acceptance and independent-benchmark checks:
+- `test/acceptance.js` — 79 acceptance and independent-benchmark checks:
   - design modules with **expected pass**, **expected fail** (e.g. 150 mm stair waist fails deflection, 3 bolts for 150 kN fails) and boundary cases;
   - IS code reference values: SP 16 Mu,lim factors 0.138/0.133/0.149, IS 456 Tables 19–22, IS 800 Table 9(c) fcd 107 & 183 N/mm², IS 1893 Sa/g, IS 800 cl 9.2.2 high-shear reduction by hand calculation;
   - FE benchmarks: MacNeal–Harder membrane patch test with distorted elements (exact), continuous beams wL²/8 and 0.1wL² (three-moment equation), torsion TL/GJ, Cook's skewed membrane convergence, SS plate mesh convergence;
   - solver safety: P-Delta above the buckling load rejected, convergence iterations/residual reported, floating parts and zero-area shells rejected before solving;
-  - storey drift at vertically stacked nodes and the Δmax/Δave torsion indicator.
+  - storey drift at vertically stacked nodes and the Δmax/Δave torsion indicator;
+  - seismic: 2-storey shear-frame periods vs the exact eigen-solution, single-storey RSA base shear = Ak·W and displacement Ak·g/ω², CQC correlation, scaling rules, CR = CM for a symmetric plan and CR shift towards one-sided walls, accidental-torsion torque, soft-storey and mass-irregularity detection.
 - `test/ui_ci.js` — browser test (Playwright): every module with blank inputs, frame analysis, Excel download, WSM switch, no JavaScript errors.
 - `test/smoke.js` — prints sample design reports (diagnostic).
 
 ## Limits
-No modal / response-spectrum or time-history dynamics (equivalent static only; torsion indicator excludes accidental eccentricity), IS 13920 ductile detailing (notes only), raft/pile/combined footings, retaining walls, plate girders or base plates.
+No time-history analysis or missing-mass correction; floors are not modelled as rigid diaphragms (slab shells give in-plane stiffness), IS 13920 ductile detailing (notes only), raft/pile/combined footings, retaining walls, plate girders or base plates.
 Section properties are rounded SP 6(1) values. All designs must be checked by a qualified structural engineer.

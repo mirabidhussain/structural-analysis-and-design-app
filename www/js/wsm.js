@@ -299,11 +299,11 @@ WS.dShell = function (sh, k, env, p) {
 /* IS 456 B-2 / IS 875 Pt 5 working-stress combinations; inc = permissible stress increase */
 WS.combos = function (cases) {
   var c = [{ name: "DL+LL", f: { DL: 1, LL: 1 }, inc: 1 }];
-  Object.keys(cases).filter(function (k) { return /^(EQ|WL)/.test(k); }).forEach(function (L) {
+  MD.lateralSets(cases).forEach(function (L) {
     [1, -1].forEach(function (s) {
       var sg = s > 0 ? "+" : "-", f1 = { DL: 1, LL: 1 }, f2 = { DL: 1 };
-      f1[L] = s; f2[L] = s;
-      c.push({ name: "DL+LL" + sg + L, f: f1, inc: 4 / 3 }, { name: "DL" + sg + L, f: f2, inc: 4 / 3 });
+      Object.keys(L.f).forEach(function (cn) { f1[cn] = s * L.f[cn]; f2[cn] = s * L.f[cn]; });
+      c.push({ name: "DL+LL" + sg + L.name, f: f1, inc: 4 / 3 }, { name: "DL" + sg + L.name, f: f2, inc: 4 / 3 });
     });
   });
   return c;

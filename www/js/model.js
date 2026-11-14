@@ -201,6 +201,29 @@ MD.cases = function (m, p) {
     cases[nm] = { nodal: pat.map(function (q) { var f = q.f.map(function (v) { return v * Vb; }); return { n: q.n, f: f }; }) };
     eq[nm] = { T: T, Sa: Sa, Ah: Ah, Ahd: Ahd, Vb: Vb, W: Wt, H: H, d: ext };
   });
+  /* accidental torsion, IS 1893 cl 7.8.2: edi = 1.5 esi ± 0.05 bi. The 3D model already carries the natural
+     eccentricity esi (loads at the masses, stiffness at the CR); the extra torque per floor is Qi·(0.5 esi + 0.05 bi)
+     (case a, eccentricity increased) and Qi·(−0.05 bi) (case b), signed with esi. */
+  var tor = null;
+  if (p.eq && p.accTor !== false && !m.twoD && typeof SE !== "undefined") {
+    try {
+      var fl = SE.floors(m, W); SE.centres(m, W, fl); tor = { floors: fl, dir: {} };
+      dirs.forEach(function (d) {
+        var nm = "EQ" + (d ? "Y" : "X"), ld = cases[nm], ca = [], cb2 = [], rows = [];
+        if (!ld) return;
+        fl.forEach(function (f) {
+          var Q = 0; ld.nodal.forEach(function (l) { if (f.nodes.indexOf(l.n) >= 0) Q += l.f[d]; });
+          var es = d ? (f.esx || 0) : (f.esy || 0), b = d ? f.bx : f.by, sg = es >= 0 ? 1 : -1;
+          var ea = 0.5 * es + 0.05 * b * sg, eb = -0.05 * b * sg;
+          var Ma = (d ? 1 : -1) * Q * ea, Mb = (d ? 1 : -1) * Q * eb;   /* Fx at +y offset gives −Mz; Fy at +x offset gives +Mz */
+          ca = ca.concat(SE.torque(m, f, Ma, W)); cb2 = cb2.concat(SE.torque(m, f, Mb, W));
+          rows.push({ z: f.z, Q: Q, es: es, b: b, edA: 1.5 * es + 0.05 * b * sg, edB: es - 0.05 * b * sg, Ma: Ma, Mb: Mb });
+        });
+        cases["T" + (d ? "Y" : "X") + "a"] = { nodal: ca }; cases["T" + (d ? "Y" : "X") + "b"] = { nodal: cb2 };
+        tor.dir[d] = rows;
+      });
+    } catch (e) { notes.push("Accidental torsion not applied: " + e.message); tor = null; }
+  }
   var wind = {};
   if (p.wind) dirs.forEach(function (d) {
     var lv = MD.floorLevels(m), nm = "WL" + (d ? "Y" : "X"), nod = [], B = m.twoD ? p.trib : (function () { var a = Infinity, b = -Infinity; m.nodes.forEach(function (n) { var v = d ? n.x : n.y; a = Math.min(a, v); b = Math.max(b, v); }); return Math.max(b - a, 1); })();
@@ -217,21 +240,34 @@ MD.cases = function (m, p) {
     });
     cases[nm] = { nodal: nod }; wind[nm] = { B: B, F: Ftot };
   });
-  return { cases: cases, eq: eq, wind: wind, W: W, Wt: Wt, notes: notes };
+  return { cases: cases, eq: eq, wind: wind, W: W, Wt: Wt, notes: notes, tor: tor };
 };
 /* IS 456 Table 18 / IS 875 Part 5 combinations */
 MD.combos = function (cases, method) {
   if (method === "wsm") return WS.combos(cases);
   var c = [{ name: "1.5(DL+LL)", f: { DL: 1.5, LL: 1.5 } }];
-  Object.keys(cases).filter(function (k) { return /^(EQ|WL)/.test(k); }).forEach(function (L) {
+  MD.lateralSets(cases).forEach(function (L) {
     [1, -1].forEach(function (s) {
       var sg = s > 0 ? "+" : "-";
-      var f1 = { DL: 1.2, LL: 1.2 }; f1[L] = 1.2 * s; c.push({ name: "1.2(DL+LL" + sg + L + ")", f: f1 });
-      var f2 = { DL: 1.5 }; f2[L] = 1.5 * s; c.push({ name: "1.5(DL" + sg + L + ")", f: f2 });
-      var f3 = { DL: 0.9 }; f3[L] = 1.5 * s; c.push({ name: "0.9DL" + sg + "1.5" + L, f: f3 });
+      function fx(base, k) { var o = Object.assign({}, base); Object.keys(L.f).forEach(function (cn) { o[cn] = k * s * L.f[cn]; }); return o; }
+      c.push({ name: "1.2(DL+LL" + sg + L.name + ")", f: fx({ DL: 1.2, LL: 1.2 }, 1.2) });
+      c.push({ name: "1.5(DL" + sg + L.name + ")", f: fx({ DL: 1.5 }, 1.5) });
+      c.push({ name: "0.9DL" + sg + "1.5" + L.name, f: fx({ DL: 0.9 }, 1.5) });
     });
   });
   return c;
+};
+/* lateral load sets: EQX (with accidental-torsion variants EQX+TXa, EQX+TXb when present), EQY, WLX, WLY */
+MD.lateralSets = function (cases) {
+  var out = [];
+  Object.keys(cases).filter(function (k) { return /^(EQ|WL)[XY]$/.test(k); }).forEach(function (L) {
+    var d = L.charAt(2), ta = "T" + d + "a", tb = "T" + d + "b";
+    if (/^EQ/.test(L) && cases[ta] && cases[tb]) {
+      var a = {}; a[L] = 1; a[ta] = 1; var b = {}; b[L] = 1; b[tb] = 1;
+      out.push({ name: L + "+" + ta, f: a, dir: d, base: L }, { name: L + "+" + tb, f: b, dir: d, base: L });
+    } else { var o = {}; o[L] = 1; out.push({ name: L, f: o, dir: d, base: L }); }
+  });
+  return out;
 };
 
 /* ---------- design ---------- */
@@ -301,28 +337,33 @@ MD.rccCol = function (e, k, s, pts, p, res) {
   var le = (p.kcol || 1.2) * L, slz = le / Dd, sly = le / b, crit = null, need = null;
   /* governing (P, Mz, My) points: column ends of every combination */
   var cand = pts.filter(function (q, i) { return i % 9 === 0 || i % 9 === 8; });
-  function evalP(pcv) {
-    var As = pcv / 100 * Ag, Puz = (0.45 * fck * (Ag - As) + 0.75 * fy * As) / 1000, worst = 0, wq = null;
-    cand.forEach(function (q) {
+  /* early exit: the points are checked most-critical first, and a failing trial stops at the first point with r > 1 */
+  var rank = null;
+  function evalP(pcv, quick) {
+    var As = pcv / 100 * Ag, Puz = (0.45 * fck * (Ag - As) + 0.75 * fy * As) / 1000, worst = 0, wq = null, rs = rank ? null : [];
+    (rank || cand).some(function (q) {
       var Pu = Math.max(-q.N, 0);
       var Maz = slz > 12 ? Pu * Dd / 2000 * slz * slz / 1000 : 0, May = sly > 12 ? Pu * b / 2000 * sly * sly / 1000 : 0;
       var Mz = Math.max(Math.abs(q.Mz), Pu * exz) + Maz, My = Math.max(Math.abs(q.My), Pu * exy) + May;
-      if (Pu > 0.98 * Puz) { if (9 > worst) { worst = 9; wq = { cb: q.cb, Pu: Pu, Mz: Mz, My: My, an: 2, M1: 1e-6, M2: 1e-6, Mz0: Math.abs(q.Mz), My0: Math.abs(q.My), Maz: Maz, May: May, Puz: Puz }; } return; }
-      var M1 = RCC.colMcap(b, Dd, As, Pu, fck, fy, 50, "four"), M2 = RCC.colMcap(Dd, b, As, Pu, fck, fy, 50, "four");
+      if (Pu > 0.98 * Puz) { if (9 > worst) { worst = 9; wq = { cb: q.cb, Pu: Pu, Mz: Mz, My: My, an: 2, M1: 1e-6, M2: 1e-6, Mz0: Math.abs(q.Mz), My0: Math.abs(q.My), Maz: Maz, May: May, Puz: Puz }; } if (rs) rs.push([q, 9]); return quick && worst > 1; }
+      var M1 = RCC.colMcap(b, Dd, As, Pu, fck, fy, 50, "four"), M2 = m2d() ? RCC.colMcap(Dd, b, As, Pu, fck, fy, 50, "four") : 1;
       var an = Math.max(1, Math.min(2, 1 + (Pu / Puz - 0.2) / 0.6)), r = Math.pow(Mz / Math.max(M1, 1e-6), an) + (m2d(My) ? Math.pow(My / Math.max(M2, 1e-6), an) : 0);
+      if (rs) rs.push([q, r]);
       if (r > worst) { worst = r; wq = { cb: q.cb, Pu: Pu, Mz: Mz, My: My, an: an, M1: M1, M2: M2, Mz0: Math.abs(q.Mz), My0: Math.abs(q.My), Maz: Maz, May: May, Puz: Puz }; }
+      return quick && worst > 1;
     });
+    if (rs) rank = rs.sort(function (a, b2) { return b2[1] - a[1]; }).map(function (x) { return x[0]; });
     return { pc: pcv, As: As, r: worst, q: wq };
   }
   /* coarse scan in 0.2 % steps, then bisection to 0.01 % between the last failing and first passing value */
   var lo = null;
   for (var pc = 0.8; pc <= 4.0001 && need === null; pc += 0.2) {
-    var t = evalP(pc);
+    var t = evalP(pc, !!rank);
     if (t.r <= 1) need = t; else { lo = pc; crit = t; }
   }
   if (need && lo !== null) {
     var hi = need.pc;
-    while (hi - lo > 0.01) { var mid = (lo + hi) / 2, tm = evalP(mid); if (tm.r <= 1) { hi = mid; need = tm; } else lo = mid; }
+    while (hi - lo > 0.01) { var mid = (lo + hi) / 2, tm = evalP(mid, true); if (tm.r <= 1) { hi = mid; need = tm; } else lo = mid; }
   }
   if (need) {   /* verify again with the bars actually provided */
     var pb = U.pickBars(need.As, [12, 16, 20, 25, 32], 4, 24), chk = evalP(100 * pb.area / Ag);
@@ -429,8 +470,9 @@ MD.floorLevels = function (m) {
 };
 MD.drift = function (m, res) {
   var lv = MD.floorLevels(m), out = [], byLev = lv.map(function (z) { return m.nodes.map(function (n, j) { return j; }).filter(function (j) { return Math.abs(m.nodes[j].z - z) < 0.01; }); });
-  Object.keys(res.cases).filter(function (c) { return /^(EQ|WL)/.test(c); }).forEach(function (c) {
-    var d = c.slice(-1) === "Y" ? 1 : 0, U = res.cases[c].U;
+  MD.lateralSets(res.cases).forEach(function (Ls) {
+    var c = Ls.name, d = Ls.dir === "Y" ? 1 : 0, U = new Float64Array(6 * m.nodes.length);
+    Object.keys(Ls.f).forEach(function (cn) { var u = res.cases[cn].U; for (var q = 0; q < U.length; q++) U[q] += Ls.f[cn] * u[q]; });
     for (var i = 1; i < lv.length; i++) {
       var h = lv[i] - lv[i - 1], top = byLev[i], bot = byLev[i - 1], best = null, umax = -Infinity, umin = Infinity, nPair = 0, exact = 0;
       if (!top.length || !bot.length) continue;

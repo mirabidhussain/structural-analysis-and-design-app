@@ -204,10 +204,12 @@ var RX = (function () {
     if (lin) {
       var cs = wb.sheet("Combinations", { cols: [26].concat(caseNames.map(function () { return 10; })), color: TAB.load });
       intro(cs, "Combinations — load factors", "Each row is a load combination; each column is the factor applied to a basic load case (DL, LL, EQX …). These factors drive the combination results on Disp_Combos and Forces_Combos through SUMPRODUCT formulas, so editing a factor here updates those results instantly" + (pdl ? " (not for this P-Delta run, whose combination results are second-order values)." : "."), Math.max(caseNames.length + 1, 5));
-      cs.row(["Combination"].concat(caseNames), "h", 22);
+      var hasRS = S.cb.some(function (c) { return c.rs; });
+      cs.row(["Combination"].concat(caseNames, hasRS ? ["Response spectrum"] : []), "h", 22);
       cs.opt.freeze = "B" + cs.next();
       var fRow = {};
-      S.cb.forEach(function (c) { fRow[c.name] = cs.row([c.name].concat(caseNames.map(function (n) { return { v: c.f[n] || 0, s: "in2" }; }))); });
+      S.cb.forEach(function (c) { fRow[c.name] = cs.row([c.name].concat(caseNames.map(function (n) { return { v: c.f[n] || 0, s: "in2" }; }), c.rs ? [{ v: (c.rs.sign > 0 ? "+" : "−") + c.rs.fac + " × RS" + (c.rs.dir ? "Y" : "X") + " envelope", s: "note" }] : [])); });
+      if (hasRS) { cs.row([]); cs.row([{ v: "Response-spectrum combinations: gravity cases × the factors shown, ± factor × the RS envelope (CQC/SRSS of all modes, scaled to the static base shear, plus accidental-torsion response). Because an envelope is not a linear sum, their results on Disp_Combos, Forces_Combos and Reactions are values.", s: "note" }]); }
       if (S.cb.some(function (c) { return c.inc > 1; })) { cs.row([]); cs.row(["Permissible stress increase", "×4/3 for combinations with EL/WL"], "sub"); }
       cs.row([]); cs.row([{ v: (W ? "Working stress (IS 875 Pt 5, IS 456 Annex B): DL+LL, DL+LL±EL/WL, DL±EL/WL, unfactored; permissible stresses +33⅓ % with EL/WL. " : "IS 456 Table 18 / IS 875 Part 5: 1.5(DL+LL), 1.2(DL+LL±EL), 1.5(DL±EL), 0.9DL±1.5EL. ") + (pdl ? "P-Delta analysis: combinations are solved individually (non-linear), so combination results are values, not sums." : "Linear analysis: every combination result is the factored sum of the case results — those cells are live formulas referencing this table."), s: "note" }]);
       cs.merge("A" + (cs.next() - 1) + ":" + XL.col(Math.max(caseNames.length, 6)) + (cs.next() - 1));
@@ -234,7 +236,7 @@ var RX = (function () {
         res.combos.forEach(function (cb, ci) {
           [0, 1, 2].forEach(function (d) {
             var v = cb.U[6 * i + d] * 1000;
-            if (pdl) { row.push({ v: v, s: "n4" }); return; }
+            if (pdl || S.cb[ci].rs) { row.push({ v: v, s: "n4" }); return; }
             row.push({ f: "=SUMPRODUCT(" + fRange(S.cb[ci].name) + ",Disp_Cases!" + XL.col(1 + d * nC) + rn + ":" + XL.col(d * nC + nC) + rn + ")", v: v, s: "f4" });
           });
         });
@@ -268,7 +270,7 @@ var RX = (function () {
             var row = [c0.name, { v: k + 1, s: "n0" }, e.type, end], rr = frow[k + end];
             comps.forEach(function (x, xi) {
               var v = d[t][x];
-              if (pdl) { row.push({ v: v, s: "n3" }); return; }
+              if (pdl || c0.rs) { row.push({ v: v, s: "n3" }); return; }
               row.push({ f: "=SUMPRODUCT(" + fRange(c0.name) + ",Forces_Cases!" + XL.col(3 + xi * nC) + rr + ":" + XL.col(3 + xi * nC + nC - 1) + rr + ")", v: v, s: "f2" });
             });
             fco.row(row);
@@ -285,6 +287,7 @@ var RX = (function () {
         var c0 = S.cb[ci], keys = Object.keys(cb.reac), r0 = rc.next();
         keys.forEach(function (n) { rc.row([c0.name, { v: +n + 1, s: "n0" }].concat(cb.reac[n].map(function (v) { return { v: v, s: "n2" }; }))); });
         var r1 = rc.next() - 1;
+        if (c0.rs) { rc.row([{ v: "Response-spectrum envelope: reactions are gravity ± spectral peaks, so no equilibrium sum applies", s: "note" }]); return; }
         var app = [0, 1, 2].map(function (d) { return "-(" + caseNames.filter(function (cn) { return c0.f[cn]; }).map(function (cn) { return factorRef(c0.name, cn) + "*Loads!" + "BCD".charAt(d) + caseRow[cn]; }).join("+") + ")"; });
         rc.row([{ v: "Σ reactions", s: "b" }, "", { f: "=SUM(C" + r0 + ":C" + r1 + ")", s: "f2" }, { f: "=SUM(D" + r0 + ":D" + r1 + ")", s: "f2" }, { f: "=SUM(E" + r0 + ":E" + r1 + ")", s: "f2" }]);
         rc.row([{ v: "− Σ applied loads (check)", s: "note" }, "", { f: "=" + app[0], s: "f2" }, { f: "=" + app[1], s: "f2" }, { f: "=" + app[2], s: "f2" }]);
@@ -308,6 +311,7 @@ var RX = (function () {
       }
     }
 
+    if (S.se) seismicSheet(wb, S, G);
     /* ===== Design sheets ===== */
     var dsn = {};
     if (des && W) designWSM(wb, des, m, p, G, dsn);
@@ -504,6 +508,71 @@ var RX = (function () {
     wb.sheets.forEach(function (s, i) { if (s._pt) wb.define("_xlnm.Print_Titles", q(s.name) + "!" + s._pt, i); });
     return wb;
   }
+  function seismicSheet(wb, S, G) {
+    var se = S.se, m = S.m, p = S.p, sh = wb.sheet("Seismic", { cols: [11, 11, 11, 12, 12, 12, 12, 12, 13, 13, 12, 12], color: TAB.load });
+    intro(sh, "Seismic — modal, response spectrum, torsion and irregularity (IS 1893 (Part 1):2016)", "Modal analysis (subspace iteration) gives the natural periods and the share of the building mass that moves in each mode. For every mode the spectral coefficient Ak = (Z/2)(Sa/g)/(R/I) is a live formula from the period and the Inputs; the modal base shear is Meff·Ak·g. Modes are combined by " + (p.rsComb === "srss" ? "SRSS" : "CQC") + " and the result is scaled up to the static base shear when smaller (cl 7.7.3). Then: centres of mass and rigidity with the accidental-torsion design eccentricity (cl 7.8.2), the torsional-irregularity ratios (Table 5) and the soft-storey and mass-irregularity checks (Table 6).", 12);
+    var rowsH = {};
+    if (se.md) {
+      sh.row(["Modal analysis and response spectrum"], "tb");
+      var md = se.md, Mt = md.Mt, rsX = se.rs[0], rsY = se.rs[1];
+      var t = table(sh, [{ k: "k", h: "Mode", s: "n0" }, { k: "T", h: "Period T", u: "s", s: "n4", d: "eigenvalue analysis" }, { k: "fr", h: "Frequency", u: "Hz", f: "1/{T}", s: "f3" }, { k: "kind", h: "Type" },
+        { k: "px", h: "Mass X", u: "%", s: "pct", d: "effective modal mass ÷ total" }, { k: "py", h: "Mass Y", u: "%", s: "pct" }, { k: "pr", h: "Torsion", u: "%", s: "pct" },
+        { k: "sa", h: "Sa/g", d: "IS 1893 Fig 2, 5 %", f: "IF({T}<0.1,1+15*{T},IF({T}<=IF([soil]=1,0.4,IF([soil]=2,0.55,0.67)),2.5,IF({T}<=4,IF([soil]=1,1,IF([soil]=2,1.36,1.67))/{T},IF([soil]=1,1,IF([soil]=2,1.36,1.67))/4)))", s: "f4" },
+        { k: "Ak", h: "Ak = (Z/2)(Sa/g)/(R/I)", f: "[Zz]/2*{sa}/([Rr]/[Imp])", s: "f4" },
+        { k: "Mx", h: "Meff X", u: "kN·s²/m", s: "n2" }, { k: "Vx", h: "Modal Vb X", u: "kN", f: "{Mx}*{Ak}*9.81", s: "f2" },
+        { k: "My", h: "Meff Y", u: "kN·s²/m", s: "n2" }, { k: "Vy", h: "Modal Vb Y", u: "kN", f: "{My}*{Ak}*9.81", s: "f2" }].filter(function (c) { return !m.twoD || ["py", "pr", "My", "Vy"].indexOf(c.k) < 0; }),
+        md.modes.map(function (mo) { return { k: mo.k, T: mo.T, kind: mo.kind, px: mo.pct[0], py: mo.pct[1], pr: mo.pctR, Mx: mo.Meff[0], My: mo.Meff[1] }; }), G, { freeze: false });
+      var L = t.L, a = t.first, b = t.last;
+      sh.row(["Σ", "", "", "", { f: "=SUM(" + L.px + a + ":" + L.px + b + ")", v: rsX.cum, s: "pct" }].concat(m.twoD ? [] : [{ f: "=SUM(" + L.py + a + ":" + L.py + b + ")", v: rsY ? rsY.cum : 0, s: "pct" }]), "b");
+      sh.row([{ v: "IS 1893 cl 7.7.5.2: the modes used must capture at least 90 % of the seismic mass in each direction.", s: "note" }]);
+      sh.row([]);
+      sh.row(["Direction", "Vb SRSS (kN)", "Vb " + (p.rsComb === "srss" ? "SRSS" : "CQC") + " (kN)", "Vb static (kN)", "Scale factor", "Applied to"], "h", 22);
+      [0, 1].forEach(function (d) {
+        var rs = se.rs[d]; if (!rs) return;
+        var col = d ? L.Vy : L.Vx, rn = sh.next();
+        sh.row([d ? "Y" : "X", { f: "=SQRT(SUMSQ(" + col + a + ":" + col + b + "))", s: "f2" }, { v: rs.Vb, s: "n2" }, { v: rs.VbS, s: "n2" }, { f: "=MAX(1,D" + rn + "/C" + rn + ")", v: rs.scale, s: "f3" }, p.rsScaleDisp ? "forces and displacements" : "forces (displacements unscaled, Amd 2 cl 7.7.3.2)"]);
+      });
+      sh.row([{ v: "CQC (cl 7.7.5.4): ρij = 8ζ²(1+β)β^1.5 / [(1−β²)² + 4ζ²β(1+β)²], β = ωj/ωi, ζ = 0.05; the CQC total is computed by the app, the SRSS column is a live check. Scale factor = Vb static / Vb dynamic when larger than 1 (cl 7.7.3).", s: "note" }]);
+      sh.row([]);
+    }
+    if (!m.twoD && se.floors.length && se.floors[0].cr) {
+      sh.row(["Centres of mass and rigidity, accidental torsion (cl 7.8.2)"], "tb");
+      var tor = S.L.tor && S.L.tor.dir ? S.L.tor.dir : {};
+      table(sh, [{ k: "z", h: "Floor z", u: "m", s: "n3" }, { k: "W", h: "W", u: "kN", s: "n0" }, { k: "cmx", h: "CM x", u: "m", s: "n3" }, { k: "cmy", h: "CM y", u: "m", s: "n3" }, { k: "crx", h: "CR x", u: "m", s: "n3" }, { k: "cry", h: "CR y", u: "m", s: "n3" },
+        { k: "esx", h: "esi,x = CMx − CRx", u: "m", f: "{cmx}-{crx}", s: "f3" }, { k: "esy", h: "esi,y = CMy − CRy", u: "m", f: "{cmy}-{cry}", s: "f3" }, { k: "bx", h: "b x", u: "m", s: "n2" }, { k: "by", h: "b y", u: "m", s: "n2" },
+        { k: "edx", h: "edi for EQY = 1.5esi + 0.05b", u: "m", f: "1.5*{esx}+0.05*{bx}*IF({esx}<0,-1,1)", s: "f3" }, { k: "edy", h: "edi for EQX = 1.5esi + 0.05b", u: "m", f: "1.5*{esy}+0.05*{by}*IF({esy}<0,-1,1)", s: "f3" }],
+        se.floors.map(function (f) { return { z: f.z, W: f.W, cmx: f.cm.x, cmy: f.cm.y, crx: f.cr ? f.cr.x : f.cm.x, cry: f.cr ? f.cr.y : f.cm.y, bx: f.bx, by: f.by }; }), G, { freeze: false });
+      if (tor[0]) {
+        sh.row([{ v: "Applied extra torques (the 3D model already carries esi): case a = Qi·(0.5esi + 0.05b), case b = Qi·(−0.05b), signed with esi — TXa/TXb for EQX, TYa/TYb for EQY.", s: "note" }]);
+        table(sh, [{ k: "z", h: "Floor z", u: "m", s: "n3" }, { k: "dir", h: "Load" }, { k: "Q", h: "Qi", u: "kN", s: "n2" }, { k: "es", h: "esi", u: "m", s: "n3" }, { k: "b", h: "b", u: "m", s: "n2" },
+          { k: "Ma", h: "Torque case a", u: "kNm", f: function (q) { return (q.d ? "" : "-") + "{Q}*(0.5*{es}+0.05*{b}*IF({es}<0,-1,1))"; }, s: "f2" },
+          { k: "Mb", h: "Torque case b", u: "kNm", f: function (q) { return (q.d ? "" : "-") + "{Q}*(-0.05*{b}*IF({es}<0,-1,1))"; }, s: "f2" }],
+          [].concat.apply([], [0, 1].map(function (d) { return (tor[d] || []).map(function (q) { return { z: q.z, dir: d ? "EQY" : "EQX", d: d, Q: q.Q, es: q.es, b: q.b }; }); })), G, { freeze: false });
+      }
+      sh.row([]);
+    }
+    if (se.tc && se.tc.length) {
+      sh.row(["Torsional irregularity — Table 5 (i)"], "tb");
+      table(sh, [{ k: "z", h: "Floor z", u: "m", s: "n3" }, { k: "dir", h: "Load" }, { k: "mx", h: "Δmax", u: "mm", s: "n3" }, { k: "mn", h: "Δmin", u: "mm", s: "n3" },
+        { k: "ave", h: "Δmax/Δave", f: "{mx}/(({mx}+{mn})/2)", s: "f3" }, { k: "a2", h: "Amendment 2 (1.2 / 1.4)", f: 'IF({ave}<=1.2,"regular",IF({ave}<=1.4,"irregular (1.2-1.4)","irregular (>1.4)"))', s: "" },
+        { k: "mi", h: "Δmax/Δmin", f: "IF({mn}>0,{mx}/{mn},9999)", s: "f3" }, { k: "o", h: "2016 as published (1.5 / 2.0)", f: 'IF({mi}<=1.5,"regular",IF({mi}<=2,"irregular (1.5-2.0)","irregular (>2.0)"))', s: "" }],
+        se.tc.map(function (q) { return { z: q.z, dir: "EQ" + q.dir, mx: q.mx * 1000, mn: q.mn * 1000 }; }), G, { freeze: false });
+      sh.row([{ v: "Floor-extreme lateral displacements under the equivalent static load including accidental eccentricity. Use the thresholds of the edition in force.", s: "note" }]);
+      sh.row([]);
+    }
+    if (se.irr && se.irr.length) {
+      sh.row(["Vertical irregularity — Table 6 (soft storey, mass)"], "tb");
+      var rows = se.irr.map(function (q) { return { dir: "EQ" + q.dir, z: q.z, W: q.W, V: q.V, dcm: q.dcm * 1000, i: q.i }; });
+      var t2 = table(sh, [{ k: "dir", h: "Load" }, { k: "z", h: "Floor z", u: "m", s: "n3" }, { k: "W", h: "W", u: "kN", s: "n0" }, { k: "V", h: "Storey shear", u: "kN", s: "n2" }, { k: "dcm", h: "CM displacement", u: "mm", s: "n4" },
+        { k: "k", h: "Storey stiffness", u: "kN/m", d: "V ÷ inter-storey drift at CM", cell: function (q, rn) { return { f: q.i ? "=D" + rn + "/((E" + rn + "-E" + (rn - 1) + ")/1000)" : "=D" + rn + "/(E" + rn + "/1000)", s: "f0" }; } },
+        { k: "kr", h: "k / k above", cell: function (q, rn) { var above = rows.filter(function (x) { return x.dir === q.dir && x.i === q.i + 1; })[0]; return above ? { f: "=F" + rn + "/F" + (rn + 1), s: "f3" } : "—"; } },
+        { k: "soft", h: "Soft storey (k < k above)", cell: function (q, rn) { var above = rows.filter(function (x) { return x.dir === q.dir && x.i === q.i + 1; })[0]; return above ? { f: '=IF(G' + rn + '<1,"yes","no")', s: "" } : "—"; } },
+        { k: "wr", h: "W / W below", cell: function (q, rn) { return q.i ? { f: "=C" + rn + "/C" + (rn - 1), s: "f3" } : "—"; } },
+        { k: "mass", h: "Mass irregular (> 1.5)", cell: function (q, rn) { return q.i ? { f: '=IF(I' + rn + '>1.5,"yes","no")', s: "" } : "—"; } }], rows, G, { freeze: false });
+      sh.row([{ v: "IS 1893 (Part 1):2016 Table 6: soft storey where the lateral stiffness is less than that of the storey above; mass irregularity where the seismic weight exceeds 150 % of the floor below. Buildings with these irregularities in Zones III–V need dynamic analysis (Amendment 2).", s: "note" }]);
+    }
+    sh.opt.freeze = "A6";
+  }
   function link(name, label) { return { f: '=HYPERLINK("#' + q(name).replace(/"/g, '""') + '!A1","' + (label || name).replace(/"/g, '""') + '")', v: label || name, s: "link" }; }
   function readme(wb, rd, S, date) {
     var m = S.m, p = S.p, W = p.method === "wsm";
@@ -647,7 +716,7 @@ var RX = (function () {
     }
     return 1;
   }
-  var SHEETDESC = { Summary: "Key results and pass/fail counts for each member group", Notation: "Meaning and units of every symbol", Inputs: "Design parameters you can change (named cells p_fck, p_fy, p_Zz …)", Nodes: "Node coordinates and restraints", Members: "Frame members, lengths and section properties (formulas)", Shells: "Shell (slab / wall) elements",
+  var SHEETDESC = { Seismic: "Modal analysis, response spectrum, centres of mass/rigidity, accidental torsion, irregularity checks (formulas)", Summary: "Key results and pass/fail counts for each member group", Notation: "Meaning and units of every symbol", Inputs: "Design parameters you can change (named cells p_fck, p_fy, p_Zz …)", Nodes: "Node coordinates and restraints", Members: "Frame members, lengths and section properties (formulas)", Shells: "Shell (slab / wall) elements",
     Loads: "Load-case totals, IS 1893 base shear & vertical distribution, IS 875-3 wind (formulas)", Combinations: "Load factors (IS 456 Table 18)", Disp_Cases: "Nodal displacements per load case", Disp_Combos: "Nodal displacements per combination",
     Forces_Cases: "Member end forces per load case", Forces_Combos: "Member end forces per combination", Reactions: "Support reactions with equilibrium check", Drift: "Storey drift check (formulas)", Pushover: "Capacity curve (chart), hinge sequence, ductility", "Design Basis": "Equations and IS code limits used, with clause numbers", "Worked Calcs": "Step-by-step calculation of every member: equation, substituted values, limit, clause, status", "Method & Formulas": "Element formulations, solver, design equations and clauses" };
   var METHOD = [

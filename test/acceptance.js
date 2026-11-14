@@ -151,7 +151,7 @@ function cook(n) {   /* Cook's membrane: tapered panel, shear load F = 1 on the 
 
 console.log('\n== D. Storey drift at corresponding locations');
 (function () {
-  const p = { fck: 25, fy: 500, fys: 250, crack: true, pcCol: 2, pcBeam: 1, colSec: '400x400', beamSec: '300x450', braceSec: 'ISA 75x75x6', tSlab: 150, tWall: 200, ff: 1.5, ffRoof: 2.5, ll: 3, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0, eq: true, zone: 'V', I: 1.2, R: 5, soil: 'II', sys: 'rc', wind: false, vb: 39, terrain: 2, cf: 1.3, trib: 4, kcol: 1.2 };
+  const p = { fck: 25, fy: 500, fys: 250, crack: true, pcCol: 2, pcBeam: 1, colSec: '400x400', beamSec: '300x450', braceSec: 'ISA 75x75x6', tSlab: 150, tWall: 200, ff: 1.5, ffRoof: 2.5, ll: 3, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0, eq: true, zone: 'V', I: 1.2, R: 5, soil: 'II', sys: 'rc', wind: false, vb: 39, terrain: 2, cf: 1.3, trib: 4, kcol: 1.2, accTor: false };
   function run(oneSide) {
     const m = MD.make(MD.generate({ bx: '4,4,4', by: '5,5', hs: '3.5,3.2,3.2', slabs: true, walls: oneSide, mesh: 1.5 }), p);
     if (oneSide) m.shells = m.shells.filter(s => s.kind !== 'wall' || m.nodes[s.n[0]].x < 1);
@@ -163,6 +163,57 @@ console.log('\n== D. Storey drift at corresponding locations');
   ok('Drift uses vertically stacked node pairs', s.d.every(x => x.stacked), s.d.map(x => (x.top + 1) + '/' + (x.bot + 1)).join(' '));
   ok('Symmetric building: Δmax/Δave ≈ 1.0', s.d.every(x => x.tr < 1.05), s.d.map(x => x.tr.toFixed(2)).join(' '));
   ok('Shear walls on one side only: torsion indicator Δmax/Δave > 1.2 in Y', t.d.filter(x => x.c === 'EQY').every(x => x.tr > 1.2), t.d.filter(x => x.c === 'EQY').map(x => x.tr.toFixed(2)).join(' '));
+})();
+
+console.log('\n== E. Seismic: modal analysis, response spectrum, torsion, irregularity');
+(function () {
+  const { SE } = c, Es = 2e8, I = 2e-4, h = 3, col = { A: 1, Iz: I, Iy: I, J: I, E: Es, G: Es / 2.6, gamma: 0 }, rig = { A: 10, Iz: 10, Iy: 10, J: 10, E: Es, G: Es / 2.6, gamma: 0 };
+  /* two-storey shear frame (rigid beams): exact ω² from det(K − ω²M) = 0, storey stiffness k = 2·12EI/h³ */
+  const nodes = [{ x: 0, y: 0, z: 0 }, { x: 6, y: 0, z: 0 }, { x: 0, y: 0, z: h }, { x: 6, y: 0, z: h }, { x: 0, y: 0, z: 2 * h }, { x: 6, y: 0, z: 2 * h }];
+  const fr = [[0, 2, 'column', col], [1, 3, 'column', col], [2, 3, 'beam', rig], [2, 4, 'column', col], [3, 5, 'column', col], [4, 5, 'beam', rig]].map(x => ({ n1: x[0], n2: x[1], type: x[2], sec: x[3] }));
+  const m = { nodes, sup: { 0: fix(), 1: fix() }, frames: fr, shells: [], twoD: true }, W = [0, 0, 500, 500, 300, 300];
+  const md = SE.modes(m, W, 2), k = 2 * 12 * Es * I / h ** 3, m1 = 1000 / 9.81, m2 = 600 / 9.81;
+  const A = m1 * m2, B = -(2 * k * m2 + k * m1), C = k * k, w2 = [(-B - Math.sqrt(B * B - 4 * A * C)) / (2 * A), (-B + Math.sqrt(B * B - 4 * A * C)) / (2 * A)];
+  near('Modal: 2-storey shear frame, mode 1 period vs exact eigenvalue solution', md.modes[0].T, 2 * Math.PI / Math.sqrt(w2[0]), 0.002);
+  near('Modal: 2-storey shear frame, mode 2 period vs exact', md.modes[1].T, 2 * Math.PI / Math.sqrt(w2[1]), 0.002);
+  near('Modal: all modes capture 100 % of the mass', md.modes[0].pct[0] + md.modes[1].pct[0], 1, 1e-6);
+  /* single storey: dynamic Vb = Ak·W exactly (one mode, 100 % mass) */
+  const m1s = { nodes: nodes.slice(0, 4), sup: { 0: fix(), 1: fix() }, frames: fr.slice(0, 3), shells: [], twoD: true }, W1 = [0, 0, 400, 400];
+  const md1 = SE.modes(m1s, W1, 1), p1 = { zone: 'IV', I: 1.2, R: 5, soil: 'II', rsComb: 'cqc' };
+  const T1 = md1.modes[0].T, Ak = 0.24 / 2 * c.LD.saG(T1, 'II') / (5 / 1.2);
+  const rs1 = SE.spectrum(m1s, null, md1, 0, p1, { Vb: 0 });
+  near('Response spectrum: single storey base shear = Ak(T)·W', rs1.Vb, Ak * 800, 1e-6);
+  near('Response spectrum: tip displacement = Ak·g/ω²', rs1.U[6 * 2], Ak * 9.81 / md1.modes[0].w2, 1e-6);
+  ok('CQC with one mode equals SRSS; ρ = 1 for equal frequencies', Math.abs(SE.combine([3], [md1.modes[0]], 'cqc') - 3) < 1e-12 && Math.abs(SE.rho(10, 10, 0.05) - 1) < 1e-12);
+  near('CQC correlation ρ(β = 0.8, ζ = 5 %) matches the closed-form expression', SE.rho(10, 8, 0.05), 8 * 0.0025 * 1.8 * Math.pow(0.8, 1.5) / (Math.pow(1 - 0.64, 2) + 4 * 0.0025 * 0.8 * 3.24), 1e-9);
+  const sc = SE.spectrum(m1s, null, md1, 0, p1, { Vb: 2 * rs1.Vb });
+  near('Scaling to static base shear: forces × V̄B/VB (cl 7.7.3)', sc.fr[0][0].Vy, 2 * rs1.fr[0][0].Vy, 1e-9);
+  near('Scaling: displacements not scaled (Amendment 2, cl 7.7.3.2)', sc.U[12], rs1.U[12], 1e-12);
+
+  /* 3D building: centres of rigidity, accidental torsion, irregularity */
+  const p = { fck: 25, fy: 500, fys: 250, crack: true, pcCol: 2, pcBeam: 1, colSec: '400x400', beamSec: '300x450', braceSec: 'ISA 75x75x6', tSlab: 150, tWall: 200, ff: 1.5, ffRoof: 2.5, ll: 3, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0, eq: true, zone: 'V', I: 1.2, R: 5, soil: 'II', sys: 'rc', wind: false, vb: 39, terrain: 2, cf: 1.3, trib: 4, kcol: 1.2, accTor: true, rsa: true, nModes: 12, rsComb: 'cqc', method: 'lsm' };
+  function bld(gen, mod, pp) {
+    const P = Object.assign({}, p, pp || {}), mm = MD.make(MD.generate(gen), P); if (mod) mod(mm);
+    const S = { m: mm, p: P }; S.L = MD.cases(mm, P); S.cb = MD.combos(S.L.cases, P.method);
+    S.res = FE.linear(mm, S.L.cases, S.cb, { caseReac: true }); S.res.incMap = {}; S.se = SE.run(mm, S, P);
+    S.se.irr = SE.irregular(mm, S, S.se); S.se.tc = SE.torsionCheck(mm, S, S.se); return S;
+  }
+  const sym = bld({ bx: '5,5', by: '4,4', hs: '3.2,3.2', slabs: true, mesh: 2 });
+  ok('Symmetric building: centre of rigidity = centre of mass', sym.se.floors.every(f => Math.hypot(f.cr.x - f.cm.x, f.cr.y - f.cm.y) < 0.01), sym.se.floors.map(f => 'CM ' + f.cm.x.toFixed(2) + ',' + f.cm.y.toFixed(2) + ' CR ' + f.cr.x.toFixed(2) + ',' + f.cr.y.toFixed(2)).join(' | '));
+  const tq = sym.L.cases.TXa.nodal.filter(l => sym.se.floors[1].top.indexOf(l.n) >= 0), f1 = sym.se.floors[1];
+  const Fx = tq.reduce((a, l) => a + l.f[0], 0), Fy = tq.reduce((a, l) => a + l.f[1], 0), Mz = tq.reduce((a, l) => { const n = sym.m.nodes[l.n]; return a + (n.x - f1.cm.x) * l.f[1] - (n.y - f1.cm.y) * l.f[0]; }, 0);
+  const row = sym.L.tor.dir[0][1];
+  ok('Accidental torsion load: zero net force, torque = Qi·(0.5esi + 0.05bi)', Math.abs(Fx) < 1e-9 && Math.abs(Fy) < 1e-9 && Math.abs(Mz - row.Ma) < 1e-6 * Math.abs(row.Ma) && Math.abs(Math.abs(row.Ma) - row.Q * 0.05 * row.b) < 1e-6, 'Mz ' + Mz.toFixed(2) + ' kNm, Qi·0.05b = ' + (row.Q * 0.05 * row.b).toFixed(2));
+  ok('Symmetric building: no soft storey or mass irregularity', sym.se.irr.every(r => !r.soft && !r.mass));
+  ok('Response-spectrum combinations are designed', sym.res.combos.some(cb => cb.rs) && MD.design(sym.m, sym.res, p).beams.length > 0, sym.cb.filter(x => x.rs).length + ' RS combinations');
+  ok('Modal mass participation ≥ 90 % with 12 modes', sym.se.rs[0].cum >= 0.9 && sym.se.rs[1].cum >= 0.9, (sym.se.rs[0].cum * 100).toFixed(1) + ' % / ' + (sym.se.rs[1].cum * 100).toFixed(1) + ' %');
+  const one = bld({ bx: '5,5', by: '4,4', hs: '3.2,3.2', slabs: true, walls: true, mesh: 2 }, mm => { mm.shells = mm.shells.filter(s => s.kind !== 'wall' || mm.nodes[s.n[0]].x < 1); });
+  ok('Shear walls on the x = 0 side: centre of rigidity moves towards the walls', one.se.floors.every(f => f.cr.x < f.cm.x - 1), one.se.floors.map(f => 'CRx ' + f.cr.x.toFixed(2) + ' vs CMx ' + f.cm.x.toFixed(2)).join(' | '));
+  ok('Torsional irregularity flagged for one-sided walls (Δmax/Δave > 1.2 in Y)', one.se.tc.filter(r => r.dir === 'Y').every(r => r.ave > 1.2), one.se.tc.filter(r => r.dir === 'Y').map(r => r.ave.toFixed(2)).join(' '));
+  const soft = bld({ bx: '5,5', by: '4,4', hs: '5,3,3', slabs: true, mesh: 2 });
+  ok('Tall ground storey (5 m under 3 m storeys): soft storey detected', soft.se.irr.filter(r => r.i === 0).every(r => r.soft), soft.se.irr.filter(r => r.i === 0).map(r => r.dir + ' k/k above ' + r.kr.toFixed(2)).join(' '));
+  const heavy = bld({ bx: '5,5', by: '4,4', hs: '3.2,3.2,3.2', slabs: true, mesh: 2 }, null, { loadOver: 'beams storey 2 = DL 60' });
+  ok('Heavy second floor (+60 kN/m on beams): mass irregularity detected', heavy.se.irr.some(r => r.i === 1 && r.mass), heavy.se.irr.filter(r => r.dir === 'X').map(r => (r.wr || 0).toFixed(2)).join(' '));
 })();
 
 console.log(`\n${pass} passed, ${fail} failed`);

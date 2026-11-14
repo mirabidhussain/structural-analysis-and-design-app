@@ -354,6 +354,15 @@ FE.frameForces = function (m, k, U, qinfo, N) {
 };
 /* internal force diagrams at n points: N (tension +), Vy, Vz, T, My, Mz */
 FE.frameDiagram = function (ff, npts) {
+  if (ff.dg) {   /* precomputed (e.g. response-spectrum envelope) diagram: resample linearly */
+    var src = ff.dg, ns = src.length - 1, o2 = [];
+    for (var s2 = 0; s2 <= npts; s2++) {
+      var t = s2 / npts * ns, i0 = Math.min(Math.floor(t), ns - 1), a = t - i0, A0 = src[i0], B0 = src[i0 + 1], q = { x: ff.L * s2 / npts };
+      ["N", "Vy", "Vz", "T", "My", "Mz"].forEach(function (c) { q[c] = A0[c] * (1 - a) + B0[c] * a; });
+      o2.push(q);
+    }
+    return o2;
+  }
   var f = ff.f, L = ff.L, w = ff.wl, out = [];
   for (var s = 0; s <= npts; s++) {
     var x = L * s / npts;
@@ -470,7 +479,11 @@ FE.linear = function (m, cases, combos, opt) {
     var lv = FE.loadVector(m, cases[cn], null), x = FE.backsub(A, m._maxa, m._neq, Float64Array.from(lv.F));
     res.cases[cn] = { U: FE.expand(m, x), lv: lv };
   });
-  combos.forEach(function (cb) {
+  var cbl = combos.slice();
+  if (opt.caseReac) Object.keys(cases).forEach(function (cn) { var f0 = {}; f0[cn] = 1; cbl.push({ name: "__case_" + cn, f: f0, __case: true }); });
+  var pd0 = opt.pdelta;
+  cbl.forEach(function (cb) {
+    opt.pdelta = cb.__case ? false : pd0;
     var U = new Float64Array(6 * m.nodes.length), qmix = m.frames.map(function () { return null; }), lcs = [];
     Object.keys(cb.f).forEach(function (cn) {
       var c = res.cases[cn], s = cb.f[cn]; if (!c) return;
@@ -516,8 +529,10 @@ FE.linear = function (m, cases, combos, opt) {
     var reac = {};
     Object.keys(m.sup).forEach(function (v) { reac[v] = []; for (var t = 0; t < 6; t++) reac[v].push(m.sup[v][t] ? Rr[6 * v + t] - Fn[6 * v + t] : 0); });
     res.combos.push({ name: cb.name, U: U, fr: fr, sh: sh, reac: reac, N: N, pdIter: it, pdAmp: amp, pdConv: conv, pdResid: hist.length ? hist[hist.length - 1] : null });
+    if (cb.__case) { res.caseReac = res.caseReac || {}; res.caseReac[lcs[0][0]] = reac; res.combos.pop(); }
     if (conv && it > 10) (res.warn = res.warn || []).push("P-Delta converged slowly for " + cb.name + " (" + it + " iterations): structure is approaching instability.");
   });
+  opt.pdelta = pd0;
   return res;
 };
 
