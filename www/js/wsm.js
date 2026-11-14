@@ -179,6 +179,11 @@ WS.column = function (p) {
     trace.push([U.f(pc, 1), U.f(q.scc, 2), U.f(q.scb, 2), U.f(q.r, 3)]);
     if (q.r <= 1) { found = { pc: pc, As: As, q: q }; break; }
   }
+  if (found && found.pc > 0.8 + 1e-9) {   /* refine to 0.01 % by bisection */
+    var lo = found.pc - 0.1, hi = found.pc;
+    while (hi - lo > 0.01) { var md = (lo + hi) / 2, qm = WS.colRatio(b, Dd, md / 100 * Ag, P, Mx, My, fck, fy, p.arr, Cr, 1); if (qm.r <= 1) { hi = md; found = { pc: md, As: md / 100 * Ag, q: qm }; } else lo = md; }
+    trace.push([U.f(found.pc, 2), U.f(found.q.scc, 2), U.f(found.q.scb, 2), U.f(found.q.r, 3)]);
+  }
   r.table(["p %", "σcc,cal", "σcbc,cal", "Ratio"], trace.slice(-4));
   if (!found) { r.fail("Section inadequate up to p = " + p.pmax + " % (working stress)."); return r; }
   var Pperm = (WS.scc(fck) * (Ag - found.As) + WS.ssc(fy) * found.As) * Cr / 1000;
@@ -189,6 +194,8 @@ WS.column = function (p) {
   var Areq = Math.max(found.As, 0.008 * Ag), nb = Math.max(4, Math.ceil(Areq / D.barArea(p.dia) / 2) * 2);
   if (p.arr === "four" && nb % 4 && nb > 4) nb = Math.ceil(nb / 4) * 4;
   r.row("Provide", nb + " nos " + p.dia + " mm φ (" + U.f(nb * D.barArea(p.dia), 0) + " mm²)", "", "0.8–4 % cl 26.5.3.1");
+  var qv = WS.colRatio(b, Dd, nb * D.barArea(p.dia), P, Mx, My, fck, fy, p.arr, Cr, 1);
+  r.check("Stress ratio with bars provided ≤ 1", qv.r <= 1, U.f(qv.r, 3), "B-4.2");
   var td = Math.max(6, Math.ceil(p.dia / 4)); td = D.bars.filter(function (x) { return x >= td; })[0];
   var ts = U.floorTo(Math.min(Math.min(b, Dd), 16 * p.dia, 300), 25);
   r.row("Ties", td + " mm φ @ " + ts + " mm c/c", "", "cl 26.5.3.2");
@@ -229,15 +236,19 @@ WS.dCol = function (e, k, s, pts, p) {
   var Cr = le / Dd > 12 || le / b > 12 ? Math.min(1, 1.25 - le / (48 * lmin)) : 1;
   var exz = Math.max(L / 500 + Dd / 30, 20), exy = Math.max(L / 500 + b / 30, 20), need = null, crit = null;
   var cand = pts.filter(function (q, i) { return i % 9 === 0 || i % 9 === 8; });
-  for (var pc = 0.8; pc <= 4.001 && !need; pc += 0.2) {
+  function evalP(pc) {
     var As = pc / 100 * Ag, worst = 0, wq = null;
     cand.forEach(function (q) {
       var P = Math.max(-q.N, 0), i = q.inc || 1, Mz = Math.max(Math.abs(q.Mz), P * exz / 1000), My = p.twoD ? 0 : Math.max(Math.abs(q.My), P * exy / 1000);
       var c = WS.colRatio(b, Dd, As, P, Mz, My, fck, fy, "four", Cr, i);
       if (c.r > worst) { worst = c.r; wq = { cb: q.cb, Pu: P, Mz: Mz, My: My, inc: i, c: c, Mz0: Math.abs(q.Mz), My0: Math.abs(q.My) }; }
     });
-    if (worst <= 1) need = { pc: pc, As: As, r: worst, q: wq };
-    crit = { r: worst, q: wq };
+    return { pc: pc, As: As, r: worst, q: wq };
+  }
+  for (var pc = 0.8; pc <= 4.001 && !need; pc += 0.2) { var e0 = evalP(pc); if (e0.r <= 1) need = e0; crit = e0; }
+  if (need && need.pc > 0.8 + 1e-9) {   /* coarse 0.2 % scan, then bisection to 0.01 % */
+    var lo = need.pc - 0.2, hi = need.pc;
+    while (hi - lo > 0.01) { var md = (lo + hi) / 2, em = evalP(md); if (em.r <= 1) { hi = md; need = em; } else lo = md; }
   }
   var Pmax = 0; pts.forEach(function (q) { Pmax = Math.max(Pmax, -q.N); });
   var msg = []; if (!need) msg.push("Fails even at 4% steel (working stress) - enlarge section");

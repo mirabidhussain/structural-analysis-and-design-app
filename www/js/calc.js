@@ -50,7 +50,7 @@ var CALC = (function () {
     if (sD > 12 || sb > 12) S.push({ l: "Additional moments", e: "Ma = Pu·D/2000·(le/D)²", s: "Max = " + f(q.Maz) + " kNm, May = " + f(q.May) + " kNm", ref: "cl 39.7.1" });
     S.push({ h: "Strength — IS 456 cl 38, 39 (critical combination: " + (q.cb || "-") + ")" });
     S.push({ l: "Design actions", e: "Mu = max(Mu,analysis, Pu·emin) + Ma", s: "Pu = " + f(q.Pu, 1) + " kN, Mux = " + f(q.Mz) + " kNm, Muy = " + f(q.My) + " kNm" + " (analysis " + f(q.Mz0) + " / " + f(q.My0) + ")" });
-    S.push({ l: "Longitudinal steel", e: "0.8% ≤ Asc/Ag ≤ 4% (6% absolute)", s: "required p = " + f(pc, 1) + "% → Asc = " + f(As, 0) + " mm² → " + r.bars, lim: "0.8–4 %", ok: !!r.need, ref: "cl 26.5.3.1" });
+    S.push({ l: "Longitudinal steel", e: "0.8% ≤ Asc/Ag ≤ 4% (6% absolute)", s: "required p = " + f(pc, 2) + "% (searched to 0.01 %) → Asc = " + f(As, 0) + " mm² → " + r.bars, lim: "0.8–4 %", ok: !!r.need, ref: "cl 26.5.3.1" });
     S.push({ l: "Pure axial capacity", e: "Puz = 0.45·fck·Ac + 0.75·fy·Asc", s: "= (0.45×" + fck + "×" + f(Ag - As, 0) + " + 0.75×" + fy + "×" + f(As, 0) + ")/10³ = " + f(q.Puz, 0) + " kN", ref: "cl 39.6" });
     S.push({ l: "Short-column axial check", e: "Pu ≤ 0.4·fck·Ac + 0.67·fy·Asc", s: "Pu = " + f(q.Pu, 0) + " kN", lim: "capacity " + f((0.4 * fck * (Ag - As) + 0.67 * fy * As) / 1000, 0) + " kN with no moment (reference; bending governs)", ref: "cl 39.3" });
     S.push({ l: "Uniaxial capacities at Pu", e: "Mux1, Muy1 by strain compatibility: εcu = 0.0035, fcd = 0.446fck (parabola-rectangle), steel design stress–strain", s: "Mux1 = " + f(q.M1) + " kNm, Muy1 = " + f(q.M2) + " kNm", ref: "cl 38.1, 39.1" });
@@ -58,6 +58,7 @@ var CALC = (function () {
     var ratio = Math.pow(q.Mz / q.M1, q.an) + (p.twoD ? 0 : Math.pow(q.My / q.M2, q.an));
     S.push({ l: "Biaxial interaction", e: "(Mux/Mux1)^αn + (Muy/Muy1)^αn ≤ 1.0", s: "= (" + f(q.Mz) + "/" + f(q.M1) + ")^" + f(q.an, 2) + (p.twoD ? "" : " + (" + f(q.My) + "/" + f(q.M2) + ")^" + f(q.an, 2)) + " = " + f(ratio, 3), lim: "≤ 1.0", ok: ratio <= 1.0001, ref: "cl 39.6" });
     var dmax = /(\d+) mm/.exec(r.bars), dd = dmax ? +dmax[1] : 16;
+    if (r.need && r.need.prov) S.push({ l: "Check with bars provided", e: "interaction recomputed with the actual bar area", s: r.bars + " = " + f(r.need.prov.pc, 2) + " % → ratio " + f(r.need.prov.r, 3), lim: "≤ 1.0", ok: r.need.prov.r <= 1, ref: "cl 39.6" });
     S.push({ l: "Lateral ties", e: "φt ≥ max(φ/4, 6 mm) ;  st ≤ min(b, 16φ, 300 mm)", s: "φt = " + Math.max(8, Math.ceil(dd / 4)) + " mm @ " + Math.min(b, 16 * dd, 300) + " mm c/c", ref: "cl 26.5.3.2" });
     return S;
   }
@@ -75,15 +76,19 @@ var CALC = (function () {
       S.push({ l: "Utilisation", e: "|N|/Pd (compression) or N/Td (tension)", s: "= " + f(r.ratio, 3), lim: "≤ 1.0", ok: r.ratio <= 1, ref: "cl 6, 7" });
       return S;
     }
-    var lz = L / (w.rx * 10), ly = L / (w.ry * 10);
-    S.push({ l: "Slenderness", e: "KL/rz, KL/ry", s: f(lz, 1) + ", " + f(ly, 1), lim: "≤ 180 (compression members)", ok: Math.max(lz, ly) <= 180 || e.type === "beam", ref: "Table 3" });
-    S.push({ l: "Compression capacity", e: "fcd = χ·fy/γm0 ; χ from φ = 0.5[1 + α(λ − 0.2) + λ²], α = 0.21 (z-z, curve a), 0.34 (y-y, curve b) ; Pd = A·fcd", s: "Pd = " + f(r.Pd, 1) + " kN", ref: "cl 7.1.2.1, Table 10" });
-    S.push({ l: "Tension capacity", e: "Td = A·fy/γm0", s: "= " + f(r.Td, 1) + " kN", ref: "cl 6.2" });
-    S.push({ l: "Elastic critical moment", e: "Mcr = (π²EIy/L²)·√[Iw/Iy + G·It·L²/(π²EIy)]", s: "= " + f(r.Mcr, 1) + " kNm (unrestrained length = member length)", ref: "Annex E-1.1" });
-    S.push({ l: "LTB reduction", e: "λLT = √(βb·Zp·fy/Mcr) ; φLT = 0.5[1 + αLT(λLT − 0.2) + λLT²], αLT = 0.21 ; χLT = 1/[φLT + √(φLT² − λLT²)]", s: "χLT = " + f(r.chi, 3), ref: "cl 8.2.2" });
-    S.push({ l: "Bending capacity", e: "Md,z = χLT·Zp·fy/γm0 ;  Md,y = Zpy·fy/γm0", s: "Md,z = " + f(r.Mdz, 1) + " kNm, Md,y = " + f(r.Mdy, 1) + " kNm", ref: "cl 8.2.1.2, 8.2.2" });
-    S.push({ l: "Shear capacity", e: "Vd = Av·fy/(√3·γm0), Av = D·tw", s: "Vd = " + f(r.Vd, 1) + " kN, V = " + f(r.Vmax, 1) + " kN", lim: "V ≤ 0.6Vd (no moment reduction)", ok: r.Vmax <= 0.6 * r.Vd, ref: "cl 8.4, 9.2.1" });
-    S.push({ l: "Combined axial + bending", e: "N/Nd + Mz/Md,z + My/Md,y ≤ 1.0 (simplified, Cm = 1)", s: "= " + f(r.ratio, 3), lim: "≤ 1.0", ok: r.ratio <= 1, ref: "cl 9.3.1, 9.3.2" });
+    var B = r.b || {}, sq = B.sq || {};
+    S.push({ l: "Section class & slenderness", e: "class per Table 2 ; KL/r with K = " + r.K + " ; λ = √(fy/fcc)", s: r.cls + ", λy = " + f(r.lamy, 3) + ", λz = " + f(r.lamz, 3), lim: "KL/r ≤ 180 (compression)", ok: r.KLr <= 180 || e.type === "beam", ref: "Table 2, Table 3, cl 7.1.2.1" });
+    S.push({ l: "Compression capacity", e: "Pd = A·χ·fy/γm0 ; α = 0.21 (z-z, curve a), 0.34 (y-y, curve b)", s: "Pdz = " + f(r.Pdz, 1) + " kN, Pdy = " + f(r.Pdy, 1) + " kN", ref: "cl 7.1.2, Table 10" });
+    S.push({ l: "Bending capacity", e: "Md,z(section) = βb·Zp·fy/γm0 ≤ 1.2Ze·fy/γm0 ; Mcr = (π²EIy/L²)√[Iw/Iy + G·It·L²/(π²EIy)] ; χLT (αLT = 0.21) ; Md,z = χLT·βb·Zp·fy/γm0", s: "Md,z(section) = " + f(r.MdzS, 1) + ", Mcr = " + f(r.Mcr, 1) + ", λLT = " + f(r.lLT, 3) + ", χLT = " + f(r.chi, 3) + " → Md,z = " + f(r.Mdz, 1) + " kNm ; Md,y = " + f(r.Mdy, 1) + " kNm", ref: "cl 8.2.1.2, 8.2.2, Annex E" });
+    S.push({ l: "Shear", e: "Vd = Av·fy/(√3·γm0) ; if V > 0.6Vd: Mdv = Md − β(Md − Mfd), β = (2V/Vd − 1)²", s: "Vd = " + f(r.Vd, 1) + " kN, V = " + f(r.Vmax, 1) + " kN, Mfd = " + f(r.Mfd, 1) + " kNm" + (r.Vmax > 0.6 * r.Vd ? " → moment reduced" : " → no reduction"), lim: "V ≤ Vd", ok: r.Vmax <= r.Vd, ref: "cl 8.4, 9.2.2" });
+    S.push({ l: "Design forces (governing combination)", e: "P (compression), T (tension), Mz, My — maxima along the member", s: "P = " + f(B.P) + ", T = " + f(B.T) + " kN, Mz = " + f(B.Mz) + ", My = " + f(B.My) + " kNm" });
+    S.push({ l: "Section strength", e: "n = N/Nd ; Mndz = 1.11Md,z(1 − n) ≤ Md,z ; Mndy = Md,y (n ≤ 0.2) else 1.56Md,y(1 − n)(n + 0.6) ; (My/Mndy)^α1 + (Mz/Mndz)^α2 ≤ 1, α1 = 5n ≥ 1, α2 = 2", s: "n = " + f(sq.n, 3) + ", Mndz = " + f(sq.Mndz, 1) + ", Mndy = " + f(sq.Mndy, 1) + " → " + f(B.sec, 3), lim: "≤ 1.0", ok: B.sec <= 1, ref: "cl 9.3.1.1" });
+    if (B.P > 0) {
+      S.push({ l: "Interaction factors", e: "Ky = 1 + (λy − 0.2)ny ≤ 1 + 0.8ny ; Kz likewise ; KLT = 1 − 0.1λLT·ny/(CmLT − 0.25) ; Cm = 0.6 + 0.4ψ ≥ 0.4 (0.95 with transverse load)", s: "ny = " + f(B.ny, 3) + ", nz = " + f(B.nz, 3) + ", Ky = " + f(B.Ky, 3) + ", Kz = " + f(B.Kz, 3) + ", KLT = " + f(B.KLT, 3) + ", Cmy = " + f(B.Cmy, 2) + ", Cmz = " + f(B.Cmz, 2), ref: "cl 9.3.2.2, Table 18" });
+      S.push({ l: "Member buckling (y)", e: "P/Pdy + Ky·Cmy·My/Mdy + KLT·Mz/Mdz ≤ 1", s: "= " + f(B.u1, 3), lim: "≤ 1.0", ok: B.u1 <= 1, ref: "cl 9.3.2.2(a)" });
+      S.push({ l: "Member buckling (z)", e: "P/Pdz + 0.6Ky·Cmy·My/Mdy + Kz·Cmz·Mz/Mdz ≤ 1", s: "= " + f(B.u2, 3), lim: "≤ 1.0", ok: B.u2 <= 1, ref: "cl 9.3.2.2(b)" });
+    } else S.push({ l: "Bending + tension", e: "Mz/Md,z(LTB) + My/Md,y ≤ 1 (tension relief ignored) ; T/Td ≤ 1", s: "= " + f(B.u1, 3) + " ; " + f(B.u2, 3), lim: "≤ 1.0", ok: Math.max(B.u1, B.u2) <= 1, ref: "cl 9.3.2.1, 6.2" });
+    S.push({ l: "Utilisation", e: "max of section and member checks", s: "= " + f(r.ratio, 3) + " (" + (B.gov || "-") + ")", lim: "≤ 1.0", ok: r.ratio <= 1 });
     return S;
   }
 
@@ -238,7 +243,9 @@ var CALC = (function () {
     ["Tension", "Tdg = Ag·fy/γm0", "cl 6.2"],
     ["Bending with LTB", "Md = χLT·βb·Zp·fy/γm0 ; Mcr per Annex E ; αLT = 0.21 (rolled)", "cl 8.2.2, Annex E"],
     ["Shear", "Vd = Av·fy/(√3·γm0) ; moment reduction if V > 0.6Vd", "cl 8.4, 9.2"],
-    ["Combined", "N/Nd + Mz/Mdz + My/Mdy ≤ 1", "cl 9.3.1, 9.3.2"]
+    ["Shear with bending", "V > 0.6Vd: Mdv = Md − β(Md − Mfd), β = (2V/Vd − 1)²", "cl 9.2.2"],
+    ["Section strength", "(My/Mndy)^α1 + (Mz/Mndz)^α2 ≤ 1 ; Mndz = 1.11Mdz(1 − n), α1 = 5n ≥ 1, α2 = 2", "cl 9.3.1.1"],
+    ["Member buckling", "P/Pdy + Ky·Cmy·My/Mdy + KLT·Mz/Mdz ≤ 1 ; P/Pdz + 0.6Ky·Cmy·My/Mdy + Kz·Cmz·Mz/Mdz ≤ 1", "cl 9.3.2.2, Table 18"]
   ];
 
   /* render steps as HTML */

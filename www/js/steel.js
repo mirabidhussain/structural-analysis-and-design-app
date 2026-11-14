@@ -155,11 +155,28 @@ ST.beamCheck = function (s, p) {
   else { o.Mu = w * p.L * p.L / 8 + P * p.L / 4; o.Vu = w * p.L / 2 + P / 2; }
   o.Mu += (s.m * 9.81 / 1000) * 1.5 * p.L * p.L / (p.support === "cant" ? 2 : 8);
   o.Vd = s.D * s.tw * fy / (Math.sqrt(3) * D.gm0) / 1e3;
+  /* IS 800 cl 9.2.2: where V > 0.6Vd the design moment is reduced, Mdv = Md − β(Md − Mfd), β = (2V/Vd − 1)²,
+     Mfd = plastic moment of the flanges alone; semi-compact: Mdv = Ze·fy/γm0. Checked at sections along the span where M and V act together. */
+  o.Mfd = s.bf * s.tf * (s.D - s.tf) * fy / D.gm0 / 1e6;
+  var swt = (s.m * 9.81 / 1000) * 1.5, Lm = p.L, worst = { u: -1 };
+  for (var i = 0; i <= 60; i++) {
+    var x = Lm * i / 60, Mx, Vx;
+    if (p.support === "cant") { var a = Lm - x; Mx = (w + swt) * a * a / 2 + P * a; Vx = (w + swt) * a + P; }
+    else { Mx = (w + swt) * x * (Lm - x) / 2 + P * Math.min(x, Lm - x) / 2; Vx = Math.abs((w + swt) * (Lm / 2 - x)) + P / 2; }
+    var Mdv = o.Md;
+    if (Vx > 0.6 * o.Vd) {
+      var beta = Math.pow(2 * Vx / o.Vd - 1, 2);
+      Mdv = o.cls === "Semi-compact" ? Math.min(o.Md, Ze * fy / D.gm0 / 1e6) : Math.max(0, o.Md - beta * Math.max(0, o.Md - o.Mfd));
+    }
+    var u = Mx / Math.max(Mdv, 1e-9);
+    if (u > worst.u) worst = { u: u, x: x, M: Mx, V: Vx, Mdv: Mdv, beta: Vx > 0.6 * o.Vd ? Math.pow(2 * Vx / o.Vd - 1, 2) : 0 };
+  }
+  o.hs = worst; o.highShear = worst.beta > 0;
   var I = s.Ix * 1e4, ws = (w / 1.5), Ps = P / 1.5;
   o.defl = p.support === "cant" ? ws * Math.pow(L, 4) / (8 * D.E * I) + Ps * 1e3 * Math.pow(L, 3) / (3 * D.E * I)
     : 5 * ws * Math.pow(L, 4) / (384 * D.E * I) + Ps * 1e3 * Math.pow(L, 3) / (48 * D.E * I);
   o.dlim = L / (p.support === "cant" ? 150 : p.dl);
-  o.ok = o.Mu <= o.Md && o.Vu <= o.Vd && o.defl <= o.dlim;
+  o.ok = o.Mu <= o.Md && o.Vu <= o.Vd && o.defl <= o.dlim && o.hs.u <= 1;
   return o;
 };
 ST.beam = function (p) {
@@ -176,7 +193,10 @@ ST.beam = function (p) {
   } else r.note("Compression flange laterally supported: Md = βb Zp fy/γm0 ≤ 1.2 Ze fy/γm0 (cl 8.2.1.2).");
   r.check("Bending Mu ≤ Md", o.Mu <= o.Md, U.f(o.Mu) + " ≤ " + U.f(o.Md) + " kNm", "cl 8.2");
   r.check("Shear Vu ≤ Vd = Av fy/(√3 γm0)", o.Vu <= o.Vd, U.f(o.Vu) + " ≤ " + U.f(o.Vd) + " kN", "cl 8.4");
-  if (o.Vu > 0.6 * o.Vd) r.note("High shear (V > 0.6 Vd): reduce Md per cl 9.2.");
+  if (o.Vu > 0.6 * o.Vd) {
+    r.eq("High shear: V > 0.6Vd = " + U.f(0.6 * o.Vd) + " kN → Mdv = Md − β(Md − Mfd), β = (2V/Vd − 1)², Mfd = bf·tf·(D − tf)·fy/γm0 = " + U.f(o.Mfd) + " kNm", "cl 9.2.2");
+    r.check("Moment with high shear M ≤ Mdv (critical section x = " + U.f(o.hs.x, 2) + " m)", o.hs.u <= 1, "M = " + U.f(o.hs.M) + ", V = " + U.f(o.hs.V) + " kN, β = " + U.f(o.hs.beta, 3) + " → Mdv = " + U.f(o.hs.Mdv) + " kNm", "cl 9.2.2");
+  } else r.check("Low shear V ≤ 0.6Vd: no moment reduction", true, U.f(o.Vu) + " ≤ " + U.f(0.6 * o.Vd) + " kN", "cl 9.2.1");
   r.check("Deflection (service) ≤ limit", o.defl <= o.dlim, U.f(o.defl, 1) + " ≤ " + U.f(o.dlim, 1) + " mm", "Table 6");
   r.note("Check web bearing and web buckling at supports/concentrated loads (cl 8.7.3, 8.7.4).");
   r.sum("Beam", s.name);

@@ -148,6 +148,8 @@ FE.shellElem = function (m, e) {
   var cm = E * t / (1 - nu * nu), Dm = [[cm, cm * nu, 0], [cm * nu, cm, 0], [0, 0, cm * (1 - nu) / 2]];
   var cb = E * t * t * t / (12 * (1 - nu * nu)), Db = [[cb, cb * nu, 0], [cb * nu, cb, 0], [0, 0, cb * (1 - nu) / 2]];
   var Gs = 5 / 6 * E / (2 * (1 + nu)) * t, Ds = [[Gs, 0], [0, Gs]];
+  var gq = FE.quadQuality(X, Y);
+  if (gq.err) throw new Error("Shell element " + (e.id + 1) + ": " + gq.err);
   var j0 = jac(q4(0, 0), X, Y);
   var Kcc = FE.zeros(8, 8), Kci = FE.zeros(8, 4), Kii = FE.zeros(4, 4), Kb = FE.zeros(12, 12), area = 0, Ni = [0, 0, 0, 0];
   /* MITC4 tying rows */
@@ -383,15 +385,87 @@ FE.woodArmer = function (mx, my, mxy) {
   return { bx: Math.max(0, bx), by: Math.max(0, by), tx: Math.min(0, tx), ty: Math.min(0, ty) };
 };
 
+/* ================= MODEL / MESH QUALITY ================= */
+FE.dofName = function (m, eqn) {
+  for (var i = 0; i < m._eq.length; i++) if (m._eq[i] === eqn) { var n = Math.floor(i / 6), nd = m.nodes[n]; return "node " + (n + 1) + " (" + nd.x.toFixed(2) + ", " + nd.y.toFixed(2) + ", " + nd.z.toFixed(2) + " m), " + ["UX", "UY", "UZ", "RX", "RY", "RZ"][i % 6]; }
+  return "equation " + eqn;
+};
+/* planar quad in local coordinates: area, convexity, angles, aspect ratio */
+FE.quadQuality = function (X, Y) {
+  var A = 0, cr = [], ang = [], L = [];
+  for (var i = 0; i < 4; i++) { var j = (i + 1) % 4; A += X[i] * Y[j] - X[j] * Y[i]; L.push(Math.hypot(X[j] - X[i], Y[j] - Y[i])); }
+  A /= 2;
+  var Lmax = Math.max.apply(null, L), Lmin = Math.min.apply(null, L);
+  if (!(Lmin > 1e-9 * Math.max(Lmax, 1))) return { err: "zero-length edge (coincident nodes)", A: A };
+  if (!(A > 1e-6 * Lmax * Lmax)) return { err: A < 0 ? "inverted (clockwise) node order" : "zero or near-zero area (collinear nodes)", A: A };
+  for (i = 0; i < 4; i++) {
+    var a = (i + 3) % 4, b = (i + 1) % 4, ux = X[a] - X[i], uy = Y[a] - Y[i], vx = X[b] - X[i], vy = Y[b] - Y[i];
+    cr.push(vx * uy - vy * ux);
+    ang.push(Math.acos(Math.max(-1, Math.min(1, (ux * vx + uy * vy) / (Math.hypot(ux, uy) * Math.hypot(vx, vy))))) * 180 / Math.PI);
+  }
+  if (cr.some(function (c) { return c <= 0; })) return { err: "non-convex or self-intersecting quadrilateral (Jacobian not positive)", A: A };
+  var amin = Math.min.apply(null, ang), amax = Math.max.apply(null, ang);
+  if (amin < 10 || amax > 170) return { err: "badly distorted: interior angle " + amin.toFixed(0) + "°–" + amax.toFixed(0) + "° (limit 10°–170°)", A: A };
+  return { A: A, ar: Lmax / Lmin, amin: amin, amax: amax };
+};
+FE.checkModel = function (m) {
+  var errors = [], warnings = [], n = m.nodes.length, used = new Uint8Array(n), stats = { shells: m.shells.length, badAR: 0, badAng: 0, warped: 0, maxAR: 0, minAng: 180 };
+  m.frames.forEach(function (e, k) {
+    var A = m.nodes[e.n1], B = m.nodes[e.n2]; used[e.n1] = used[e.n2] = 1;
+    if (e.n1 === e.n2 || Math.hypot(B.x - A.x, B.y - A.y, B.z - A.z) < 1e-6) errors.push("Member " + (k + 1) + " has zero length");
+    if (e.sec && !(e.sec.A > 0 && e.sec.Iz > 0 && e.sec.Iy > 0)) errors.push("Member " + (k + 1) + " has invalid section properties");
+  });
+  m.shells.forEach(function (e, k) {
+    e.id = k; e.n.forEach(function (i) { used[i] = 1; });
+    if (!(e.t > 0)) { errors.push("Shell " + (k + 1) + " has zero thickness"); return; }
+    var P = e.n.map(function (i) { return m.nodes[i]; });
+    if (new Set(e.n).size < 4) { errors.push("Shell " + (k + 1) + " has repeated nodes (degenerate)"); return; }
+    var g; try { g = FE.shellGeom(m, e); } catch (x) { errors.push("Shell " + (k + 1) + ": degenerate geometry"); return; }
+    if (g.R.some(function (v) { return v.some(function (x) { return !isFinite(x); }); })) { errors.push("Shell " + (k + 1) + ": degenerate geometry (zero area)"); return; }
+    var q = FE.quadQuality(g.X, g.Y);
+    if (q.err) { errors.push("Shell " + (k + 1) + ": " + q.err); return; }
+    /* warping: out-of-plane offset of nodes from the mean plane relative to the diagonal */
+    var c = { x: 0, y: 0, z: 0 }; P.forEach(function (p) { c.x += p.x / 4; c.y += p.y / 4; c.z += p.z / 4; });
+    var w = 0; P.forEach(function (p) { w = Math.max(w, Math.abs((p.x - c.x) * g.R[2][0] + (p.y - c.y) * g.R[2][1] + (p.z - c.z) * g.R[2][2])); });
+    var diag = Math.max(Math.hypot(P[2].x - P[0].x, P[2].y - P[0].y, P[2].z - P[0].z), Math.hypot(P[3].x - P[1].x, P[3].y - P[1].y, P[3].z - P[1].z));
+    if (w / diag > 0.1) errors.push("Shell " + (k + 1) + " is strongly warped (out-of-plane " + (100 * w / diag).toFixed(1) + "% of diagonal)");
+    else if (w / diag > 0.01) stats.warped++;
+    if (q.ar > 5) stats.badAR++;
+    if (q.amin < 45 || q.amax > 135) stats.badAng++;
+    stats.maxAR = Math.max(stats.maxAR, q.ar); stats.minAng = Math.min(stats.minAng, q.amin);
+  });
+  var free = 0; for (var i = 0; i < n; i++) if (!used[i]) free++;
+  if (free) warnings.push(free + " node(s) not connected to any element (ignored)");
+  if (stats.badAR) warnings.push(stats.badAR + " shell element(s) with aspect ratio > 5 (max " + stats.maxAR.toFixed(1) + ") — refine the mesh for accurate stresses");
+  if (stats.badAng) warnings.push(stats.badAng + " shell element(s) with corner angles outside 45°–135° (min " + stats.minAng.toFixed(0) + "°)");
+  if (stats.warped) warnings.push(stats.warped + " shell element(s) slightly warped (1–10% of diagonal)");
+  /* connectivity: every connected part must contain a support */
+  var adj = []; for (i = 0; i < n; i++) adj.push([]);
+  m.frames.forEach(function (e) { adj[e.n1].push(e.n2); adj[e.n2].push(e.n1); });
+  m.shells.forEach(function (e) { for (var a = 0; a < 4; a++) adj[e.n[a]].push(e.n[(a + 1) % 4], e.n[(a + 3) % 4]); });
+  var comp = new Int32Array(n).fill(-1), nc = 0;
+  for (i = 0; i < n; i++) {
+    if (comp[i] >= 0 || !used[i]) continue;
+    var st = [i], hasSup = false, cnt = 0; comp[i] = nc;
+    while (st.length) { var v = st.pop(); cnt++; if (m.sup[v] && m.sup[v].some(function (x) { return x; })) hasSup = true; adj[v].forEach(function (w2) { if (comp[w2] < 0) { comp[w2] = nc; st.push(w2); } }); }
+    if (!hasSup) errors.push("A group of " + cnt + " node(s) including node " + (i + 1) + " is not connected to any support (floating part)");
+    nc++;
+  }
+  stats.parts = nc;
+  return { errors: errors, warnings: warnings, stats: stats };
+};
+
 /* ================= LINEAR STATIC ================= */
 /* cases: {name: lc}. combos: [{name, f:{case:factor}}]. pdelta: iterate geometric stiffness for each combo */
 FE.linear = function (m, cases, combos, opt) {
   opt = opt || {};
+  var qc = FE.checkModel(m);
+  if (qc.errors.length) throw new Error("Model check failed:\n• " + qc.errors.slice(0, 8).join("\n• ") + (qc.errors.length > 8 ? "\n… " + (qc.errors.length - 8) + " more" : ""));
   var info = FE.prepare(m);
-  var res = { info: info, cases: {}, combos: [] };
+  var res = { info: info, cases: {}, combos: [], quality: qc, warn: qc.warnings.slice() };
   var asm = FE.assemble(m, null), A = asm.A;
   var bad = FE.factor(A, m._maxa, m._neq);
-  if (bad >= 0) throw new Error("Structure is unstable (mechanism) - check supports/releases near equation " + bad);
+  if (bad >= 0) throw new Error("Structure is unstable (mechanism or missing support) at " + FE.dofName(m, bad) + ". Check supports, member releases and that every part of the model is connected.");
   Object.keys(cases).forEach(function (cn) {
     var lv = FE.loadVector(m, cases[cn], null), x = FE.backsub(A, m._maxa, m._neq, Float64Array.from(lv.F));
     res.cases[cn] = { U: FE.expand(m, x), lv: lv };
@@ -404,21 +478,29 @@ FE.linear = function (m, cases, combos, opt) {
       c.lv.qeq.forEach(function (q, k) { if (!q) return; if (!qmix[k]) qmix[k] = { w: [0, 0, 0] }; for (var d = 0; d < 3; d++) qmix[k].w[d] += s * q.w[d]; });
       lcs.push([cn, s]);
     });
-    var N = null, it = 0, amp = 1;
+    var N = null, it = 0, amp = 1, conv = null, hist = [], maxIt = opt.pdMaxIt || 30, tol = opt.pdTol || 1e-6;
     if (opt.pdelta) {
-      for (it = 0; it < 15; it++) {
+      conv = false;
+      for (it = 0; it < maxIt; it++) {
+        var Nold = N;
         N = m.frames.map(function (e, k) { var ff = FE.frameForces(m, k, U, qmix[k], N ? N[k] : 0); return -ff.f[0]; });
         var asm2 = FE.assemble(m, N), A2 = asm2.A;
-        if (FE.factor(A2, m._maxa, m._neq) >= 0) throw new Error("P-Delta: structure buckles under combination " + cb.name);
+        var badPD = FE.factor(A2, m._maxa, m._neq);
+        if (badPD >= 0) throw new Error("P-Delta: the structure becomes unstable (buckles) under combination " + cb.name + " — " + FE.dofName(m, badPD) + ". Axial loads exceed the elastic critical load; stiffen the structure.");
         var F = new Float64Array(m._neq);
         lcs.forEach(function (p) { var f = res.cases[p[0]].lv.F; for (var i = 0; i < F.length; i++) F[i] += p[1] * f[i]; });
         var U2 = FE.expand(m, FE.backsub(A2, m._maxa, m._neq, F));
         var dmax = 0, umax = 0; for (var i = 0; i < U.length; i += 1) { dmax = Math.max(dmax, Math.abs(U2[i] - U[i])); umax = Math.max(umax, Math.abs(U2[i])); }
         var u0 = 0; for (i = 0; i < U.length; i++) u0 = Math.max(u0, Math.abs(U[i]));
         if (it === 0) amp = u0 > 0 ? umax / u0 : 1;
-        U = U2; if (dmax <= 1e-6 * Math.max(umax, 1e-9)) break;
+        var dN = 0, nN = 0; if (Nold) N.forEach(function (v, k) { dN = Math.max(dN, Math.abs(v - Nold[k])); nN = Math.max(nN, Math.abs(v)); });
+        var rU = dmax / Math.max(umax, 1e-12), rN = Nold ? dN / Math.max(nN, 1e-9) : 1;
+        hist.push(rU);
+        U = U2;
+        if (rU <= tol) { conv = true; it++; break; }
+        if (it >= 4 && hist[it] > hist[it - 1] * 1.05 && hist[it - 1] > hist[it - 2] * 1.05) break;   /* diverging */
       }
-      m._shellCache = m._shellCache;
+      if (!conv) throw new Error("P-Delta did not converge for combination " + cb.name + " after " + it + " iterations (last relative displacement change " + (hist[hist.length - 1] || 0).toExponential(2) + ", tolerance " + tol.toExponential(0) + "). The structure is close to elastic instability — results rejected. Stiffen the structure or reduce axial loads.");
     }
     var fr = m.frames.map(function (e, k) { return FE.frameForces(m, k, U, qmix[k], N ? N[k] : 0); });
     var sh = m.shells.map(function (e, k) { return FE.shellForces(m, k, U); });
@@ -433,7 +515,8 @@ FE.linear = function (m, cases, combos, opt) {
     lcs.forEach(function (p) { var c = res.cases[p[0]].lv.Ffull; for (var i = 0; i < Fn.length; i++) Fn[i] += p[1] * c[i]; });
     var reac = {};
     Object.keys(m.sup).forEach(function (v) { reac[v] = []; for (var t = 0; t < 6; t++) reac[v].push(m.sup[v][t] ? Rr[6 * v + t] - Fn[6 * v + t] : 0); });
-    res.combos.push({ name: cb.name, U: U, fr: fr, sh: sh, reac: reac, N: N, pdIter: it, pdAmp: amp });
+    res.combos.push({ name: cb.name, U: U, fr: fr, sh: sh, reac: reac, N: N, pdIter: it, pdAmp: amp, pdConv: conv, pdResid: hist.length ? hist[hist.length - 1] : null });
+    if (conv && it > 10) (res.warn = res.warn || []).push("P-Delta converged slowly for " + cb.name + " (" + it + " iterations): structure is approaching instability.");
   });
   return res;
 };

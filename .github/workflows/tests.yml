@@ -7,7 +7,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  engineering:
+    name: Verification, benchmarks & acceptance
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,3 +23,23 @@ jobs:
         run: node test/model_test.js | tee model.txt && ! grep -q FAIL model.txt
       - name: Design module checks
         run: node test/verify.js | tee v.txt && ! grep -q FAIL v.txt
+      - name: Acceptance & independent benchmarks (expected pass / expected fail / code tables / FE benchmarks / drift)
+        run: node test/acceptance.js
+      - name: Sample design report (diagnostic, not pass/fail)
+        run: node test/smoke.js
+
+  ui:
+    name: Browser UI test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: python build.py
+      - run: node test/ui_ci.js

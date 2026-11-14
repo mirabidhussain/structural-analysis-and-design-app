@@ -568,6 +568,16 @@ RCC.column = function (p) {
     trace.push([U.f(pc, 1), U.f(Puz, 0), U.f(Mx1, 1), U.f(My1, 1), U.f(an, 2), U.f(u, 3)]);
     if (u <= 1) { found = { pc: pc, As: As, Puz: Puz, Mx1: Mx1, My1: My1, an: an, u: u }; break; }
   }
+  if (found && found.pc > 0.8 + 1e-9) {   /* refine to 0.01 % by bisection */
+    var lo2 = found.pc - 0.1, hi2 = found.pc;
+    while (hi2 - lo2 > 0.01) {
+      var md = (lo2 + hi2) / 2, As3 = md / 100 * Ag, Puz3 = (0.45 * fck * (Ag - As3) + 0.75 * fy * As3) / 1000;
+      if (Pu > Puz3) { lo2 = md; continue; }
+      var a1 = RCC.colMcap(b, Dd, As3, Pu, fck, fy, dc, p.arr), a2 = RCC.colMcap(Dd, b, As3, Pu, fck, fy, dc, p.arr), rr3 = Pu / Puz3, an3 = rr3 <= 0.2 ? 1 : rr3 >= 0.8 ? 2 : 1 + (rr3 - 0.2) / 0.6;
+      var u3 = Math.pow(Mx / a1, an3) + Math.pow(My / a2, an3);
+      if (u3 <= 1) { hi2 = md; found = { pc: md, As: As3, Puz: Puz3, Mx1: a1, My1: a2, an: an3, u: u3 }; } else lo2 = md;
+    }
+  }
   if (trace.length) r.table(["p %", "Puz kN", "Mux1 kNm", "Muy1 kNm", "αn", "Interaction"], trace.slice(-4));
   if (!found) { r.fail("Section inadequate up to p = " + p.pmax + " %. Increase size or grade."); return r; }
   r.eq("Puz = 0.45 fck Ac + 0.75 fy Asc = " + U.f(found.Puz, 0) + " kN ; αn = " + U.f(found.an, 2), "cl 39.6");
@@ -578,6 +588,11 @@ RCC.column = function (p) {
   var Aprov = nb * D.barArea(p.dia);
   r.row("Required Asc (p = " + U.f(found.pc, 1) + " %)", U.f(Asreq, 0), "mm²", "min 0.8 % cl 26.5.3.1");
   r.row("Provide", nb + " nos " + p.dia + " mm φ (" + U.f(Aprov, 0) + " mm², " + U.f(100 * Aprov / Ag, 2) + " %)", "");
+  (function () {   /* re-verify interaction with the bars actually provided */
+    var Puz2 = (0.45 * fck * (Ag - Aprov) + 0.75 * fy * Aprov) / 1000, Mx2 = RCC.colMcap(b, Dd, Aprov, Pu, fck, fy, dc, p.arr), My2 = RCC.colMcap(Dd, b, Aprov, Pu, fck, fy, dc, p.arr);
+    var rt = Pu / Puz2, an2 = rt <= 0.2 ? 1 : rt >= 0.8 ? 2 : 1 + (rt - 0.2) / 0.6, u2 = Math.pow(Mx / Mx2, an2) + Math.pow(My / My2, an2);
+    r.check("Interaction with bars provided ≤ 1", u2 <= 1, U.f(u2, 3) + " (Mux1 = " + U.f(Mx2, 1) + ", Muy1 = " + U.f(My2, 1) + " kNm)", "cl 39.6");
+  })();
   r.check("Asc ≤ 4 % (practical) / 6 %", 100 * Aprov / Ag <= 6, "", "cl 26.5.3.1");
   r.h("4. Lateral ties");
   var td = Math.max(6, Math.ceil(p.dia / 4)); td = D.bars.filter(function (x) { return x >= td; })[0];
@@ -895,11 +910,28 @@ ST.beamCheck = function (s, p) {
   else { o.Mu = w * p.L * p.L / 8 + P * p.L / 4; o.Vu = w * p.L / 2 + P / 2; }
   o.Mu += (s.m * 9.81 / 1000) * 1.5 * p.L * p.L / (p.support === "cant" ? 2 : 8);
   o.Vd = s.D * s.tw * fy / (Math.sqrt(3) * D.gm0) / 1e3;
+  /* IS 800 cl 9.2.2: where V > 0.6Vd the design moment is reduced, Mdv = Md − β(Md − Mfd), β = (2V/Vd − 1)²,
+     Mfd = plastic moment of the flanges alone; semi-compact: Mdv = Ze·fy/γm0. Checked at sections along the span where M and V act together. */
+  o.Mfd = s.bf * s.tf * (s.D - s.tf) * fy / D.gm0 / 1e6;
+  var swt = (s.m * 9.81 / 1000) * 1.5, Lm = p.L, worst = { u: -1 };
+  for (var i = 0; i <= 60; i++) {
+    var x = Lm * i / 60, Mx, Vx;
+    if (p.support === "cant") { var a = Lm - x; Mx = (w + swt) * a * a / 2 + P * a; Vx = (w + swt) * a + P; }
+    else { Mx = (w + swt) * x * (Lm - x) / 2 + P * Math.min(x, Lm - x) / 2; Vx = Math.abs((w + swt) * (Lm / 2 - x)) + P / 2; }
+    var Mdv = o.Md;
+    if (Vx > 0.6 * o.Vd) {
+      var beta = Math.pow(2 * Vx / o.Vd - 1, 2);
+      Mdv = o.cls === "Semi-compact" ? Math.min(o.Md, Ze * fy / D.gm0 / 1e6) : Math.max(0, o.Md - beta * Math.max(0, o.Md - o.Mfd));
+    }
+    var u = Mx / Math.max(Mdv, 1e-9);
+    if (u > worst.u) worst = { u: u, x: x, M: Mx, V: Vx, Mdv: Mdv, beta: Vx > 0.6 * o.Vd ? Math.pow(2 * Vx / o.Vd - 1, 2) : 0 };
+  }
+  o.hs = worst; o.highShear = worst.beta > 0;
   var I = s.Ix * 1e4, ws = (w / 1.5), Ps = P / 1.5;
   o.defl = p.support === "cant" ? ws * Math.pow(L, 4) / (8 * D.E * I) + Ps * 1e3 * Math.pow(L, 3) / (3 * D.E * I)
     : 5 * ws * Math.pow(L, 4) / (384 * D.E * I) + Ps * 1e3 * Math.pow(L, 3) / (48 * D.E * I);
   o.dlim = L / (p.support === "cant" ? 150 : p.dl);
-  o.ok = o.Mu <= o.Md && o.Vu <= o.Vd && o.defl <= o.dlim;
+  o.ok = o.Mu <= o.Md && o.Vu <= o.Vd && o.defl <= o.dlim && o.hs.u <= 1;
   return o;
 };
 ST.beam = function (p) {
@@ -916,7 +948,10 @@ ST.beam = function (p) {
   } else r.note("Compression flange laterally supported: Md = βb Zp fy/γm0 ≤ 1.2 Ze fy/γm0 (cl 8.2.1.2).");
   r.check("Bending Mu ≤ Md", o.Mu <= o.Md, U.f(o.Mu) + " ≤ " + U.f(o.Md) + " kNm", "cl 8.2");
   r.check("Shear Vu ≤ Vd = Av fy/(√3 γm0)", o.Vu <= o.Vd, U.f(o.Vu) + " ≤ " + U.f(o.Vd) + " kN", "cl 8.4");
-  if (o.Vu > 0.6 * o.Vd) r.note("High shear (V > 0.6 Vd): reduce Md per cl 9.2.");
+  if (o.Vu > 0.6 * o.Vd) {
+    r.eq("High shear: V > 0.6Vd = " + U.f(0.6 * o.Vd) + " kN → Mdv = Md − β(Md − Mfd), β = (2V/Vd − 1)², Mfd = bf·tf·(D − tf)·fy/γm0 = " + U.f(o.Mfd) + " kNm", "cl 9.2.2");
+    r.check("Moment with high shear M ≤ Mdv (critical section x = " + U.f(o.hs.x, 2) + " m)", o.hs.u <= 1, "M = " + U.f(o.hs.M) + ", V = " + U.f(o.hs.V) + " kN, β = " + U.f(o.hs.beta, 3) + " → Mdv = " + U.f(o.hs.Mdv) + " kNm", "cl 9.2.2");
+  } else r.check("Low shear V ≤ 0.6Vd: no moment reduction", true, U.f(o.Vu) + " ≤ " + U.f(0.6 * o.Vd) + " kN", "cl 9.2.1");
   r.check("Deflection (service) ≤ limit", o.defl <= o.dlim, U.f(o.defl, 1) + " ≤ " + U.f(o.dlim, 1) + " mm", "Table 6");
   r.note("Check web bearing and web buckling at supports/concentrated loads (cl 8.7.3, 8.7.4).");
   r.sum("Beam", s.name);
@@ -1460,6 +1495,8 @@ FE.shellElem = function (m, e) {
   var cm = E * t / (1 - nu * nu), Dm = [[cm, cm * nu, 0], [cm * nu, cm, 0], [0, 0, cm * (1 - nu) / 2]];
   var cb = E * t * t * t / (12 * (1 - nu * nu)), Db = [[cb, cb * nu, 0], [cb * nu, cb, 0], [0, 0, cb * (1 - nu) / 2]];
   var Gs = 5 / 6 * E / (2 * (1 + nu)) * t, Ds = [[Gs, 0], [0, Gs]];
+  var gq = FE.quadQuality(X, Y);
+  if (gq.err) throw new Error("Shell element " + (e.id + 1) + ": " + gq.err);
   var j0 = jac(q4(0, 0), X, Y);
   var Kcc = FE.zeros(8, 8), Kci = FE.zeros(8, 4), Kii = FE.zeros(4, 4), Kb = FE.zeros(12, 12), area = 0, Ni = [0, 0, 0, 0];
   /* MITC4 tying rows */
@@ -1695,15 +1732,87 @@ FE.woodArmer = function (mx, my, mxy) {
   return { bx: Math.max(0, bx), by: Math.max(0, by), tx: Math.min(0, tx), ty: Math.min(0, ty) };
 };
 
+/* ================= MODEL / MESH QUALITY ================= */
+FE.dofName = function (m, eqn) {
+  for (var i = 0; i < m._eq.length; i++) if (m._eq[i] === eqn) { var n = Math.floor(i / 6), nd = m.nodes[n]; return "node " + (n + 1) + " (" + nd.x.toFixed(2) + ", " + nd.y.toFixed(2) + ", " + nd.z.toFixed(2) + " m), " + ["UX", "UY", "UZ", "RX", "RY", "RZ"][i % 6]; }
+  return "equation " + eqn;
+};
+/* planar quad in local coordinates: area, convexity, angles, aspect ratio */
+FE.quadQuality = function (X, Y) {
+  var A = 0, cr = [], ang = [], L = [];
+  for (var i = 0; i < 4; i++) { var j = (i + 1) % 4; A += X[i] * Y[j] - X[j] * Y[i]; L.push(Math.hypot(X[j] - X[i], Y[j] - Y[i])); }
+  A /= 2;
+  var Lmax = Math.max.apply(null, L), Lmin = Math.min.apply(null, L);
+  if (!(Lmin > 1e-9 * Math.max(Lmax, 1))) return { err: "zero-length edge (coincident nodes)", A: A };
+  if (!(A > 1e-6 * Lmax * Lmax)) return { err: A < 0 ? "inverted (clockwise) node order" : "zero or near-zero area (collinear nodes)", A: A };
+  for (i = 0; i < 4; i++) {
+    var a = (i + 3) % 4, b = (i + 1) % 4, ux = X[a] - X[i], uy = Y[a] - Y[i], vx = X[b] - X[i], vy = Y[b] - Y[i];
+    cr.push(vx * uy - vy * ux);
+    ang.push(Math.acos(Math.max(-1, Math.min(1, (ux * vx + uy * vy) / (Math.hypot(ux, uy) * Math.hypot(vx, vy))))) * 180 / Math.PI);
+  }
+  if (cr.some(function (c) { return c <= 0; })) return { err: "non-convex or self-intersecting quadrilateral (Jacobian not positive)", A: A };
+  var amin = Math.min.apply(null, ang), amax = Math.max.apply(null, ang);
+  if (amin < 10 || amax > 170) return { err: "badly distorted: interior angle " + amin.toFixed(0) + "°–" + amax.toFixed(0) + "° (limit 10°–170°)", A: A };
+  return { A: A, ar: Lmax / Lmin, amin: amin, amax: amax };
+};
+FE.checkModel = function (m) {
+  var errors = [], warnings = [], n = m.nodes.length, used = new Uint8Array(n), stats = { shells: m.shells.length, badAR: 0, badAng: 0, warped: 0, maxAR: 0, minAng: 180 };
+  m.frames.forEach(function (e, k) {
+    var A = m.nodes[e.n1], B = m.nodes[e.n2]; used[e.n1] = used[e.n2] = 1;
+    if (e.n1 === e.n2 || Math.hypot(B.x - A.x, B.y - A.y, B.z - A.z) < 1e-6) errors.push("Member " + (k + 1) + " has zero length");
+    if (e.sec && !(e.sec.A > 0 && e.sec.Iz > 0 && e.sec.Iy > 0)) errors.push("Member " + (k + 1) + " has invalid section properties");
+  });
+  m.shells.forEach(function (e, k) {
+    e.id = k; e.n.forEach(function (i) { used[i] = 1; });
+    if (!(e.t > 0)) { errors.push("Shell " + (k + 1) + " has zero thickness"); return; }
+    var P = e.n.map(function (i) { return m.nodes[i]; });
+    if (new Set(e.n).size < 4) { errors.push("Shell " + (k + 1) + " has repeated nodes (degenerate)"); return; }
+    var g; try { g = FE.shellGeom(m, e); } catch (x) { errors.push("Shell " + (k + 1) + ": degenerate geometry"); return; }
+    if (g.R.some(function (v) { return v.some(function (x) { return !isFinite(x); }); })) { errors.push("Shell " + (k + 1) + ": degenerate geometry (zero area)"); return; }
+    var q = FE.quadQuality(g.X, g.Y);
+    if (q.err) { errors.push("Shell " + (k + 1) + ": " + q.err); return; }
+    /* warping: out-of-plane offset of nodes from the mean plane relative to the diagonal */
+    var c = { x: 0, y: 0, z: 0 }; P.forEach(function (p) { c.x += p.x / 4; c.y += p.y / 4; c.z += p.z / 4; });
+    var w = 0; P.forEach(function (p) { w = Math.max(w, Math.abs((p.x - c.x) * g.R[2][0] + (p.y - c.y) * g.R[2][1] + (p.z - c.z) * g.R[2][2])); });
+    var diag = Math.max(Math.hypot(P[2].x - P[0].x, P[2].y - P[0].y, P[2].z - P[0].z), Math.hypot(P[3].x - P[1].x, P[3].y - P[1].y, P[3].z - P[1].z));
+    if (w / diag > 0.1) errors.push("Shell " + (k + 1) + " is strongly warped (out-of-plane " + (100 * w / diag).toFixed(1) + "% of diagonal)");
+    else if (w / diag > 0.01) stats.warped++;
+    if (q.ar > 5) stats.badAR++;
+    if (q.amin < 45 || q.amax > 135) stats.badAng++;
+    stats.maxAR = Math.max(stats.maxAR, q.ar); stats.minAng = Math.min(stats.minAng, q.amin);
+  });
+  var free = 0; for (var i = 0; i < n; i++) if (!used[i]) free++;
+  if (free) warnings.push(free + " node(s) not connected to any element (ignored)");
+  if (stats.badAR) warnings.push(stats.badAR + " shell element(s) with aspect ratio > 5 (max " + stats.maxAR.toFixed(1) + ") — refine the mesh for accurate stresses");
+  if (stats.badAng) warnings.push(stats.badAng + " shell element(s) with corner angles outside 45°–135° (min " + stats.minAng.toFixed(0) + "°)");
+  if (stats.warped) warnings.push(stats.warped + " shell element(s) slightly warped (1–10% of diagonal)");
+  /* connectivity: every connected part must contain a support */
+  var adj = []; for (i = 0; i < n; i++) adj.push([]);
+  m.frames.forEach(function (e) { adj[e.n1].push(e.n2); adj[e.n2].push(e.n1); });
+  m.shells.forEach(function (e) { for (var a = 0; a < 4; a++) adj[e.n[a]].push(e.n[(a + 1) % 4], e.n[(a + 3) % 4]); });
+  var comp = new Int32Array(n).fill(-1), nc = 0;
+  for (i = 0; i < n; i++) {
+    if (comp[i] >= 0 || !used[i]) continue;
+    var st = [i], hasSup = false, cnt = 0; comp[i] = nc;
+    while (st.length) { var v = st.pop(); cnt++; if (m.sup[v] && m.sup[v].some(function (x) { return x; })) hasSup = true; adj[v].forEach(function (w2) { if (comp[w2] < 0) { comp[w2] = nc; st.push(w2); } }); }
+    if (!hasSup) errors.push("A group of " + cnt + " node(s) including node " + (i + 1) + " is not connected to any support (floating part)");
+    nc++;
+  }
+  stats.parts = nc;
+  return { errors: errors, warnings: warnings, stats: stats };
+};
+
 /* ================= LINEAR STATIC ================= */
 /* cases: {name: lc}. combos: [{name, f:{case:factor}}]. pdelta: iterate geometric stiffness for each combo */
 FE.linear = function (m, cases, combos, opt) {
   opt = opt || {};
+  var qc = FE.checkModel(m);
+  if (qc.errors.length) throw new Error("Model check failed:\n• " + qc.errors.slice(0, 8).join("\n• ") + (qc.errors.length > 8 ? "\n… " + (qc.errors.length - 8) + " more" : ""));
   var info = FE.prepare(m);
-  var res = { info: info, cases: {}, combos: [] };
+  var res = { info: info, cases: {}, combos: [], quality: qc, warn: qc.warnings.slice() };
   var asm = FE.assemble(m, null), A = asm.A;
   var bad = FE.factor(A, m._maxa, m._neq);
-  if (bad >= 0) throw new Error("Structure is unstable (mechanism) - check supports/releases near equation " + bad);
+  if (bad >= 0) throw new Error("Structure is unstable (mechanism or missing support) at " + FE.dofName(m, bad) + ". Check supports, member releases and that every part of the model is connected.");
   Object.keys(cases).forEach(function (cn) {
     var lv = FE.loadVector(m, cases[cn], null), x = FE.backsub(A, m._maxa, m._neq, Float64Array.from(lv.F));
     res.cases[cn] = { U: FE.expand(m, x), lv: lv };
@@ -1716,21 +1825,29 @@ FE.linear = function (m, cases, combos, opt) {
       c.lv.qeq.forEach(function (q, k) { if (!q) return; if (!qmix[k]) qmix[k] = { w: [0, 0, 0] }; for (var d = 0; d < 3; d++) qmix[k].w[d] += s * q.w[d]; });
       lcs.push([cn, s]);
     });
-    var N = null, it = 0, amp = 1;
+    var N = null, it = 0, amp = 1, conv = null, hist = [], maxIt = opt.pdMaxIt || 30, tol = opt.pdTol || 1e-6;
     if (opt.pdelta) {
-      for (it = 0; it < 15; it++) {
+      conv = false;
+      for (it = 0; it < maxIt; it++) {
+        var Nold = N;
         N = m.frames.map(function (e, k) { var ff = FE.frameForces(m, k, U, qmix[k], N ? N[k] : 0); return -ff.f[0]; });
         var asm2 = FE.assemble(m, N), A2 = asm2.A;
-        if (FE.factor(A2, m._maxa, m._neq) >= 0) throw new Error("P-Delta: structure buckles under combination " + cb.name);
+        var badPD = FE.factor(A2, m._maxa, m._neq);
+        if (badPD >= 0) throw new Error("P-Delta: the structure becomes unstable (buckles) under combination " + cb.name + " — " + FE.dofName(m, badPD) + ". Axial loads exceed the elastic critical load; stiffen the structure.");
         var F = new Float64Array(m._neq);
         lcs.forEach(function (p) { var f = res.cases[p[0]].lv.F; for (var i = 0; i < F.length; i++) F[i] += p[1] * f[i]; });
         var U2 = FE.expand(m, FE.backsub(A2, m._maxa, m._neq, F));
         var dmax = 0, umax = 0; for (var i = 0; i < U.length; i += 1) { dmax = Math.max(dmax, Math.abs(U2[i] - U[i])); umax = Math.max(umax, Math.abs(U2[i])); }
         var u0 = 0; for (i = 0; i < U.length; i++) u0 = Math.max(u0, Math.abs(U[i]));
         if (it === 0) amp = u0 > 0 ? umax / u0 : 1;
-        U = U2; if (dmax <= 1e-6 * Math.max(umax, 1e-9)) break;
+        var dN = 0, nN = 0; if (Nold) N.forEach(function (v, k) { dN = Math.max(dN, Math.abs(v - Nold[k])); nN = Math.max(nN, Math.abs(v)); });
+        var rU = dmax / Math.max(umax, 1e-12), rN = Nold ? dN / Math.max(nN, 1e-9) : 1;
+        hist.push(rU);
+        U = U2;
+        if (rU <= tol) { conv = true; it++; break; }
+        if (it >= 4 && hist[it] > hist[it - 1] * 1.05 && hist[it - 1] > hist[it - 2] * 1.05) break;   /* diverging */
       }
-      m._shellCache = m._shellCache;
+      if (!conv) throw new Error("P-Delta did not converge for combination " + cb.name + " after " + it + " iterations (last relative displacement change " + (hist[hist.length - 1] || 0).toExponential(2) + ", tolerance " + tol.toExponential(0) + "). The structure is close to elastic instability — results rejected. Stiffen the structure or reduce axial loads.");
     }
     var fr = m.frames.map(function (e, k) { return FE.frameForces(m, k, U, qmix[k], N ? N[k] : 0); });
     var sh = m.shells.map(function (e, k) { return FE.shellForces(m, k, U); });
@@ -1745,7 +1862,8 @@ FE.linear = function (m, cases, combos, opt) {
     lcs.forEach(function (p) { var c = res.cases[p[0]].lv.Ffull; for (var i = 0; i < Fn.length; i++) Fn[i] += p[1] * c[i]; });
     var reac = {};
     Object.keys(m.sup).forEach(function (v) { reac[v] = []; for (var t = 0; t < 6; t++) reac[v].push(m.sup[v][t] ? Rr[6 * v + t] - Fn[6 * v + t] : 0); });
-    res.combos.push({ name: cb.name, U: U, fr: fr, sh: sh, reac: reac, N: N, pdIter: it, pdAmp: amp });
+    res.combos.push({ name: cb.name, U: U, fr: fr, sh: sh, reac: reac, N: N, pdIter: it, pdAmp: amp, pdConv: conv, pdResid: hist.length ? hist[hist.length - 1] : null });
+    if (conv && it > 10) (res.warn = res.warn || []).push("P-Delta converged slowly for " + cb.name + " (" + it + " iterations): structure is approaching instability.");
   });
   return res;
 };
@@ -1768,6 +1886,8 @@ PO.level = function (th, lim) { th = Math.abs(th); return th <= 1e-12 ? "Elastic
 
 /* opt: {gravity: lc (load case object), pattern: [{n, f[6]}], ctrl: node, dir: 0|1, dmax (m), pdelta, maxEvents} */
 PO.start = function (m, opt) {
+  var qc = FE.checkModel(m);
+  if (qc.errors.length) throw new Error("Model check failed:\n• " + qc.errors.slice(0, 8).join("\n• "));
   var info = FE.prepare(m), nF = m.frames.length;
   var baseRel = m.frames.map(function (e) { return (e.rel || []).slice(); });
   m.frames.forEach(function (e) { var A = m.nodes[e.n1], B = m.nodes[e.n2]; e.L = Math.hypot(B.x - A.x, B.y - A.y, B.z - A.z); });
@@ -2202,7 +2322,7 @@ MD.generate = function (g) {
 
 /* ---------- member selection rules: "12", "1-12", "F20", "columns storey 1-2", "beams level 3.5", "layer BEAM" ---------- */
 MD.select = function (m, sel) {
-  var lv = MD.levels(m), out = [], bad = null;
+  var lv = MD.floorLevels(m), out = [], bad = null;
   function storey(e) { var z = Math.max(m.nodes[e.n1].z, m.nodes[e.n2].z); var i = -1, best = 1e9; lv.forEach(function (l, j) { if (Math.abs(l - z) < best) { best = Math.abs(l - z); i = j; } }); return i; }
   String(sel).split(",").forEach(function (part) {
     var t = part.trim(), mm; if (!t) return;
@@ -2316,7 +2436,7 @@ MD.cases = function (m, p) {
   });
   var wind = {};
   if (p.wind) dirs.forEach(function (d) {
-    var lv = MD.levels(m), nm = "WL" + (d ? "Y" : "X"), nod = [], B = m.twoD ? p.trib : (function () { var a = Infinity, b = -Infinity; m.nodes.forEach(function (n) { var v = d ? n.x : n.y; a = Math.min(a, v); b = Math.max(b, v); }); return Math.max(b - a, 1); })();
+    var lv = MD.floorLevels(m), nm = "WL" + (d ? "Y" : "X"), nod = [], B = m.twoD ? p.trib : (function () { var a = Infinity, b = -Infinity; m.nodes.forEach(function (n) { var v = d ? n.x : n.y; a = Math.min(a, v); b = Math.max(b, v); }); return Math.max(b - a, 1); })();
     var Ftot = 0;
     lv.forEach(function (z, i) {
       if (i === 0) return;
@@ -2412,29 +2532,42 @@ MD.rccCol = function (e, k, s, pts, p, res) {
   var b = s.b, Dd = s.D, fck = s.fck, fy = s.fy, L = e.L * 1000, Ag = b * Dd;
   var exz = Math.max(L / 500 + Dd / 30, 20) / 1000, exy = Math.max(L / 500 + b / 30, 20) / 1000;
   var le = (p.kcol || 1.2) * L, slz = le / Dd, sly = le / b, crit = null, need = null;
-  var steps = []; for (var pc = 0.8; pc <= 4.001; pc += 0.2) steps.push(pc);
   /* governing (P, Mz, My) points: column ends of every combination */
   var cand = pts.filter(function (q, i) { return i % 9 === 0 || i % 9 === 8; });
-  for (var si = 0; si < steps.length && need === null; si++) {
-    var As = steps[si] / 100 * Ag, Puz = (0.45 * fck * (Ag - As) + 0.75 * fy * As) / 1000, worst = 0, wq = null;
+  function evalP(pcv) {
+    var As = pcv / 100 * Ag, Puz = (0.45 * fck * (Ag - As) + 0.75 * fy * As) / 1000, worst = 0, wq = null;
     cand.forEach(function (q) {
       var Pu = Math.max(-q.N, 0);
       var Maz = slz > 12 ? Pu * Dd / 2000 * slz * slz / 1000 : 0, May = sly > 12 ? Pu * b / 2000 * sly * sly / 1000 : 0;
       var Mz = Math.max(Math.abs(q.Mz), Pu * exz) + Maz, My = Math.max(Math.abs(q.My), Pu * exy) + May;
-      if (Pu > 0.98 * Puz) { worst = 9; wq = q; return; }
+      if (Pu > 0.98 * Puz) { if (9 > worst) { worst = 9; wq = { cb: q.cb, Pu: Pu, Mz: Mz, My: My, an: 2, M1: 1e-6, M2: 1e-6, Mz0: Math.abs(q.Mz), My0: Math.abs(q.My), Maz: Maz, May: May, Puz: Puz }; } return; }
       var M1 = RCC.colMcap(b, Dd, As, Pu, fck, fy, 50, "four"), M2 = RCC.colMcap(Dd, b, As, Pu, fck, fy, 50, "four");
       var an = Math.max(1, Math.min(2, 1 + (Pu / Puz - 0.2) / 0.6)), r = Math.pow(Mz / Math.max(M1, 1e-6), an) + (m2d(My) ? Math.pow(My / Math.max(M2, 1e-6), an) : 0);
       if (r > worst) { worst = r; wq = { cb: q.cb, Pu: Pu, Mz: Mz, My: My, an: an, M1: M1, M2: M2, Mz0: Math.abs(q.Mz), My0: Math.abs(q.My), Maz: Maz, May: May, Puz: Puz }; }
     });
-    if (worst <= 1) need = { pc: steps[si], As: As, r: worst, q: wq };
-    crit = { r: worst, q: wq };
+    return { pc: pcv, As: As, r: worst, q: wq };
+  }
+  /* coarse scan in 0.2 % steps, then bisection to 0.01 % between the last failing and first passing value */
+  var lo = null;
+  for (var pc = 0.8; pc <= 4.0001 && need === null; pc += 0.2) {
+    var t = evalP(pc);
+    if (t.r <= 1) need = t; else { lo = pc; crit = t; }
+  }
+  if (need && lo !== null) {
+    var hi = need.pc;
+    while (hi - lo > 0.01) { var mid = (lo + hi) / 2, tm = evalP(mid); if (tm.r <= 1) { hi = mid; need = tm; } else lo = mid; }
+  }
+  if (need) {   /* verify again with the bars actually provided */
+    var pb = U.pickBars(need.As, [12, 16, 20, 25, 32], 4, 24), chk = evalP(100 * pb.area / Ag);
+    need.prov = { area: pb.area, pc: 100 * pb.area / Ag, r: chk.r, text: pb.text };
+    if (chk.r > 1) need = null;
   }
   function m2d() { return !p.twoD; }
   var msg = [];
   if (slz > 12 || sly > 12) msg.push("Slender (le/D = " + slz.toFixed(1) + ", le/b = " + sly.toFixed(1) + ") - additional moments cl 39.7.1 included");
   if (!need) msg.push("Fails even at 4% steel - enlarge section");
   var Pmax = 0; pts.forEach(function (q) { Pmax = Math.max(Pmax, -q.N); });
-  return { k: k, name: s.name, b: b, D: Dd, L: L, le: le, exz: exz, exy: exy, fck: fck, fy: fy, Pu: Pmax, need: need, crit: crit, ok: !!need, msg: msg, bars: need ? U.pickBars(need.As, [12, 16, 20, 25, 32], 4, 24).text : "-" };
+  return { k: k, name: s.name, b: b, D: Dd, L: L, le: le, exz: exz, exy: exy, fck: fck, fy: fy, Pu: Pmax, need: need, crit: crit, ok: !!need, msg: msg, bars: need ? need.prov.text : "-" };
 };
 MD.steelMem = function (e, k, s, pts, p) {
   var r = s.row, fy = s.fy, L = e.L * 1000, A = s.A * 1e6, msg = [], ok = true, worst = 0, wq = null;
@@ -2444,23 +2577,61 @@ MD.steelMem = function (e, k, s, pts, p) {
     if (L / (r.rvv * 10) > 180) { msg.push("KL/r = " + (L / (r.rvv * 10)).toFixed(0) + " > 180 (IS 800 Table 3) - tension-only bracing"); }
     return { k: k, name: s.name, ratio: worst, ok: worst <= 1, msg: msg, txt: "Pd,c = " + Pc.toFixed(1) + " kN, Td = " + Pt.toFixed(1) + " kN", cb: wq && wq.cb, Pd: Pc, Td: Pt, Mdz: 0, Mdy: 0, q: wq, L: L, KLr: L / (r.rvv * 10) };
   }
-  var lz = L / (r.rx * 10), ly = L / (r.ry * 10), Pdz = A * ST.fcd(lz, fy, "a") / 1e3, Pdy = A * ST.fcd(ly, fy, "b") / 1e3, Pd = Math.min(Pdz, Pdy), Td = A * fy / D.gm0 / 1e3;
-  /* LTB, IS 800 Annex E (unrestrained length = member length) */
-  var Iy = r.Iy * 1e4, It = s.J * 1e12, hf = r.D - r.tf, Iw = Iy * hf * hf / 4, E = 2e5, G = 76900;
-  var Mcr = Math.PI * Math.PI * E * Iy / (L * L) * Math.sqrt(Iw / Iy + G * It * L * L / (Math.PI * Math.PI * E * Iy)) / 1e6;
-  var Mp = fy * r.Zpx / 1e3, lLT = Math.min(Math.sqrt(Mp / Mcr), Math.sqrt(1.2 * r.Zex * fy / 1e3 / Mcr) * 10), phi = 0.5 * (1 + 0.21 * (lLT - 0.2) + lLT * lLT);
-  var chi = Math.min(1, 1 / (phi + Math.sqrt(phi * phi - lLT * lLT))), Mdz = chi * Mp / D.gm0, Mdy = fy * s.Zpy / 1e3 / D.gm0;
-  var Vd = r.D * r.tw * fy / (Math.sqrt(3) * D.gm0) / 1e3, Vmax = 0;
-  pts.forEach(function (q) {
-    Vmax = Math.max(Vmax, Math.abs(q.Vy));
-    var u = (q.N < 0 ? -q.N / Pd : q.N / Td) + Math.abs(q.Mz) / Mdz + Math.abs(q.My) / Mdy;
-    if (u > worst) { worst = u; wq = q; }
-  });
-  if (Vmax > 0.6 * Vd) msg.push("High shear V > 0.6Vd - moment capacity reduced (cl 9.2)");
-  if (Vmax > Vd) ok = false;
-  if (e.type === "column" && Math.max(lz, ly) > 180) { ok = false; msg.push("KL/r > 180"); }
-  return { k: k, name: s.name, ratio: worst, ok: ok && worst <= 1, msg: msg, cb: wq && wq.cb, Pd: Pd, Td: Td, Mdz: Mdz, Mdy: Mdy, Vd: Vd, Vmax: Vmax, chi: chi, Mcr: Mcr, q: wq, L: L, KLr: Math.max(lz, ly),
-    txt: "Pd = " + Pd.toFixed(0) + " kN, Md,z = " + Mdz.toFixed(1) + " kNm (χLT " + chi.toFixed(2) + "), Md,y = " + Mdy.toFixed(1) + " kNm, Vd = " + Vd.toFixed(0) + " kN" };
+  /* ---- IS 800:2007 I-section: cl 7.1.2 buckling, 8.2.2 LTB, 8.4 shear, 9.2.2 high shear, 9.3.1.1 section strength, 9.3.2.2 member buckling ---- */
+  var K = e.type === "column" ? (p.kcol || 1.2) : 1, KL = K * L, lz = KL / (r.rx * 10), ly = KL / (r.ry * 10);
+  var lamz = ST.lamND(lz, fy), lamy = ST.lamND(ly, fy);
+  var Pdz = A * ST.fcd(lz, fy, "a") / 1e3, Pdy = A * ST.fcd(ly, fy, "b") / 1e3, Pd = Math.min(Pdz, Pdy), Nd = A * fy / D.gm0 / 1e3, Td = Nd;
+  var eps = ST.eps(fy), bt = (r.bf / 2) / r.tf, dt = (r.D - 2 * r.tf) / r.tw;
+  var cls = (bt <= 9.4 * eps && dt <= 84 * eps) ? "Plastic" : (bt <= 10.5 * eps && dt <= 105 * eps) ? "Compact" : "Semi-compact", bb = cls === "Semi-compact" ? r.Zex / r.Zpx : 1;
+  var Iy = r.Iy * 1e4, It = s.J * 1e12, hf = r.D - r.tf, Iw = Iy * hf * hf / 4, E = 2e5, G = 76900, LLT = L;
+  var Mcr = Math.PI * Math.PI * E * Iy / (LLT * LLT) * Math.sqrt(Iw / Iy + G * It * LLT * LLT / (Math.PI * Math.PI * E * Iy)) / 1e6;
+  var MdzS = Math.min(bb * fy * r.Zpx / 1e3, 1.2 * fy * r.Zex / 1e3) / D.gm0;                    /* section, cl 8.2.1.2 */
+  var lLT = Math.sqrt(bb * fy * r.Zpx / 1e3 / Mcr), phi = 0.5 * (1 + 0.21 * (lLT - 0.2) + lLT * lLT);
+  var chi = Math.min(1, 1 / (phi + Math.sqrt(Math.max(phi * phi - lLT * lLT, 0)))), Mdz = Math.min(chi * bb * fy * r.Zpx / 1e3 / D.gm0, MdzS);   /* LTB, cl 8.2.2 */
+  var Mdy = fy * s.Zpy / 1e3 / D.gm0;
+  var Vd = r.D * r.tw * fy / (Math.sqrt(3) * D.gm0) / 1e3, Mfd = r.bf * r.tf * (r.D - r.tf) * fy / D.gm0 / 1e6, Vmax = 0, best = null;
+  function Mv(M, V) {   /* cl 9.2.2 */
+    if (V <= 0.6 * Vd) return M;
+    var beta = Math.pow(2 * V / Vd - 1, 2);
+    return cls === "Semi-compact" ? Math.min(M, fy * r.Zex / 1e3 / D.gm0) : Math.max(0, M - beta * Math.max(0, M - Mfd));
+  }
+  function Cm(a) {   /* IS 800 Table 18: linear moment 0.6 + 0.4ψ ≥ 0.4; transverse load 0.95 */
+    var m1 = a[0], m2 = a[a.length - 1], me = Math.max(Math.abs(m1), Math.abs(m2)), mi = 0;
+    a.forEach(function (x) { mi = Math.max(mi, Math.abs(x)); });
+    if (mi < 1e-6) return 1;
+    if (mi > 1.05 * me) return 0.95;
+    var psi = Math.abs(m1) >= Math.abs(m2) ? (Math.abs(m1) > 1e-9 ? m2 / m1 : 0) : m1 / m2;
+    return Math.max(0.4, 0.6 + 0.4 * psi);
+  }
+  for (var c0 = 0; c0 < pts.length; c0 += 9) {
+    var g = pts.slice(c0, c0 + 9), P = 0, T = 0, Mz = 0, My = 0, V = 0, sec = 0, sq = null;
+    g.forEach(function (q) {
+      P = Math.max(P, -q.N); T = Math.max(T, q.N); Mz = Math.max(Mz, Math.abs(q.Mz)); My = Math.max(My, Math.abs(q.My)); V = Math.max(V, Math.abs(q.Vy)); Vmax = Math.max(Vmax, Math.abs(q.Vy));
+      /* section strength at every point, cl 9.3.1.1 */
+      var n = Math.abs(q.N) / Nd, MdzV = Mv(MdzS, Math.abs(q.Vy)), Mndz = Math.min(MdzV, 1.11 * MdzV * (1 - n)), Mndy = n <= 0.2 ? Mdy : Math.min(Mdy, 1.56 * Mdy * (1 - n) * (n + 0.6)), a1 = Math.max(1, 5 * n);
+      var us = n >= 1 ? n : Math.pow(Math.abs(q.My) / Math.max(Mndy, 1e-9), a1) + Math.pow(Math.abs(q.Mz) / Math.max(Mndz, 1e-9), 2);
+      if (us > sec) { sec = us; sq = { n: n, Mndz: Mndz, Mndy: Mndy, a1: a1, MdzV: MdzV, q: q }; }
+    });
+    var Cmz = Cm(g.map(function (q) { return q.Mz; })), Cmy = Cm(g.map(function (q) { return q.My; })), CmLT = Cmz, u1 = 0, u2 = 0, ny = 0, nz = 0, Ky = 1, Kz = 1, KLT = 1;
+    if (P > 1e-6) {   /* member buckling, cl 9.3.2.2 */
+      ny = P / Pdy; nz = P / Pdz;
+      Ky = Math.min(1 + (lamy - 0.2) * ny, 1 + 0.8 * ny); Kz = Math.min(1 + (lamz - 0.2) * nz, 1 + 0.8 * nz);
+      KLT = Math.max(1 - 0.1 * lLT * ny / (CmLT - 0.25), 1 - 0.1 * ny / (CmLT - 0.25));
+      u1 = P / Pdy + Ky * Cmy * My / Mdy + KLT * Mz / Mdz;
+      u2 = P / Pdz + 0.6 * Ky * Cmy * My / Mdy + Kz * Cmz * Mz / Mdz;
+    } else { u1 = Mz / Mdz + My / Mdy; u2 = T / Td; }   /* tension: LTB with tension relief ignored (conservative), cl 9.3.2.1 */
+    var u = Math.max(sec, u1, u2);
+    if (!best || u > best.u) best = { u: u, cb: g[0].cb, P: P, T: T, Mz: Mz, My: My, V: V, sec: sec, sq: sq, u1: u1, u2: u2, ny: ny, nz: nz, Ky: Ky, Kz: Kz, KLT: KLT, Cmy: Cmy, Cmz: Cmz,
+      gov: u === sec ? "section strength cl 9.3.1.1" : u === u1 ? (P > 0 ? "member buckling cl 9.3.2.2 (y)" : "LTB cl 9.3.2.1") : (P > 0 ? "member buckling cl 9.3.2.2 (z)" : "tension cl 6") };
+  }
+  worst = best ? best.u : 0;
+  wq = best ? { cb: best.cb, N: best.P > 0 ? -best.P : best.T, Mz: best.Mz, My: best.My } : null;
+  if (Vmax > 0.6 * Vd) msg.push("High shear V = " + Vmax.toFixed(1) + " > 0.6Vd: moment capacity reduced per cl 9.2.2");
+  if (Vmax > Vd) { ok = false; msg.push("Shear V > Vd (cl 8.4)"); }
+  if (e.type === "column" && Math.max(lz, ly) > 180) { ok = false; msg.push("KL/r > 180 (Table 3)"); }
+  return { k: k, name: s.name, ratio: worst, ok: ok && worst <= 1, msg: msg, cb: wq && wq.cb, Pd: Pd, Pdy: Pdy, Pdz: Pdz, Nd: Nd, Td: Td, Mdz: Mdz, MdzS: MdzS, Mdy: Mdy, Vd: Vd, Vmax: Vmax, Mfd: Mfd, chi: chi, lLT: lLT, Mcr: Mcr, cls: cls,
+    lamy: lamy, lamz: lamz, K: K, q: wq, b: best, L: L, KLr: Math.max(lz, ly),
+    txt: "Pdy = " + Pdy.toFixed(0) + ", Pdz = " + Pdz.toFixed(0) + " kN, Md,z = " + Mdz.toFixed(1) + " kNm (χLT " + chi.toFixed(2) + "), Md,y = " + Mdy.toFixed(1) + " kNm, Vd = " + Vd.toFixed(0) + " kN; governs: " + (best ? best.gov : "-") };
 };
 MD.shellDesign = function (sh, k, env, p) {
   var t = sh.t * 1000, dx = t - 30, dy = t - 40, fck = p.fck, fy = p.fy, msg = [], ok = true;
@@ -2475,15 +2646,46 @@ MD.shellDesign = function (sh, k, env, p) {
   }
   r.ok = ok; r.msg = msg; return r;
 };
+/* Storey drift at corresponding locations (IS 1893 cl 7.11.1): for every node of a floor, the node directly below it
+   (same plan position, else the nearest one on the floor below) gives Δ = |u_top − u_bottom| / h. The governing (largest)
+   location is reported, with the plan-torsion indicator Δmax/Δave of floor displacements (IS 1893 Table 5 (i)). */
+/* floor levels: base + levels that carry horizontal beams or slabs (excludes intermediate wall-mesh rows) */
+MD.floorLevels = function (m) {
+  var zs = [], zmin = Infinity;
+  function add(z) { z = Math.round(z * 100) / 100; if (zs.indexOf(z) < 0) zs.push(z); }
+  m.nodes.forEach(function (n) { zmin = Math.min(zmin, n.z); });
+  m.frames.forEach(function (e) { var A = m.nodes[e.n1], B = m.nodes[e.n2]; if (Math.abs(A.z - B.z) < 0.01 && e.type !== "column") add(A.z); });
+  m.shells.forEach(function (s) { if (s.kind === "slab") s.n.forEach(function (i) { add(m.nodes[i].z); }); });
+  if (!zs.length) return MD.levels(m);
+  add(zmin);
+  return zs.sort(function (a, b) { return a - b; });
+};
 MD.drift = function (m, res) {
-  var lv = MD.levels(m), out = [];
+  var lv = MD.floorLevels(m), out = [], byLev = lv.map(function (z) { return m.nodes.map(function (n, j) { return j; }).filter(function (j) { return Math.abs(m.nodes[j].z - z) < 0.01; }); });
   Object.keys(res.cases).filter(function (c) { return /^(EQ|WL)/.test(c); }).forEach(function (c) {
-    var d = c.slice(-1) === "Y" ? 1 : 0, U = res.cases[c].U, prev = 0;
-    lv.forEach(function (z, i) {
-      var mx = 0; m.nodes.forEach(function (n, j) { if (Math.abs(n.z - z) < 0.01) mx = Math.max(mx, Math.abs(U[6 * j + d])); });
-      if (i > 0) { var h = z - lv[i - 1], dr = (mx - prev) / h; out.push({ c: c, z: z, d: mx, dr: dr, ok: !/^EQ/.test(c) || dr <= 0.004, lim: /^EQ/.test(c) ? 0.004 : null }); }
-      prev = mx;
-    });
+    var d = c.slice(-1) === "Y" ? 1 : 0, U = res.cases[c].U;
+    for (var i = 1; i < lv.length; i++) {
+      var h = lv[i] - lv[i - 1], top = byLev[i], bot = byLev[i - 1], best = null, umax = -Infinity, umin = Infinity, nPair = 0, exact = 0;
+      if (!top.length || !bot.length) continue;
+      var pairs = top.map(function (j) {
+        var A = m.nodes[j], k = -1, dmin = Infinity;
+        bot.forEach(function (q) { var B = m.nodes[q], dd = Math.hypot(A.x - B.x, A.y - B.y); if (dd < dmin) { dmin = dd; k = q; } });
+        return [j, k, dmin];
+      }).filter(function (x) { return x[1] >= 0; });
+      var ex = pairs.filter(function (x) { return x[2] < 0.01; });
+      if (ex.length) pairs = ex;          /* use vertically stacked node pairs whenever they exist */
+      pairs.forEach(function (pr) {
+        var j = pr[0], k = pr[1], dmin = pr[2];
+        nPair++; if (dmin < 0.01) exact++;
+        var dr = Math.abs(U[6 * j + d] - U[6 * k + d]) / h;
+        if (!best || dr > best.dr) best = { dr: dr, top: j, bot: k, ut: U[6 * j + d], ub: U[6 * k + d], off: dmin };
+        var ut = Math.abs(U[6 * j + d]); umax = Math.max(umax, ut); umin = Math.min(umin, ut);
+      });
+      if (!best) continue;
+      var eq = /^EQ/.test(c), dave = (umax + umin) / 2;
+      out.push({ c: c, z: lv[i], zb: lv[i - 1], h: h, d: Math.max(Math.abs(best.ut), Math.abs(best.ub)), dr: best.dr, top: best.top, bot: best.bot, ut: best.ut, ub: best.ub, stacked: best.off < 0.01, pairs: nPair, exact: exact,
+        tr: dave > 1e-12 ? umax / dave : 1, ok: !eq || best.dr <= 0.004, lim: eq ? 0.004 : null });
+    }
   });
   return out;
 };
@@ -2672,6 +2874,11 @@ WS.column = function (p) {
     trace.push([U.f(pc, 1), U.f(q.scc, 2), U.f(q.scb, 2), U.f(q.r, 3)]);
     if (q.r <= 1) { found = { pc: pc, As: As, q: q }; break; }
   }
+  if (found && found.pc > 0.8 + 1e-9) {   /* refine to 0.01 % by bisection */
+    var lo = found.pc - 0.1, hi = found.pc;
+    while (hi - lo > 0.01) { var md = (lo + hi) / 2, qm = WS.colRatio(b, Dd, md / 100 * Ag, P, Mx, My, fck, fy, p.arr, Cr, 1); if (qm.r <= 1) { hi = md; found = { pc: md, As: md / 100 * Ag, q: qm }; } else lo = md; }
+    trace.push([U.f(found.pc, 2), U.f(found.q.scc, 2), U.f(found.q.scb, 2), U.f(found.q.r, 3)]);
+  }
   r.table(["p %", "σcc,cal", "σcbc,cal", "Ratio"], trace.slice(-4));
   if (!found) { r.fail("Section inadequate up to p = " + p.pmax + " % (working stress)."); return r; }
   var Pperm = (WS.scc(fck) * (Ag - found.As) + WS.ssc(fy) * found.As) * Cr / 1000;
@@ -2682,6 +2889,8 @@ WS.column = function (p) {
   var Areq = Math.max(found.As, 0.008 * Ag), nb = Math.max(4, Math.ceil(Areq / D.barArea(p.dia) / 2) * 2);
   if (p.arr === "four" && nb % 4 && nb > 4) nb = Math.ceil(nb / 4) * 4;
   r.row("Provide", nb + " nos " + p.dia + " mm φ (" + U.f(nb * D.barArea(p.dia), 0) + " mm²)", "", "0.8–4 % cl 26.5.3.1");
+  var qv = WS.colRatio(b, Dd, nb * D.barArea(p.dia), P, Mx, My, fck, fy, p.arr, Cr, 1);
+  r.check("Stress ratio with bars provided ≤ 1", qv.r <= 1, U.f(qv.r, 3), "B-4.2");
   var td = Math.max(6, Math.ceil(p.dia / 4)); td = D.bars.filter(function (x) { return x >= td; })[0];
   var ts = U.floorTo(Math.min(Math.min(b, Dd), 16 * p.dia, 300), 25);
   r.row("Ties", td + " mm φ @ " + ts + " mm c/c", "", "cl 26.5.3.2");
@@ -2722,15 +2931,19 @@ WS.dCol = function (e, k, s, pts, p) {
   var Cr = le / Dd > 12 || le / b > 12 ? Math.min(1, 1.25 - le / (48 * lmin)) : 1;
   var exz = Math.max(L / 500 + Dd / 30, 20), exy = Math.max(L / 500 + b / 30, 20), need = null, crit = null;
   var cand = pts.filter(function (q, i) { return i % 9 === 0 || i % 9 === 8; });
-  for (var pc = 0.8; pc <= 4.001 && !need; pc += 0.2) {
+  function evalP(pc) {
     var As = pc / 100 * Ag, worst = 0, wq = null;
     cand.forEach(function (q) {
       var P = Math.max(-q.N, 0), i = q.inc || 1, Mz = Math.max(Math.abs(q.Mz), P * exz / 1000), My = p.twoD ? 0 : Math.max(Math.abs(q.My), P * exy / 1000);
       var c = WS.colRatio(b, Dd, As, P, Mz, My, fck, fy, "four", Cr, i);
       if (c.r > worst) { worst = c.r; wq = { cb: q.cb, Pu: P, Mz: Mz, My: My, inc: i, c: c, Mz0: Math.abs(q.Mz), My0: Math.abs(q.My) }; }
     });
-    if (worst <= 1) need = { pc: pc, As: As, r: worst, q: wq };
-    crit = { r: worst, q: wq };
+    return { pc: pc, As: As, r: worst, q: wq };
+  }
+  for (var pc = 0.8; pc <= 4.001 && !need; pc += 0.2) { var e0 = evalP(pc); if (e0.r <= 1) need = e0; crit = e0; }
+  if (need && need.pc > 0.8 + 1e-9) {   /* coarse 0.2 % scan, then bisection to 0.01 % */
+    var lo = need.pc - 0.2, hi = need.pc;
+    while (hi - lo > 0.01) { var md = (lo + hi) / 2, em = evalP(md); if (em.r <= 1) { hi = md; need = em; } else lo = md; }
   }
   var Pmax = 0; pts.forEach(function (q) { Pmax = Math.max(Pmax, -q.N); });
   var msg = []; if (!need) msg.push("Fails even at 4% steel (working stress) - enlarge section");
@@ -2845,7 +3058,7 @@ var CALC = (function () {
     if (sD > 12 || sb > 12) S.push({ l: "Additional moments", e: "Ma = Pu·D/2000·(le/D)²", s: "Max = " + f(q.Maz) + " kNm, May = " + f(q.May) + " kNm", ref: "cl 39.7.1" });
     S.push({ h: "Strength — IS 456 cl 38, 39 (critical combination: " + (q.cb || "-") + ")" });
     S.push({ l: "Design actions", e: "Mu = max(Mu,analysis, Pu·emin) + Ma", s: "Pu = " + f(q.Pu, 1) + " kN, Mux = " + f(q.Mz) + " kNm, Muy = " + f(q.My) + " kNm" + " (analysis " + f(q.Mz0) + " / " + f(q.My0) + ")" });
-    S.push({ l: "Longitudinal steel", e: "0.8% ≤ Asc/Ag ≤ 4% (6% absolute)", s: "required p = " + f(pc, 1) + "% → Asc = " + f(As, 0) + " mm² → " + r.bars, lim: "0.8–4 %", ok: !!r.need, ref: "cl 26.5.3.1" });
+    S.push({ l: "Longitudinal steel", e: "0.8% ≤ Asc/Ag ≤ 4% (6% absolute)", s: "required p = " + f(pc, 2) + "% (searched to 0.01 %) → Asc = " + f(As, 0) + " mm² → " + r.bars, lim: "0.8–4 %", ok: !!r.need, ref: "cl 26.5.3.1" });
     S.push({ l: "Pure axial capacity", e: "Puz = 0.45·fck·Ac + 0.75·fy·Asc", s: "= (0.45×" + fck + "×" + f(Ag - As, 0) + " + 0.75×" + fy + "×" + f(As, 0) + ")/10³ = " + f(q.Puz, 0) + " kN", ref: "cl 39.6" });
     S.push({ l: "Short-column axial check", e: "Pu ≤ 0.4·fck·Ac + 0.67·fy·Asc", s: "Pu = " + f(q.Pu, 0) + " kN", lim: "capacity " + f((0.4 * fck * (Ag - As) + 0.67 * fy * As) / 1000, 0) + " kN with no moment (reference; bending governs)", ref: "cl 39.3" });
     S.push({ l: "Uniaxial capacities at Pu", e: "Mux1, Muy1 by strain compatibility: εcu = 0.0035, fcd = 0.446fck (parabola-rectangle), steel design stress–strain", s: "Mux1 = " + f(q.M1) + " kNm, Muy1 = " + f(q.M2) + " kNm", ref: "cl 38.1, 39.1" });
@@ -2853,6 +3066,7 @@ var CALC = (function () {
     var ratio = Math.pow(q.Mz / q.M1, q.an) + (p.twoD ? 0 : Math.pow(q.My / q.M2, q.an));
     S.push({ l: "Biaxial interaction", e: "(Mux/Mux1)^αn + (Muy/Muy1)^αn ≤ 1.0", s: "= (" + f(q.Mz) + "/" + f(q.M1) + ")^" + f(q.an, 2) + (p.twoD ? "" : " + (" + f(q.My) + "/" + f(q.M2) + ")^" + f(q.an, 2)) + " = " + f(ratio, 3), lim: "≤ 1.0", ok: ratio <= 1.0001, ref: "cl 39.6" });
     var dmax = /(\d+) mm/.exec(r.bars), dd = dmax ? +dmax[1] : 16;
+    if (r.need && r.need.prov) S.push({ l: "Check with bars provided", e: "interaction recomputed with the actual bar area", s: r.bars + " = " + f(r.need.prov.pc, 2) + " % → ratio " + f(r.need.prov.r, 3), lim: "≤ 1.0", ok: r.need.prov.r <= 1, ref: "cl 39.6" });
     S.push({ l: "Lateral ties", e: "φt ≥ max(φ/4, 6 mm) ;  st ≤ min(b, 16φ, 300 mm)", s: "φt = " + Math.max(8, Math.ceil(dd / 4)) + " mm @ " + Math.min(b, 16 * dd, 300) + " mm c/c", ref: "cl 26.5.3.2" });
     return S;
   }
@@ -2870,15 +3084,19 @@ var CALC = (function () {
       S.push({ l: "Utilisation", e: "|N|/Pd (compression) or N/Td (tension)", s: "= " + f(r.ratio, 3), lim: "≤ 1.0", ok: r.ratio <= 1, ref: "cl 6, 7" });
       return S;
     }
-    var lz = L / (w.rx * 10), ly = L / (w.ry * 10);
-    S.push({ l: "Slenderness", e: "KL/rz, KL/ry", s: f(lz, 1) + ", " + f(ly, 1), lim: "≤ 180 (compression members)", ok: Math.max(lz, ly) <= 180 || e.type === "beam", ref: "Table 3" });
-    S.push({ l: "Compression capacity", e: "fcd = χ·fy/γm0 ; χ from φ = 0.5[1 + α(λ − 0.2) + λ²], α = 0.21 (z-z, curve a), 0.34 (y-y, curve b) ; Pd = A·fcd", s: "Pd = " + f(r.Pd, 1) + " kN", ref: "cl 7.1.2.1, Table 10" });
-    S.push({ l: "Tension capacity", e: "Td = A·fy/γm0", s: "= " + f(r.Td, 1) + " kN", ref: "cl 6.2" });
-    S.push({ l: "Elastic critical moment", e: "Mcr = (π²EIy/L²)·√[Iw/Iy + G·It·L²/(π²EIy)]", s: "= " + f(r.Mcr, 1) + " kNm (unrestrained length = member length)", ref: "Annex E-1.1" });
-    S.push({ l: "LTB reduction", e: "λLT = √(βb·Zp·fy/Mcr) ; φLT = 0.5[1 + αLT(λLT − 0.2) + λLT²], αLT = 0.21 ; χLT = 1/[φLT + √(φLT² − λLT²)]", s: "χLT = " + f(r.chi, 3), ref: "cl 8.2.2" });
-    S.push({ l: "Bending capacity", e: "Md,z = χLT·Zp·fy/γm0 ;  Md,y = Zpy·fy/γm0", s: "Md,z = " + f(r.Mdz, 1) + " kNm, Md,y = " + f(r.Mdy, 1) + " kNm", ref: "cl 8.2.1.2, 8.2.2" });
-    S.push({ l: "Shear capacity", e: "Vd = Av·fy/(√3·γm0), Av = D·tw", s: "Vd = " + f(r.Vd, 1) + " kN, V = " + f(r.Vmax, 1) + " kN", lim: "V ≤ 0.6Vd (no moment reduction)", ok: r.Vmax <= 0.6 * r.Vd, ref: "cl 8.4, 9.2.1" });
-    S.push({ l: "Combined axial + bending", e: "N/Nd + Mz/Md,z + My/Md,y ≤ 1.0 (simplified, Cm = 1)", s: "= " + f(r.ratio, 3), lim: "≤ 1.0", ok: r.ratio <= 1, ref: "cl 9.3.1, 9.3.2" });
+    var B = r.b || {}, sq = B.sq || {};
+    S.push({ l: "Section class & slenderness", e: "class per Table 2 ; KL/r with K = " + r.K + " ; λ = √(fy/fcc)", s: r.cls + ", λy = " + f(r.lamy, 3) + ", λz = " + f(r.lamz, 3), lim: "KL/r ≤ 180 (compression)", ok: r.KLr <= 180 || e.type === "beam", ref: "Table 2, Table 3, cl 7.1.2.1" });
+    S.push({ l: "Compression capacity", e: "Pd = A·χ·fy/γm0 ; α = 0.21 (z-z, curve a), 0.34 (y-y, curve b)", s: "Pdz = " + f(r.Pdz, 1) + " kN, Pdy = " + f(r.Pdy, 1) + " kN", ref: "cl 7.1.2, Table 10" });
+    S.push({ l: "Bending capacity", e: "Md,z(section) = βb·Zp·fy/γm0 ≤ 1.2Ze·fy/γm0 ; Mcr = (π²EIy/L²)√[Iw/Iy + G·It·L²/(π²EIy)] ; χLT (αLT = 0.21) ; Md,z = χLT·βb·Zp·fy/γm0", s: "Md,z(section) = " + f(r.MdzS, 1) + ", Mcr = " + f(r.Mcr, 1) + ", λLT = " + f(r.lLT, 3) + ", χLT = " + f(r.chi, 3) + " → Md,z = " + f(r.Mdz, 1) + " kNm ; Md,y = " + f(r.Mdy, 1) + " kNm", ref: "cl 8.2.1.2, 8.2.2, Annex E" });
+    S.push({ l: "Shear", e: "Vd = Av·fy/(√3·γm0) ; if V > 0.6Vd: Mdv = Md − β(Md − Mfd), β = (2V/Vd − 1)²", s: "Vd = " + f(r.Vd, 1) + " kN, V = " + f(r.Vmax, 1) + " kN, Mfd = " + f(r.Mfd, 1) + " kNm" + (r.Vmax > 0.6 * r.Vd ? " → moment reduced" : " → no reduction"), lim: "V ≤ Vd", ok: r.Vmax <= r.Vd, ref: "cl 8.4, 9.2.2" });
+    S.push({ l: "Design forces (governing combination)", e: "P (compression), T (tension), Mz, My — maxima along the member", s: "P = " + f(B.P) + ", T = " + f(B.T) + " kN, Mz = " + f(B.Mz) + ", My = " + f(B.My) + " kNm" });
+    S.push({ l: "Section strength", e: "n = N/Nd ; Mndz = 1.11Md,z(1 − n) ≤ Md,z ; Mndy = Md,y (n ≤ 0.2) else 1.56Md,y(1 − n)(n + 0.6) ; (My/Mndy)^α1 + (Mz/Mndz)^α2 ≤ 1, α1 = 5n ≥ 1, α2 = 2", s: "n = " + f(sq.n, 3) + ", Mndz = " + f(sq.Mndz, 1) + ", Mndy = " + f(sq.Mndy, 1) + " → " + f(B.sec, 3), lim: "≤ 1.0", ok: B.sec <= 1, ref: "cl 9.3.1.1" });
+    if (B.P > 0) {
+      S.push({ l: "Interaction factors", e: "Ky = 1 + (λy − 0.2)ny ≤ 1 + 0.8ny ; Kz likewise ; KLT = 1 − 0.1λLT·ny/(CmLT − 0.25) ; Cm = 0.6 + 0.4ψ ≥ 0.4 (0.95 with transverse load)", s: "ny = " + f(B.ny, 3) + ", nz = " + f(B.nz, 3) + ", Ky = " + f(B.Ky, 3) + ", Kz = " + f(B.Kz, 3) + ", KLT = " + f(B.KLT, 3) + ", Cmy = " + f(B.Cmy, 2) + ", Cmz = " + f(B.Cmz, 2), ref: "cl 9.3.2.2, Table 18" });
+      S.push({ l: "Member buckling (y)", e: "P/Pdy + Ky·Cmy·My/Mdy + KLT·Mz/Mdz ≤ 1", s: "= " + f(B.u1, 3), lim: "≤ 1.0", ok: B.u1 <= 1, ref: "cl 9.3.2.2(a)" });
+      S.push({ l: "Member buckling (z)", e: "P/Pdz + 0.6Ky·Cmy·My/Mdy + Kz·Cmz·Mz/Mdz ≤ 1", s: "= " + f(B.u2, 3), lim: "≤ 1.0", ok: B.u2 <= 1, ref: "cl 9.3.2.2(b)" });
+    } else S.push({ l: "Bending + tension", e: "Mz/Md,z(LTB) + My/Md,y ≤ 1 (tension relief ignored) ; T/Td ≤ 1", s: "= " + f(B.u1, 3) + " ; " + f(B.u2, 3), lim: "≤ 1.0", ok: Math.max(B.u1, B.u2) <= 1, ref: "cl 9.3.2.1, 6.2" });
+    S.push({ l: "Utilisation", e: "max of section and member checks", s: "= " + f(r.ratio, 3) + " (" + (B.gov || "-") + ")", lim: "≤ 1.0", ok: r.ratio <= 1 });
     return S;
   }
 
@@ -3033,7 +3251,9 @@ var CALC = (function () {
     ["Tension", "Tdg = Ag·fy/γm0", "cl 6.2"],
     ["Bending with LTB", "Md = χLT·βb·Zp·fy/γm0 ; Mcr per Annex E ; αLT = 0.21 (rolled)", "cl 8.2.2, Annex E"],
     ["Shear", "Vd = Av·fy/(√3·γm0) ; moment reduction if V > 0.6Vd", "cl 8.4, 9.2"],
-    ["Combined", "N/Nd + Mz/Mdz + My/Mdy ≤ 1", "cl 9.3.1, 9.3.2"]
+    ["Shear with bending", "V > 0.6Vd: Mdv = Md − β(Md − Mfd), β = (2V/Vd − 1)²", "cl 9.2.2"],
+    ["Section strength", "(My/Mndy)^α1 + (Mz/Mndz)^α2 ≤ 1 ; Mndz = 1.11Mdz(1 − n), α1 = 5n ≥ 1, α2 = 2", "cl 9.3.1.1"],
+    ["Member buckling", "P/Pdy + Ky·Cmy·My/Mdy + KLT·Mz/Mdz ≤ 1 ; P/Pdz + 0.6Ky·Cmy·My/Mdy + Kz·Cmz·Mz/Mdz ≤ 1", "cl 9.3.2.2, Table 18"]
   ];
 
   /* render steps as HTML */
@@ -3448,7 +3668,7 @@ var RX = (function () {
       Object.keys(S.L.wind).forEach(function (k) {
         var w = S.L.wind[k];
         ld.row([]); ld.row(["Wind " + k + " — IS 875 (Part 3):2015"], "tb");
-        var lv = MD.levels(m), zmin = lv[0], rows = [];
+        var lv = MD.floorLevels(m), zmin = lv[0], rows = [];
         lv.forEach(function (z, i) { if (i === 0) return; var hz = z - zmin, k2 = U.interp(D.k2h, D.k2[p.terrain], Math.max(10, Math.min(hz, 100))); rows.push({ z: z, hz: hz, k2: k2, hb: (z - lv[i - 1]) / 2 + (i + 1 < lv.length ? (lv[i + 1] - z) / 2 : 0), B: w.B }); });
         table(ld, [{ k: "z", h: "Level z (m)", s: "n3" }, { k: "hz", h: "Height (m)", s: "n3" }, { k: "k2", h: "k2 (Table 2, TC " + p.terrain + ")", s: "n3" },
           { k: "Vz", h: "Vz = Vb·k1·k2·k3·k4 (m/s)", f: "[vb]*{k2}", s: "f2" }, { k: "pz", h: "pz = 0.6Vz² (kN/m²)", f: "0.6*{Vz}^2/1000", s: "f4" },
@@ -3551,19 +3771,18 @@ var RX = (function () {
 
       /* ===== Drift ===== */
       if (S.drift && S.drift.length) {
-        var dr = wb.sheet("Drift", { cols: [8, 12, 12, 14, 14, 12, 10], color: TAB.result });
-        intro(dr, "Drift — storey drift check (IS 1893 cl 7.11.1)", "Storey drift = difference in lateral displacement between two consecutive floors ÷ storey height, under the unfactored earthquake load. IS 1893 limits it to 0.004 (0.4 %). Wind drifts are listed for information only.", 7);
-        var lvl = MD.levels(m), rows = [];
-        Object.keys(res.cases).filter(function (c) { return /^(EQ|WL)/.test(c); }).forEach(function (c) {
-          var d = c.slice(-1) === "Y" ? 1 : 0, U = res.cases[c].U;
-          lvl.forEach(function (z, i) { var mx = 0; m.nodes.forEach(function (n, j) { if (Math.abs(n.z - z) < 0.01) mx = Math.max(mx, Math.abs(U[6 * j + d])); }); rows.push({ c: c, z: z, dm: mx * 1000, first: i === 0, eq: /^EQ/.test(c) }); });
-        });
-        table(dr, [{ k: "c", h: "Case" }, { k: "z", h: "Level z", u: "m", s: "n3" }, { k: "dm", h: "Max lateral disp.", u: "mm", s: "n3", d: "largest at this level" },
-          { k: "h", h: "Storey height h", u: "m", cell: function (r, rn) { return r.first ? { v: 0, s: "n3" } : { f: "=B" + rn + "-B" + (rn - 1), v: null, s: "f4" }; } },
-          { k: "dr", h: "Drift ratio Δ/h", cell: function (r, rn) { return r.first ? "" : { f: "=(C" + rn + "-C" + (rn - 1) + ")/(D" + rn + "*1000)", s: "f4" }; } },
-          { k: "lim", h: "Limit", cell: function (r) { return r.first || !r.eq ? "" : { f: "=p_dlim", v: 0.004, s: "f4" }; } },
-          { k: "st", h: "Check", cell: function (r, rn) { if (r.first || !r.eq) return ""; var row = S.drift.filter(function (x) { return x.c === r.c && Math.abs(x.z - r.z) < 1e-6; })[0]; return { f: '=IF(E' + rn + '<=F' + rn + ',"OK","FAIL")', v: row && row.ok ? "OK" : "FAIL", s: row && row.ok ? "ok" : "no" }; } }], rows, G);
-        dr.row([]); dr.row([{ v: "Drift from unfactored lateral load cases (IS 1893 cl 7.11.1: partial safety factor 1.0). Wind drifts reported for information.", s: "note" }]);
+        var dr = wb.sheet("Drift", { cols: [8, 10, 10, 10, 9, 9, 12, 12, 12, 10, 9, 12], color: TAB.result });
+        intro(dr, "Drift — storey drift check (IS 1893 cl 7.11.1)", "Storey drift is checked at corresponding locations: for each storey, the lateral displacement of a node at the top of the storey minus that of the node directly below it (same plan position), divided by the storey height. The largest value on each storey is shown, with the two node numbers, under the unfactored earthquake load. IS 1893 limits it to 0.004 (0.4 %); wind drifts are for information. 'Δmax/Δave' compares the largest and average extreme floor displacements — an indicator for torsional irregularity (IS 1893 Table 5 (i)) computed without accidental eccentricity.", 10);
+        table(dr, [{ k: "c", h: "Case" }, { k: "zb", h: "Bottom level", u: "m", s: "n3" }, { k: "z", h: "Top level", u: "m", s: "n3" },
+          { k: "h", h: "Storey height h", u: "m", f: "{z}-{zb}", s: "f3", d: "top − bottom" },
+          { k: "nt", h: "Node top", s: "n0", d: "governing location" }, { k: "nb", h: "Node below", s: "n0", d: m.twoD ? "same column line" : "same plan position (or nearest)" },
+          { k: "ut", h: "u top", u: "mm", s: "n3", d: "lateral displacement" }, { k: "ub", h: "u bottom", u: "mm", s: "n3", d: "lateral displacement" },
+          { k: "dr", h: "Drift Δu/h", f: "ABS({ut}-{ub})/({h}*1000)", s: "f4", d: "storey drift ratio" },
+          { k: "lim", h: "Limit", cell: function (q) { return q.eq ? { f: "=p_dlim", v: 0.004, s: "f4" } : { v: "info", s: "note" }; } },
+          { k: "st", h: "Check", f: function (q) { return q.eq ? 'IF({dr}<={lim},"OK","FAIL")' : null; }, s: "stat" },
+          { k: "tr", h: "Δmax/Δave", s: "n3", d: "> 1.2: review torsion" }],
+          S.drift.map(function (q) { return { c: q.c, zb: q.zb, z: q.z, nt: q.top + 1, nb: q.bot + 1, ut: q.ut * 1000, ub: q.ub * 1000, tr: m.twoD ? null : q.tr, eq: /^EQ/.test(q.c), st: "" }; }), G);
+        dr.row([]); dr.row([{ v: "Drift from unfactored lateral load cases (IS 1893 cl 7.11.1: partial safety factor 1.0). Wind drifts reported for information. Torsional-irregularity thresholds differ between IS 1893 (Part 1):2016 as first published and its Amendment 2 (2020); the ratio is an indicator for the engineer to review against the edition in force.", s: "note" }]);
       }
     }
 
@@ -3629,13 +3848,28 @@ var RX = (function () {
     }
     if (des && des.steel.length && !W) {
       var sd = wb.sheet("Steel Design", { cols: [8, 14, 10].concat(Array(16).fill(12)), color: TAB.design });
-      intro(sd, "Steel Design — IS 800 limit state method", "One row per steel member, at its governing combination. Capacities: Pd compression with flexural buckling (cl 7.1.2), Td tension yield (cl 6.2), Md,z bending including lateral-torsional buckling (Annex E, unrestrained length = member length), Md,y minor-axis bending. The ratio N/Nd + Mz/Mdz + My/Mdy (cl 9.3, simplified) must be ≤ 1.", 12);
+      intro(sd, "Steel Design — IS 800 limit state method", "One row per steel member, at its governing combination. Capacities: Pdy, Pdz flexural buckling (cl 7.1.2), Td tension (cl 6.2), Md,z with lateral-torsional buckling (Annex E, unrestrained length = member length), Md,y minor axis; moment reduced for high shear (cl 9.2.2). Checks: member buckling interaction with Ky, Kz, KLT and equivalent-moment factors Cm (cl 9.3.2.2, two equations) and section strength (cl 9.3.1.1) at the critical point. The largest ratio must be ≤ 1. Angle braces: axial check only.", 12);
       var t3 = table(sd, [{ k: "id", h: "Member", s: "n0" }, { k: "sec", h: "Section" }, { k: "type", h: "Type" }, { k: "L", h: "L", u: "mm", s: "n0" }, { k: "KLr", h: "KL/r max", s: "n2" },
-        { k: "cb", h: "Governing combination", d: "highest utilisation" }, { k: "N", h: "N (tension +)", u: "kN", s: "n2", d: "axial force" }, { k: "Mz", h: "Mz", u: "kNm", s: "n2", d: "major-axis moment" }, { k: "My", h: "My", u: "kNm", s: "n2", d: "minor-axis moment" },
-        { k: "Pd", h: "Pd (cl 7.1.2)", u: "kN", s: "n2", d: "compression capacity" }, { k: "Td", h: "Td = A·fy/γm0", u: "kN", s: "n2", d: "tension capacity" }, { k: "Mdz", h: "Md,z (LTB, Annex E)", u: "kNm", s: "n2", d: "major-axis bending capacity" }, { k: "Mdy", h: "Md,y", u: "kNm", s: "n2", d: "minor-axis bending capacity" },
-        { k: "ratio", h: "N/Nd + Mz/Mdz + My/Mdy (cl 9.3)", d: "utilisation, ≤ 1", f: "IF({N}<0,-{N}/{Pd},{N}/{Td})+IF({Mdz}>0,ABS({Mz})/{Mdz},0)+IF({Mdy}>0,ABS({My})/{Mdy},0)", s: "f4" },
+        { k: "cb", h: "Governing combination", d: "highest utilisation" },
+        { k: "P", h: "P compression", u: "kN", s: "n2", d: "member max" }, { k: "T", h: "T tension", u: "kN", s: "n2" }, { k: "Mz", h: "Mz max", u: "kNm", s: "n2" }, { k: "My", h: "My max", u: "kNm", s: "n2" },
+        { k: "Pdy", h: "Pdy", u: "kN", s: "n2", d: "buckling y-y, cl 7.1.2" }, { k: "Pdz", h: "Pdz", u: "kN", s: "n2", d: "buckling z-z" }, { k: "Td", h: "Td = Nd", u: "kN", s: "n2", d: "A·fy/γm0" },
+        { k: "Mdz", h: "Md,z (LTB)", u: "kNm", s: "n2", d: "cl 8.2.2" }, { k: "Mdy", h: "Md,y", u: "kNm", s: "n2" },
+        { k: "Ky", h: "Ky", s: "n3", d: "cl 9.3.2.2" }, { k: "Kz", h: "Kz", s: "n3" }, { k: "KLT", h: "KLT", s: "n3" }, { k: "Cmy", h: "Cmy", s: "n3", d: "Table 18" }, { k: "Cmz", h: "Cmz", s: "n3" },
+        { k: "u1", h: "P/Pdy + Ky·Cmy·My/Mdy + KLT·Mz/Mdz", d: "member buckling (a); tension: Mz/Mdz + My/Mdy", f: "IF({P}>0,{P}/{Pdy}+{Ky}*{Cmy}*{My}/{Mdy}+{KLT}*{Mz}/{Mdz},{Mz}/{Mdz}+{My}/{Mdy})", s: "f4" },
+        { k: "u2", h: "P/Pdz + 0.6Ky·Cmy·My/Mdy + Kz·Cmz·Mz/Mdz", d: "member buckling (b); tension: T/Td", f: "IF({P}>0,{P}/{Pdz}+0.6*{Ky}*{Cmy}*{My}/{Mdy}+{Kz}*{Cmz}*{Mz}/{Mdz},{T}/{Td})", s: "f4" },
+        { k: "sN", h: "N at section-check point", u: "kN", s: "n2" }, { k: "sMz", h: "Mz there", u: "kNm", s: "n2" }, { k: "sMy", h: "My there", u: "kNm", s: "n2" }, { k: "MdzV", h: "Md,z after shear reduction", u: "kNm", s: "n2", d: "cl 9.2.2" },
+        { k: "n", h: "n = N/Nd", f: "ABS({sN})/{Td}", s: "f4" },
+        { k: "Mndz", h: "Mndz = 1.11Mdz(1−n) ≤ Mdz", u: "kNm", f: "MIN({MdzV},1.11*{MdzV}*(1-{n}))" },
+        { k: "Mndy", h: "Mndy", u: "kNm", d: "Mdy if n ≤ 0.2", f: "IF({n}<=0.2,{Mdy},MIN({Mdy},1.56*{Mdy}*(1-{n})*({n}+0.6)))" },
+        { k: "us", h: "(My/Mndy)^α1 + (Mz/Mndz)²", d: "section strength cl 9.3.1.1, α1 = 5n ≥ 1", f: "IF({n}>=1,{n},(ABS({sMy})/MAX({Mndy},0.000000001))^MAX(1,5*{n})+(ABS({sMz})/MAX({Mndz},0.000000001))^2)", s: "f4" },
+        { k: "ratio", h: "Utilisation (max)", d: "must be ≤ 1", f: "MAX({u1},{u2},{us})", s: "f4" },
         { k: "st", h: "Status", f: 'IF({ratio}<=1,"OK","FAIL")', s: "stat" }],
-        des.steel.map(function (r) { var qq = r.q || {}; return { id: r.k + 1, sec: r.name, type: m.frames[r.k].type, L: Math.round(r.L), KLr: r.KLr, cb: r.cb || "-", N: qq.N || 0, Mz: qq.Mz || 0, My: qq.My || 0, Pd: r.Pd, Td: r.Td, Mdz: r.Mdz || 0, Mdy: r.Mdy || 0 }; }), G, { fc: 2 });
+        des.steel.map(function (r) {
+          var B = r.b || {}, sq = B.sq || {}, qq = sq.q || {}, angle = !r.b;
+          if (angle) { var qa = r.q || {}; return { id: r.k + 1, sec: r.name, type: m.frames[r.k].type, L: Math.round(r.L), KLr: r.KLr, cb: r.cb || "-", P: Math.max(0, -(qa.N || 0)), T: Math.max(0, qa.N || 0), Mz: 0, My: 0, Pdy: r.Pd, Pdz: r.Pd, Td: r.Td, Mdz: 1e9, Mdy: 1e9, Ky: 0, Kz: 0, KLT: 0, Cmy: 0, Cmz: 0, sN: 0, sMz: 0, sMy: 0, MdzV: 1e9 }; }
+          return { id: r.k + 1, sec: r.name, type: m.frames[r.k].type, L: Math.round(r.L), KLr: r.KLr, cb: r.cb || "-", P: B.P, T: B.T, Mz: B.Mz, My: B.My, Pdy: r.Pdy, Pdz: r.Pdz, Td: r.Td, Mdz: r.Mdz, Mdy: r.Mdy,
+            Ky: B.Ky, Kz: B.Kz, KLT: B.KLT, Cmy: B.Cmy, Cmz: B.Cmz, sN: qq.N || 0, sMz: qq.Mz || 0, sMy: qq.My || 0, MdzV: sq.MdzV || r.MdzS };
+        }), G, { fc: 2 });
       dsn.steel = { sh: "Steel Design", col: t3.L.st, a: t3.first, b: t3.last };
     }
     ["slabs", "walls"].forEach(function (gk) {
@@ -3720,6 +3954,9 @@ var RX = (function () {
     if (lin) {
       kv("Method", "Direct stiffness (displacement) method" + (m.shells.length ? " + 4-node shell FEA" : "") + (pdl ? ", P-Delta (iterated geometric stiffness)" : ", linear elastic"));
       kv("Equations solved", res.info.neq);
+      if (pdl) kv("P-Delta convergence", "all combinations converged; max " + Math.max.apply(null, res.combos.map(function (c) { return c.pdIter; })) + " iterations, residual ≤ " + Math.max.apply(null, res.combos.map(function (c) { return c.pdResid || 0; })).toExponential(1));
+      if (res.quality && res.quality.stats.shells) kv("Mesh quality", res.quality.stats.shells + " shells, max aspect ratio " + res.quality.stats.maxAR.toFixed(1) + ", min corner angle " + res.quality.stats.minAng.toFixed(0) + "°");
+      if (res.warn && res.warn.length) kv("Model warnings", res.warn.join(" | "));
       var umax = 0; res.combos.forEach(function (c) { for (var i = 0; i < c.U.length; i += 6) umax = Math.max(umax, Math.hypot(c.U[i], c.U[i + 1], c.U[i + 2])); });
       kv("Max displacement (all combinations)", { v: umax * 1000, s: "n2" }, "mm");
       Object.keys(S.L.eq).forEach(function (k) { kv("Design base shear " + k, { f: "=Loads!B" + findRow(wb, "Loads", "Design base shear Vb = Ah·W", k), v: S.L.eq[k].Vb, s: "f2" }, "kN"); });
@@ -4138,7 +4375,7 @@ var SU = (function () {
   }
 
   /* ---------- model building ---------- */
-  function err(e) { console.error(e); $("mstat").innerHTML = '<div class="err">' + esc(e.message || e) + '</div>'; }
+  function err(e) { console.error(e); $("mstat").innerHTML = '<div class="err">' + esc(e.message || e).replace(/\n/g, "<br>") + '</div>'; }
   function setGeo(g) {
     S.geo = g; S.res = S.des = S.po = null; S.sel = null; S.state = null;
     var p = params(); MD._pm = {};
@@ -4460,14 +4697,19 @@ var SU = (function () {
       h += '<div class="rep"><div class="rh"><div><h3>Linear static analysis' + (r.pd ? ' with P-Delta' : '') + '</h3><div class="mbadge">Design: ' + (S.p.method === "wsm" ? "Working stress method" : "Limit state method") + (given("method") ? "" : " (default)") + '</div><small>Direct stiffness method · ' + r.info.neq + ' equations · skyline ' + (r.info.size / 1e6).toFixed(2) + ' M terms · ' + r.ms + ' ms</small></div>' +
         '<span class="badge ' + (S.des.fails ? "fail" : "pass") + '">' + (S.des.fails ? S.des.fails + " FAIL" : "ALL OK") + '</span></div>';
       h += '<div class="sum"><div><span>Max displacement, ' + esc(cb0.name) + '</span><b>' + f(umax * 1000, 2) + ' mm at node ' + (ui + 1) + '</b></div><div><span>Total vertical reaction, ' + esc(cb0.name) + '</span><b>' + f(Rz, 1) + ' kN</b></div>';
-      if (r.pd) { var a = r.combos.map(function (c) { return c.pdAmp; }); h += '<div><span>P-Delta displacement amplification (max)</span><b>' + f(Math.max.apply(null, a), 3) + '</b></div>'; }
+      if (r.pd) { var a = r.combos.map(function (c) { return c.pdAmp; }), its = r.combos.map(function (c) { return c.pdIter; }), rs = r.combos.map(function (c) { return c.pdResid || 0; });
+        h += '<div><span>P-Delta displacement amplification (max)</span><b>' + f(Math.max.apply(null, a), 3) + '</b></div><div><span>P-Delta convergence</span><b>all ' + r.combos.length + ' combinations converged · ≤ ' + Math.max.apply(null, its) + ' iterations · residual ≤ ' + Math.max.apply(null, rs).toExponential(1) + '</b></div>'; }
+      var qs = r.quality && r.quality.stats;
+      if (qs && qs.shells) h += '<div><span>Mesh quality</span><b>' + qs.shells + ' shells · max aspect ' + f(qs.maxAR, 1) + ' · min angle ' + f(qs.minAng, 0) + '°</b></div>';
       h += '</div>';
       var dfl = used().filter(function (k) { return LBL[k]; }).map(function (k) { return LBL[k] + " " + dtxt(k); });
       if (dfl.length) h += '<div class="note"><b>Defaults used</b> (not entered): ' + esc(dfl.join(" · ")) + '</div>';
       if (S.L.notes.length) h += '<div class="note">' + S.L.notes.map(esc).join("<br>") + '</div>';
+      if (r.warn && r.warn.length) h += '<div class="note"><b>Model warnings:</b> ' + r.warn.map(esc).join("<br>") + '</div>';
       Object.keys(S.L.eq).forEach(function (k) { var q = S.L.eq[k]; h += '<div class="eq">' + k + ': h = ' + f(q.H, 2) + ' m, d = ' + f(q.d, 1) + ' m, Ta = ' + f(q.T, 3) + ' s, Sa/g = ' + f(q.Sa, 3) + ', Ah = Z/2 · Sa/g / (R/I) = ' + f(q.Ah, 4) + (q.Ahd > q.Ah ? ' → min ' + f(q.Ahd, 4) + ' (Table 7)' : '') + ', W = ' + f(q.W, 0) + ' kN, <b>Vb = ' + f(q.Vb, 1) + ' kN</b></div>'; });
       Object.keys(S.L.wind).forEach(function (k) { var q = S.L.wind[k]; h += '<div class="eq">' + k + ': exposed width ' + f(q.B, 1) + ' m, total wind force ' + f(q.F, 1) + ' kN (pd = 0.7·pz min, Cf ' + S.p.cf + ')</div>'; });
-      if (S.drift.length) h += '<h4>Storey drift (unfactored lateral load, IS 1893 cl 7.11.1 limit 0.004h)</h4>' + tbl(["Case", "Level z (m)", "Max disp (mm)", "Drift ratio", ""], S.drift.map(function (d) { return [d.c, f(d.z, 2), f(d.d * 1000, 2), f(d.dr, 5), d.lim ? (d.ok ? '<span class="okt">OK</span>' : '<span class="not">EXCEEDS</span>') : '']; }));
+      if (S.drift.length) h += '<h4>Storey drift at corresponding locations (unfactored lateral load, IS 1893 cl 7.11.1, limit 0.004h)</h4>' + tbl(["Case", "Storey (z, m)", "Governing nodes (top/bottom)", "Δu (mm)", "Drift Δu/h", "Δmax/Δave floor", ""], S.drift.map(function (d) { return [d.c, f(d.zb, 2) + "–" + f(d.z, 2), (d.top + 1) + " / " + (d.bot + 1) + (d.stacked ? "" : " (nearest)"), f(Math.abs(d.ut - d.ub) * 1000, 2), f(d.dr, 5), m.twoD ? "—" : f(d.tr, 2), d.lim ? (d.ok ? '<span class="okt">OK</span>' : '<span class="not">EXCEEDS</span>') : '']; })) +
+        '<div class="note">Drift = relative lateral displacement of the node at the top of a storey and the node directly below it, ÷ storey height; the largest value on each storey is shown. ' + (m.twoD ? '' : 'Δmax/Δave = largest ÷ average of the extreme floor displacements — an indicator for torsional irregularity (IS 1893 (Part 1):2016 Table 5 (i); Amendment 2 (2020) uses Δmax/Δave with 1.2 and 1.4 thresholds) computed without accidental eccentricity; values above 1.2 need review.') + '</div>';
       h += designTables() + basisBlock();
       h += '<h4>Support reactions — ' + esc(cb0.name) + '</h4>' + tbl(["Node", "Fx", "Fy", "Fz (kN)", "Mx", "My", "Mz (kNm)"], Object.keys(cb0.reac).slice(0, 60).map(function (k) { var q = cb0.reac[k]; return [+k + 1].concat(q.map(function (v) { return f(v, 1); })); }));
       h += '<div class="btns noprint"><button type="button" class="pri bXls">Excel: full analysis & design</button></div><div class="btns noprint"><button type="button" id="bCSV">Forces CSV</button><button type="button" id="bPrint">Print / Save PDF</button></div>';

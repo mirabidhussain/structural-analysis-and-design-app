@@ -89,7 +89,7 @@ MD.generate = function (g) {
 
 /* ---------- member selection rules: "12", "1-12", "F20", "columns storey 1-2", "beams level 3.5", "layer BEAM" ---------- */
 MD.select = function (m, sel) {
-  var lv = MD.levels(m), out = [], bad = null;
+  var lv = MD.floorLevels(m), out = [], bad = null;
   function storey(e) { var z = Math.max(m.nodes[e.n1].z, m.nodes[e.n2].z); var i = -1, best = 1e9; lv.forEach(function (l, j) { if (Math.abs(l - z) < best) { best = Math.abs(l - z); i = j; } }); return i; }
   String(sel).split(",").forEach(function (part) {
     var t = part.trim(), mm; if (!t) return;
@@ -203,7 +203,7 @@ MD.cases = function (m, p) {
   });
   var wind = {};
   if (p.wind) dirs.forEach(function (d) {
-    var lv = MD.levels(m), nm = "WL" + (d ? "Y" : "X"), nod = [], B = m.twoD ? p.trib : (function () { var a = Infinity, b = -Infinity; m.nodes.forEach(function (n) { var v = d ? n.x : n.y; a = Math.min(a, v); b = Math.max(b, v); }); return Math.max(b - a, 1); })();
+    var lv = MD.floorLevels(m), nm = "WL" + (d ? "Y" : "X"), nod = [], B = m.twoD ? p.trib : (function () { var a = Infinity, b = -Infinity; m.nodes.forEach(function (n) { var v = d ? n.x : n.y; a = Math.min(a, v); b = Math.max(b, v); }); return Math.max(b - a, 1); })();
     var Ftot = 0;
     lv.forEach(function (z, i) {
       if (i === 0) return;
@@ -299,29 +299,42 @@ MD.rccCol = function (e, k, s, pts, p, res) {
   var b = s.b, Dd = s.D, fck = s.fck, fy = s.fy, L = e.L * 1000, Ag = b * Dd;
   var exz = Math.max(L / 500 + Dd / 30, 20) / 1000, exy = Math.max(L / 500 + b / 30, 20) / 1000;
   var le = (p.kcol || 1.2) * L, slz = le / Dd, sly = le / b, crit = null, need = null;
-  var steps = []; for (var pc = 0.8; pc <= 4.001; pc += 0.2) steps.push(pc);
   /* governing (P, Mz, My) points: column ends of every combination */
   var cand = pts.filter(function (q, i) { return i % 9 === 0 || i % 9 === 8; });
-  for (var si = 0; si < steps.length && need === null; si++) {
-    var As = steps[si] / 100 * Ag, Puz = (0.45 * fck * (Ag - As) + 0.75 * fy * As) / 1000, worst = 0, wq = null;
+  function evalP(pcv) {
+    var As = pcv / 100 * Ag, Puz = (0.45 * fck * (Ag - As) + 0.75 * fy * As) / 1000, worst = 0, wq = null;
     cand.forEach(function (q) {
       var Pu = Math.max(-q.N, 0);
       var Maz = slz > 12 ? Pu * Dd / 2000 * slz * slz / 1000 : 0, May = sly > 12 ? Pu * b / 2000 * sly * sly / 1000 : 0;
       var Mz = Math.max(Math.abs(q.Mz), Pu * exz) + Maz, My = Math.max(Math.abs(q.My), Pu * exy) + May;
-      if (Pu > 0.98 * Puz) { worst = 9; wq = q; return; }
+      if (Pu > 0.98 * Puz) { if (9 > worst) { worst = 9; wq = { cb: q.cb, Pu: Pu, Mz: Mz, My: My, an: 2, M1: 1e-6, M2: 1e-6, Mz0: Math.abs(q.Mz), My0: Math.abs(q.My), Maz: Maz, May: May, Puz: Puz }; } return; }
       var M1 = RCC.colMcap(b, Dd, As, Pu, fck, fy, 50, "four"), M2 = RCC.colMcap(Dd, b, As, Pu, fck, fy, 50, "four");
       var an = Math.max(1, Math.min(2, 1 + (Pu / Puz - 0.2) / 0.6)), r = Math.pow(Mz / Math.max(M1, 1e-6), an) + (m2d(My) ? Math.pow(My / Math.max(M2, 1e-6), an) : 0);
       if (r > worst) { worst = r; wq = { cb: q.cb, Pu: Pu, Mz: Mz, My: My, an: an, M1: M1, M2: M2, Mz0: Math.abs(q.Mz), My0: Math.abs(q.My), Maz: Maz, May: May, Puz: Puz }; }
     });
-    if (worst <= 1) need = { pc: steps[si], As: As, r: worst, q: wq };
-    crit = { r: worst, q: wq };
+    return { pc: pcv, As: As, r: worst, q: wq };
+  }
+  /* coarse scan in 0.2 % steps, then bisection to 0.01 % between the last failing and first passing value */
+  var lo = null;
+  for (var pc = 0.8; pc <= 4.0001 && need === null; pc += 0.2) {
+    var t = evalP(pc);
+    if (t.r <= 1) need = t; else { lo = pc; crit = t; }
+  }
+  if (need && lo !== null) {
+    var hi = need.pc;
+    while (hi - lo > 0.01) { var mid = (lo + hi) / 2, tm = evalP(mid); if (tm.r <= 1) { hi = mid; need = tm; } else lo = mid; }
+  }
+  if (need) {   /* verify again with the bars actually provided */
+    var pb = U.pickBars(need.As, [12, 16, 20, 25, 32], 4, 24), chk = evalP(100 * pb.area / Ag);
+    need.prov = { area: pb.area, pc: 100 * pb.area / Ag, r: chk.r, text: pb.text };
+    if (chk.r > 1) need = null;
   }
   function m2d() { return !p.twoD; }
   var msg = [];
   if (slz > 12 || sly > 12) msg.push("Slender (le/D = " + slz.toFixed(1) + ", le/b = " + sly.toFixed(1) + ") - additional moments cl 39.7.1 included");
   if (!need) msg.push("Fails even at 4% steel - enlarge section");
   var Pmax = 0; pts.forEach(function (q) { Pmax = Math.max(Pmax, -q.N); });
-  return { k: k, name: s.name, b: b, D: Dd, L: L, le: le, exz: exz, exy: exy, fck: fck, fy: fy, Pu: Pmax, need: need, crit: crit, ok: !!need, msg: msg, bars: need ? U.pickBars(need.As, [12, 16, 20, 25, 32], 4, 24).text : "-" };
+  return { k: k, name: s.name, b: b, D: Dd, L: L, le: le, exz: exz, exy: exy, fck: fck, fy: fy, Pu: Pmax, need: need, crit: crit, ok: !!need, msg: msg, bars: need ? need.prov.text : "-" };
 };
 MD.steelMem = function (e, k, s, pts, p) {
   var r = s.row, fy = s.fy, L = e.L * 1000, A = s.A * 1e6, msg = [], ok = true, worst = 0, wq = null;
@@ -331,23 +344,61 @@ MD.steelMem = function (e, k, s, pts, p) {
     if (L / (r.rvv * 10) > 180) { msg.push("KL/r = " + (L / (r.rvv * 10)).toFixed(0) + " > 180 (IS 800 Table 3) - tension-only bracing"); }
     return { k: k, name: s.name, ratio: worst, ok: worst <= 1, msg: msg, txt: "Pd,c = " + Pc.toFixed(1) + " kN, Td = " + Pt.toFixed(1) + " kN", cb: wq && wq.cb, Pd: Pc, Td: Pt, Mdz: 0, Mdy: 0, q: wq, L: L, KLr: L / (r.rvv * 10) };
   }
-  var lz = L / (r.rx * 10), ly = L / (r.ry * 10), Pdz = A * ST.fcd(lz, fy, "a") / 1e3, Pdy = A * ST.fcd(ly, fy, "b") / 1e3, Pd = Math.min(Pdz, Pdy), Td = A * fy / D.gm0 / 1e3;
-  /* LTB, IS 800 Annex E (unrestrained length = member length) */
-  var Iy = r.Iy * 1e4, It = s.J * 1e12, hf = r.D - r.tf, Iw = Iy * hf * hf / 4, E = 2e5, G = 76900;
-  var Mcr = Math.PI * Math.PI * E * Iy / (L * L) * Math.sqrt(Iw / Iy + G * It * L * L / (Math.PI * Math.PI * E * Iy)) / 1e6;
-  var Mp = fy * r.Zpx / 1e3, lLT = Math.min(Math.sqrt(Mp / Mcr), Math.sqrt(1.2 * r.Zex * fy / 1e3 / Mcr) * 10), phi = 0.5 * (1 + 0.21 * (lLT - 0.2) + lLT * lLT);
-  var chi = Math.min(1, 1 / (phi + Math.sqrt(phi * phi - lLT * lLT))), Mdz = chi * Mp / D.gm0, Mdy = fy * s.Zpy / 1e3 / D.gm0;
-  var Vd = r.D * r.tw * fy / (Math.sqrt(3) * D.gm0) / 1e3, Vmax = 0;
-  pts.forEach(function (q) {
-    Vmax = Math.max(Vmax, Math.abs(q.Vy));
-    var u = (q.N < 0 ? -q.N / Pd : q.N / Td) + Math.abs(q.Mz) / Mdz + Math.abs(q.My) / Mdy;
-    if (u > worst) { worst = u; wq = q; }
-  });
-  if (Vmax > 0.6 * Vd) msg.push("High shear V > 0.6Vd - moment capacity reduced (cl 9.2)");
-  if (Vmax > Vd) ok = false;
-  if (e.type === "column" && Math.max(lz, ly) > 180) { ok = false; msg.push("KL/r > 180"); }
-  return { k: k, name: s.name, ratio: worst, ok: ok && worst <= 1, msg: msg, cb: wq && wq.cb, Pd: Pd, Td: Td, Mdz: Mdz, Mdy: Mdy, Vd: Vd, Vmax: Vmax, chi: chi, Mcr: Mcr, q: wq, L: L, KLr: Math.max(lz, ly),
-    txt: "Pd = " + Pd.toFixed(0) + " kN, Md,z = " + Mdz.toFixed(1) + " kNm (χLT " + chi.toFixed(2) + "), Md,y = " + Mdy.toFixed(1) + " kNm, Vd = " + Vd.toFixed(0) + " kN" };
+  /* ---- IS 800:2007 I-section: cl 7.1.2 buckling, 8.2.2 LTB, 8.4 shear, 9.2.2 high shear, 9.3.1.1 section strength, 9.3.2.2 member buckling ---- */
+  var K = e.type === "column" ? (p.kcol || 1.2) : 1, KL = K * L, lz = KL / (r.rx * 10), ly = KL / (r.ry * 10);
+  var lamz = ST.lamND(lz, fy), lamy = ST.lamND(ly, fy);
+  var Pdz = A * ST.fcd(lz, fy, "a") / 1e3, Pdy = A * ST.fcd(ly, fy, "b") / 1e3, Pd = Math.min(Pdz, Pdy), Nd = A * fy / D.gm0 / 1e3, Td = Nd;
+  var eps = ST.eps(fy), bt = (r.bf / 2) / r.tf, dt = (r.D - 2 * r.tf) / r.tw;
+  var cls = (bt <= 9.4 * eps && dt <= 84 * eps) ? "Plastic" : (bt <= 10.5 * eps && dt <= 105 * eps) ? "Compact" : "Semi-compact", bb = cls === "Semi-compact" ? r.Zex / r.Zpx : 1;
+  var Iy = r.Iy * 1e4, It = s.J * 1e12, hf = r.D - r.tf, Iw = Iy * hf * hf / 4, E = 2e5, G = 76900, LLT = L;
+  var Mcr = Math.PI * Math.PI * E * Iy / (LLT * LLT) * Math.sqrt(Iw / Iy + G * It * LLT * LLT / (Math.PI * Math.PI * E * Iy)) / 1e6;
+  var MdzS = Math.min(bb * fy * r.Zpx / 1e3, 1.2 * fy * r.Zex / 1e3) / D.gm0;                    /* section, cl 8.2.1.2 */
+  var lLT = Math.sqrt(bb * fy * r.Zpx / 1e3 / Mcr), phi = 0.5 * (1 + 0.21 * (lLT - 0.2) + lLT * lLT);
+  var chi = Math.min(1, 1 / (phi + Math.sqrt(Math.max(phi * phi - lLT * lLT, 0)))), Mdz = Math.min(chi * bb * fy * r.Zpx / 1e3 / D.gm0, MdzS);   /* LTB, cl 8.2.2 */
+  var Mdy = fy * s.Zpy / 1e3 / D.gm0;
+  var Vd = r.D * r.tw * fy / (Math.sqrt(3) * D.gm0) / 1e3, Mfd = r.bf * r.tf * (r.D - r.tf) * fy / D.gm0 / 1e6, Vmax = 0, best = null;
+  function Mv(M, V) {   /* cl 9.2.2 */
+    if (V <= 0.6 * Vd) return M;
+    var beta = Math.pow(2 * V / Vd - 1, 2);
+    return cls === "Semi-compact" ? Math.min(M, fy * r.Zex / 1e3 / D.gm0) : Math.max(0, M - beta * Math.max(0, M - Mfd));
+  }
+  function Cm(a) {   /* IS 800 Table 18: linear moment 0.6 + 0.4ψ ≥ 0.4; transverse load 0.95 */
+    var m1 = a[0], m2 = a[a.length - 1], me = Math.max(Math.abs(m1), Math.abs(m2)), mi = 0;
+    a.forEach(function (x) { mi = Math.max(mi, Math.abs(x)); });
+    if (mi < 1e-6) return 1;
+    if (mi > 1.05 * me) return 0.95;
+    var psi = Math.abs(m1) >= Math.abs(m2) ? (Math.abs(m1) > 1e-9 ? m2 / m1 : 0) : m1 / m2;
+    return Math.max(0.4, 0.6 + 0.4 * psi);
+  }
+  for (var c0 = 0; c0 < pts.length; c0 += 9) {
+    var g = pts.slice(c0, c0 + 9), P = 0, T = 0, Mz = 0, My = 0, V = 0, sec = 0, sq = null;
+    g.forEach(function (q) {
+      P = Math.max(P, -q.N); T = Math.max(T, q.N); Mz = Math.max(Mz, Math.abs(q.Mz)); My = Math.max(My, Math.abs(q.My)); V = Math.max(V, Math.abs(q.Vy)); Vmax = Math.max(Vmax, Math.abs(q.Vy));
+      /* section strength at every point, cl 9.3.1.1 */
+      var n = Math.abs(q.N) / Nd, MdzV = Mv(MdzS, Math.abs(q.Vy)), Mndz = Math.min(MdzV, 1.11 * MdzV * (1 - n)), Mndy = n <= 0.2 ? Mdy : Math.min(Mdy, 1.56 * Mdy * (1 - n) * (n + 0.6)), a1 = Math.max(1, 5 * n);
+      var us = n >= 1 ? n : Math.pow(Math.abs(q.My) / Math.max(Mndy, 1e-9), a1) + Math.pow(Math.abs(q.Mz) / Math.max(Mndz, 1e-9), 2);
+      if (us > sec) { sec = us; sq = { n: n, Mndz: Mndz, Mndy: Mndy, a1: a1, MdzV: MdzV, q: q }; }
+    });
+    var Cmz = Cm(g.map(function (q) { return q.Mz; })), Cmy = Cm(g.map(function (q) { return q.My; })), CmLT = Cmz, u1 = 0, u2 = 0, ny = 0, nz = 0, Ky = 1, Kz = 1, KLT = 1;
+    if (P > 1e-6) {   /* member buckling, cl 9.3.2.2 */
+      ny = P / Pdy; nz = P / Pdz;
+      Ky = Math.min(1 + (lamy - 0.2) * ny, 1 + 0.8 * ny); Kz = Math.min(1 + (lamz - 0.2) * nz, 1 + 0.8 * nz);
+      KLT = Math.max(1 - 0.1 * lLT * ny / (CmLT - 0.25), 1 - 0.1 * ny / (CmLT - 0.25));
+      u1 = P / Pdy + Ky * Cmy * My / Mdy + KLT * Mz / Mdz;
+      u2 = P / Pdz + 0.6 * Ky * Cmy * My / Mdy + Kz * Cmz * Mz / Mdz;
+    } else { u1 = Mz / Mdz + My / Mdy; u2 = T / Td; }   /* tension: LTB with tension relief ignored (conservative), cl 9.3.2.1 */
+    var u = Math.max(sec, u1, u2);
+    if (!best || u > best.u) best = { u: u, cb: g[0].cb, P: P, T: T, Mz: Mz, My: My, V: V, sec: sec, sq: sq, u1: u1, u2: u2, ny: ny, nz: nz, Ky: Ky, Kz: Kz, KLT: KLT, Cmy: Cmy, Cmz: Cmz,
+      gov: u === sec ? "section strength cl 9.3.1.1" : u === u1 ? (P > 0 ? "member buckling cl 9.3.2.2 (y)" : "LTB cl 9.3.2.1") : (P > 0 ? "member buckling cl 9.3.2.2 (z)" : "tension cl 6") };
+  }
+  worst = best ? best.u : 0;
+  wq = best ? { cb: best.cb, N: best.P > 0 ? -best.P : best.T, Mz: best.Mz, My: best.My } : null;
+  if (Vmax > 0.6 * Vd) msg.push("High shear V = " + Vmax.toFixed(1) + " > 0.6Vd: moment capacity reduced per cl 9.2.2");
+  if (Vmax > Vd) { ok = false; msg.push("Shear V > Vd (cl 8.4)"); }
+  if (e.type === "column" && Math.max(lz, ly) > 180) { ok = false; msg.push("KL/r > 180 (Table 3)"); }
+  return { k: k, name: s.name, ratio: worst, ok: ok && worst <= 1, msg: msg, cb: wq && wq.cb, Pd: Pd, Pdy: Pdy, Pdz: Pdz, Nd: Nd, Td: Td, Mdz: Mdz, MdzS: MdzS, Mdy: Mdy, Vd: Vd, Vmax: Vmax, Mfd: Mfd, chi: chi, lLT: lLT, Mcr: Mcr, cls: cls,
+    lamy: lamy, lamz: lamz, K: K, q: wq, b: best, L: L, KLr: Math.max(lz, ly),
+    txt: "Pdy = " + Pdy.toFixed(0) + ", Pdz = " + Pdz.toFixed(0) + " kN, Md,z = " + Mdz.toFixed(1) + " kNm (χLT " + chi.toFixed(2) + "), Md,y = " + Mdy.toFixed(1) + " kNm, Vd = " + Vd.toFixed(0) + " kN; governs: " + (best ? best.gov : "-") };
 };
 MD.shellDesign = function (sh, k, env, p) {
   var t = sh.t * 1000, dx = t - 30, dy = t - 40, fck = p.fck, fy = p.fy, msg = [], ok = true;
@@ -362,15 +413,46 @@ MD.shellDesign = function (sh, k, env, p) {
   }
   r.ok = ok; r.msg = msg; return r;
 };
+/* Storey drift at corresponding locations (IS 1893 cl 7.11.1): for every node of a floor, the node directly below it
+   (same plan position, else the nearest one on the floor below) gives Δ = |u_top − u_bottom| / h. The governing (largest)
+   location is reported, with the plan-torsion indicator Δmax/Δave of floor displacements (IS 1893 Table 5 (i)). */
+/* floor levels: base + levels that carry horizontal beams or slabs (excludes intermediate wall-mesh rows) */
+MD.floorLevels = function (m) {
+  var zs = [], zmin = Infinity;
+  function add(z) { z = Math.round(z * 100) / 100; if (zs.indexOf(z) < 0) zs.push(z); }
+  m.nodes.forEach(function (n) { zmin = Math.min(zmin, n.z); });
+  m.frames.forEach(function (e) { var A = m.nodes[e.n1], B = m.nodes[e.n2]; if (Math.abs(A.z - B.z) < 0.01 && e.type !== "column") add(A.z); });
+  m.shells.forEach(function (s) { if (s.kind === "slab") s.n.forEach(function (i) { add(m.nodes[i].z); }); });
+  if (!zs.length) return MD.levels(m);
+  add(zmin);
+  return zs.sort(function (a, b) { return a - b; });
+};
 MD.drift = function (m, res) {
-  var lv = MD.levels(m), out = [];
+  var lv = MD.floorLevels(m), out = [], byLev = lv.map(function (z) { return m.nodes.map(function (n, j) { return j; }).filter(function (j) { return Math.abs(m.nodes[j].z - z) < 0.01; }); });
   Object.keys(res.cases).filter(function (c) { return /^(EQ|WL)/.test(c); }).forEach(function (c) {
-    var d = c.slice(-1) === "Y" ? 1 : 0, U = res.cases[c].U, prev = 0;
-    lv.forEach(function (z, i) {
-      var mx = 0; m.nodes.forEach(function (n, j) { if (Math.abs(n.z - z) < 0.01) mx = Math.max(mx, Math.abs(U[6 * j + d])); });
-      if (i > 0) { var h = z - lv[i - 1], dr = (mx - prev) / h; out.push({ c: c, z: z, d: mx, dr: dr, ok: !/^EQ/.test(c) || dr <= 0.004, lim: /^EQ/.test(c) ? 0.004 : null }); }
-      prev = mx;
-    });
+    var d = c.slice(-1) === "Y" ? 1 : 0, U = res.cases[c].U;
+    for (var i = 1; i < lv.length; i++) {
+      var h = lv[i] - lv[i - 1], top = byLev[i], bot = byLev[i - 1], best = null, umax = -Infinity, umin = Infinity, nPair = 0, exact = 0;
+      if (!top.length || !bot.length) continue;
+      var pairs = top.map(function (j) {
+        var A = m.nodes[j], k = -1, dmin = Infinity;
+        bot.forEach(function (q) { var B = m.nodes[q], dd = Math.hypot(A.x - B.x, A.y - B.y); if (dd < dmin) { dmin = dd; k = q; } });
+        return [j, k, dmin];
+      }).filter(function (x) { return x[1] >= 0; });
+      var ex = pairs.filter(function (x) { return x[2] < 0.01; });
+      if (ex.length) pairs = ex;          /* use vertically stacked node pairs whenever they exist */
+      pairs.forEach(function (pr) {
+        var j = pr[0], k = pr[1], dmin = pr[2];
+        nPair++; if (dmin < 0.01) exact++;
+        var dr = Math.abs(U[6 * j + d] - U[6 * k + d]) / h;
+        if (!best || dr > best.dr) best = { dr: dr, top: j, bot: k, ut: U[6 * j + d], ub: U[6 * k + d], off: dmin };
+        var ut = Math.abs(U[6 * j + d]); umax = Math.max(umax, ut); umin = Math.min(umin, ut);
+      });
+      if (!best) continue;
+      var eq = /^EQ/.test(c), dave = (umax + umin) / 2;
+      out.push({ c: c, z: lv[i], zb: lv[i - 1], h: h, d: Math.max(Math.abs(best.ut), Math.abs(best.ub)), dr: best.dr, top: best.top, bot: best.bot, ut: best.ut, ub: best.ub, stacked: best.off < 0.01, pairs: nPair, exact: exact,
+        tr: dave > 1e-12 ? umax / dave : 1, ok: !eq || best.dr <= 0.004, lim: eq ? 0.004 : null });
+    }
   });
   return out;
 };

@@ -303,6 +303,16 @@ RCC.column = function (p) {
     trace.push([U.f(pc, 1), U.f(Puz, 0), U.f(Mx1, 1), U.f(My1, 1), U.f(an, 2), U.f(u, 3)]);
     if (u <= 1) { found = { pc: pc, As: As, Puz: Puz, Mx1: Mx1, My1: My1, an: an, u: u }; break; }
   }
+  if (found && found.pc > 0.8 + 1e-9) {   /* refine to 0.01 % by bisection */
+    var lo2 = found.pc - 0.1, hi2 = found.pc;
+    while (hi2 - lo2 > 0.01) {
+      var md = (lo2 + hi2) / 2, As3 = md / 100 * Ag, Puz3 = (0.45 * fck * (Ag - As3) + 0.75 * fy * As3) / 1000;
+      if (Pu > Puz3) { lo2 = md; continue; }
+      var a1 = RCC.colMcap(b, Dd, As3, Pu, fck, fy, dc, p.arr), a2 = RCC.colMcap(Dd, b, As3, Pu, fck, fy, dc, p.arr), rr3 = Pu / Puz3, an3 = rr3 <= 0.2 ? 1 : rr3 >= 0.8 ? 2 : 1 + (rr3 - 0.2) / 0.6;
+      var u3 = Math.pow(Mx / a1, an3) + Math.pow(My / a2, an3);
+      if (u3 <= 1) { hi2 = md; found = { pc: md, As: As3, Puz: Puz3, Mx1: a1, My1: a2, an: an3, u: u3 }; } else lo2 = md;
+    }
+  }
   if (trace.length) r.table(["p %", "Puz kN", "Mux1 kNm", "Muy1 kNm", "αn", "Interaction"], trace.slice(-4));
   if (!found) { r.fail("Section inadequate up to p = " + p.pmax + " %. Increase size or grade."); return r; }
   r.eq("Puz = 0.45 fck Ac + 0.75 fy Asc = " + U.f(found.Puz, 0) + " kN ; αn = " + U.f(found.an, 2), "cl 39.6");
@@ -313,6 +323,11 @@ RCC.column = function (p) {
   var Aprov = nb * D.barArea(p.dia);
   r.row("Required Asc (p = " + U.f(found.pc, 1) + " %)", U.f(Asreq, 0), "mm²", "min 0.8 % cl 26.5.3.1");
   r.row("Provide", nb + " nos " + p.dia + " mm φ (" + U.f(Aprov, 0) + " mm², " + U.f(100 * Aprov / Ag, 2) + " %)", "");
+  (function () {   /* re-verify interaction with the bars actually provided */
+    var Puz2 = (0.45 * fck * (Ag - Aprov) + 0.75 * fy * Aprov) / 1000, Mx2 = RCC.colMcap(b, Dd, Aprov, Pu, fck, fy, dc, p.arr), My2 = RCC.colMcap(Dd, b, Aprov, Pu, fck, fy, dc, p.arr);
+    var rt = Pu / Puz2, an2 = rt <= 0.2 ? 1 : rt >= 0.8 ? 2 : 1 + (rt - 0.2) / 0.6, u2 = Math.pow(Mx / Mx2, an2) + Math.pow(My / My2, an2);
+    r.check("Interaction with bars provided ≤ 1", u2 <= 1, U.f(u2, 3) + " (Mux1 = " + U.f(Mx2, 1) + ", Muy1 = " + U.f(My2, 1) + " kNm)", "cl 39.6");
+  })();
   r.check("Asc ≤ 4 % (practical) / 6 %", 100 * Aprov / Ag <= 6, "", "cl 26.5.3.1");
   r.h("4. Lateral ties");
   var td = Math.max(6, Math.ceil(p.dia / 4)); td = D.bars.filter(function (x) { return x >= td; })[0];

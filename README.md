@@ -41,6 +41,21 @@ Home → **Frame & FE analysis**.
 - `dist/index.html` - single-file version (open in any browser).
 - `test/` - Node tests: `node test/verify.js` (20 checks against code tables and statics), `node test/smoke.js`.
 
+## Verification & testing (v2.6)
+Run `npm test` (Node 18+) or let GitHub Actions run it on every push:
+- `test/fem_verify.js` — 16 closed-form checks (cantilever, fixed beam, portal sway, P-Delta amplification, SS & clamped plates, shear wall, truss).
+- `test/po_verify.js` — plastic collapse loads (portal 4Mp/h, propped cantilever 6Mp/L), P–M hinges, P-Delta equilibrium.
+- `test/model_test.js` — equilibrium of a 3D building, DXF import/export round trip.
+- `test/verify.js` — design-module checks against hand calculations.
+- `test/acceptance.js` — 61 acceptance and independent-benchmark checks:
+  - design modules with **expected pass**, **expected fail** (e.g. 150 mm stair waist fails deflection, 3 bolts for 150 kN fails) and boundary cases;
+  - IS code reference values: SP 16 Mu,lim factors 0.138/0.133/0.149, IS 456 Tables 19–22, IS 800 Table 9(c) fcd 107 & 183 N/mm², IS 1893 Sa/g, IS 800 cl 9.2.2 high-shear reduction by hand calculation;
+  - FE benchmarks: MacNeal–Harder membrane patch test with distorted elements (exact), continuous beams wL²/8 and 0.1wL² (three-moment equation), torsion TL/GJ, Cook's skewed membrane convergence, SS plate mesh convergence;
+  - solver safety: P-Delta above the buckling load rejected, convergence iterations/residual reported, floating parts and zero-area shells rejected before solving;
+  - storey drift at vertically stacked nodes and the Δmax/Δave torsion indicator.
+- `test/ui_ci.js` — browser test (Playwright): every module with blank inputs, frame analysis, Excel download, WSM switch, no JavaScript errors.
+- `test/smoke.js` — prints sample design reports (diagnostic).
+
 ## Limits
-No response-spectrum or time-history dynamics, IS 13920 ductile detailing (notes only), raft/pile/combined footings, retaining walls, plate girders or base plates.
+No modal / response-spectrum or time-history dynamics (equivalent static only; torsion indicator excludes accidental eccentricity), IS 13920 ductile detailing (notes only), raft/pile/combined footings, retaining walls, plate girders or base plates.
 Section properties are rounded SP 6(1) values. All designs must be checked by a qualified structural engineer.

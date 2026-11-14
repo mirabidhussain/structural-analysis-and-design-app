@@ -161,7 +161,7 @@ var SU = (function () {
   }
 
   /* ---------- model building ---------- */
-  function err(e) { console.error(e); $("mstat").innerHTML = '<div class="err">' + esc(e.message || e) + '</div>'; }
+  function err(e) { console.error(e); $("mstat").innerHTML = '<div class="err">' + esc(e.message || e).replace(/\n/g, "<br>") + '</div>'; }
   function setGeo(g) {
     S.geo = g; S.res = S.des = S.po = null; S.sel = null; S.state = null;
     var p = params(); MD._pm = {};
@@ -483,14 +483,19 @@ var SU = (function () {
       h += '<div class="rep"><div class="rh"><div><h3>Linear static analysis' + (r.pd ? ' with P-Delta' : '') + '</h3><div class="mbadge">Design: ' + (S.p.method === "wsm" ? "Working stress method" : "Limit state method") + (given("method") ? "" : " (default)") + '</div><small>Direct stiffness method · ' + r.info.neq + ' equations · skyline ' + (r.info.size / 1e6).toFixed(2) + ' M terms · ' + r.ms + ' ms</small></div>' +
         '<span class="badge ' + (S.des.fails ? "fail" : "pass") + '">' + (S.des.fails ? S.des.fails + " FAIL" : "ALL OK") + '</span></div>';
       h += '<div class="sum"><div><span>Max displacement, ' + esc(cb0.name) + '</span><b>' + f(umax * 1000, 2) + ' mm at node ' + (ui + 1) + '</b></div><div><span>Total vertical reaction, ' + esc(cb0.name) + '</span><b>' + f(Rz, 1) + ' kN</b></div>';
-      if (r.pd) { var a = r.combos.map(function (c) { return c.pdAmp; }); h += '<div><span>P-Delta displacement amplification (max)</span><b>' + f(Math.max.apply(null, a), 3) + '</b></div>'; }
+      if (r.pd) { var a = r.combos.map(function (c) { return c.pdAmp; }), its = r.combos.map(function (c) { return c.pdIter; }), rs = r.combos.map(function (c) { return c.pdResid || 0; });
+        h += '<div><span>P-Delta displacement amplification (max)</span><b>' + f(Math.max.apply(null, a), 3) + '</b></div><div><span>P-Delta convergence</span><b>all ' + r.combos.length + ' combinations converged · ≤ ' + Math.max.apply(null, its) + ' iterations · residual ≤ ' + Math.max.apply(null, rs).toExponential(1) + '</b></div>'; }
+      var qs = r.quality && r.quality.stats;
+      if (qs && qs.shells) h += '<div><span>Mesh quality</span><b>' + qs.shells + ' shells · max aspect ' + f(qs.maxAR, 1) + ' · min angle ' + f(qs.minAng, 0) + '°</b></div>';
       h += '</div>';
       var dfl = used().filter(function (k) { return LBL[k]; }).map(function (k) { return LBL[k] + " " + dtxt(k); });
       if (dfl.length) h += '<div class="note"><b>Defaults used</b> (not entered): ' + esc(dfl.join(" · ")) + '</div>';
       if (S.L.notes.length) h += '<div class="note">' + S.L.notes.map(esc).join("<br>") + '</div>';
+      if (r.warn && r.warn.length) h += '<div class="note"><b>Model warnings:</b> ' + r.warn.map(esc).join("<br>") + '</div>';
       Object.keys(S.L.eq).forEach(function (k) { var q = S.L.eq[k]; h += '<div class="eq">' + k + ': h = ' + f(q.H, 2) + ' m, d = ' + f(q.d, 1) + ' m, Ta = ' + f(q.T, 3) + ' s, Sa/g = ' + f(q.Sa, 3) + ', Ah = Z/2 · Sa/g / (R/I) = ' + f(q.Ah, 4) + (q.Ahd > q.Ah ? ' → min ' + f(q.Ahd, 4) + ' (Table 7)' : '') + ', W = ' + f(q.W, 0) + ' kN, <b>Vb = ' + f(q.Vb, 1) + ' kN</b></div>'; });
       Object.keys(S.L.wind).forEach(function (k) { var q = S.L.wind[k]; h += '<div class="eq">' + k + ': exposed width ' + f(q.B, 1) + ' m, total wind force ' + f(q.F, 1) + ' kN (pd = 0.7·pz min, Cf ' + S.p.cf + ')</div>'; });
-      if (S.drift.length) h += '<h4>Storey drift (unfactored lateral load, IS 1893 cl 7.11.1 limit 0.004h)</h4>' + tbl(["Case", "Level z (m)", "Max disp (mm)", "Drift ratio", ""], S.drift.map(function (d) { return [d.c, f(d.z, 2), f(d.d * 1000, 2), f(d.dr, 5), d.lim ? (d.ok ? '<span class="okt">OK</span>' : '<span class="not">EXCEEDS</span>') : '']; }));
+      if (S.drift.length) h += '<h4>Storey drift at corresponding locations (unfactored lateral load, IS 1893 cl 7.11.1, limit 0.004h)</h4>' + tbl(["Case", "Storey (z, m)", "Governing nodes (top/bottom)", "Δu (mm)", "Drift Δu/h", "Δmax/Δave floor", ""], S.drift.map(function (d) { return [d.c, f(d.zb, 2) + "–" + f(d.z, 2), (d.top + 1) + " / " + (d.bot + 1) + (d.stacked ? "" : " (nearest)"), f(Math.abs(d.ut - d.ub) * 1000, 2), f(d.dr, 5), m.twoD ? "—" : f(d.tr, 2), d.lim ? (d.ok ? '<span class="okt">OK</span>' : '<span class="not">EXCEEDS</span>') : '']; })) +
+        '<div class="note">Drift = relative lateral displacement of the node at the top of a storey and the node directly below it, ÷ storey height; the largest value on each storey is shown. ' + (m.twoD ? '' : 'Δmax/Δave = largest ÷ average of the extreme floor displacements — an indicator for torsional irregularity (IS 1893 (Part 1):2016 Table 5 (i); Amendment 2 (2020) uses Δmax/Δave with 1.2 and 1.4 thresholds) computed without accidental eccentricity; values above 1.2 need review.') + '</div>';
       h += designTables() + basisBlock();
       h += '<h4>Support reactions — ' + esc(cb0.name) + '</h4>' + tbl(["Node", "Fx", "Fy", "Fz (kN)", "Mx", "My", "Mz (kNm)"], Object.keys(cb0.reac).slice(0, 60).map(function (k) { var q = cb0.reac[k]; return [+k + 1].concat(q.map(function (v) { return f(v, 1); })); }));
       h += '<div class="btns noprint"><button type="button" class="pri bXls">Excel: full analysis & design</button></div><div class="btns noprint"><button type="button" id="bCSV">Forces CSV</button><button type="button" id="bPrint">Print / Save PDF</button></div>';

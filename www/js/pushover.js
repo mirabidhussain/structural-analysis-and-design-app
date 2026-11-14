@@ -13,6 +13,8 @@ PO.level = function (th, lim) { th = Math.abs(th); return th <= 1e-12 ? "Elastic
 
 /* opt: {gravity: lc (load case object), pattern: [{n, f[6]}], ctrl: node, dir: 0|1, dmax (m), pdelta, maxEvents} */
 PO.start = function (m, opt) {
+  var qc = FE.checkModel(m);
+  if (qc.errors.length) throw new Error("Model check failed:\n• " + qc.errors.slice(0, 8).join("\n• "));
   var info = FE.prepare(m), nF = m.frames.length;
   var baseRel = m.frames.map(function (e) { return (e.rel || []).slice(); });
   m.frames.forEach(function (e) { var A = m.nodes[e.n1], B = m.nodes[e.n2]; e.L = Math.hypot(B.x - A.x, B.y - A.y, B.z - A.z); });

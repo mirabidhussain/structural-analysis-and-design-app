@@ -1,0 +1,14 @@
+{
+  "name": "is-structdesign",
+  "version": "2.6.0",
+  "private": true,
+  "description": "IS-code structural analysis & design app (offline web app + Android WebView)",
+  "scripts": {
+    "build": "python3 build.py",
+    "test": "node test/fem_verify.js && node test/po_verify.js && node test/model_test.js && node test/verify.js && node test/acceptance.js",
+    "test:ui": "node test/ui_ci.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

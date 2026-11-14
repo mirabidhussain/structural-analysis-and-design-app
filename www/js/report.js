@@ -190,7 +190,7 @@ var RX = (function () {
       Object.keys(S.L.wind).forEach(function (k) {
         var w = S.L.wind[k];
         ld.row([]); ld.row(["Wind " + k + " — IS 875 (Part 3):2015"], "tb");
-        var lv = MD.levels(m), zmin = lv[0], rows = [];
+        var lv = MD.floorLevels(m), zmin = lv[0], rows = [];
         lv.forEach(function (z, i) { if (i === 0) return; var hz = z - zmin, k2 = U.interp(D.k2h, D.k2[p.terrain], Math.max(10, Math.min(hz, 100))); rows.push({ z: z, hz: hz, k2: k2, hb: (z - lv[i - 1]) / 2 + (i + 1 < lv.length ? (lv[i + 1] - z) / 2 : 0), B: w.B }); });
         table(ld, [{ k: "z", h: "Level z (m)", s: "n3" }, { k: "hz", h: "Height (m)", s: "n3" }, { k: "k2", h: "k2 (Table 2, TC " + p.terrain + ")", s: "n3" },
           { k: "Vz", h: "Vz = Vb·k1·k2·k3·k4 (m/s)", f: "[vb]*{k2}", s: "f2" }, { k: "pz", h: "pz = 0.6Vz² (kN/m²)", f: "0.6*{Vz}^2/1000", s: "f4" },
@@ -293,19 +293,18 @@ var RX = (function () {
 
       /* ===== Drift ===== */
       if (S.drift && S.drift.length) {
-        var dr = wb.sheet("Drift", { cols: [8, 12, 12, 14, 14, 12, 10], color: TAB.result });
-        intro(dr, "Drift — storey drift check (IS 1893 cl 7.11.1)", "Storey drift = difference in lateral displacement between two consecutive floors ÷ storey height, under the unfactored earthquake load. IS 1893 limits it to 0.004 (0.4 %). Wind drifts are listed for information only.", 7);
-        var lvl = MD.levels(m), rows = [];
-        Object.keys(res.cases).filter(function (c) { return /^(EQ|WL)/.test(c); }).forEach(function (c) {
-          var d = c.slice(-1) === "Y" ? 1 : 0, U = res.cases[c].U;
-          lvl.forEach(function (z, i) { var mx = 0; m.nodes.forEach(function (n, j) { if (Math.abs(n.z - z) < 0.01) mx = Math.max(mx, Math.abs(U[6 * j + d])); }); rows.push({ c: c, z: z, dm: mx * 1000, first: i === 0, eq: /^EQ/.test(c) }); });
-        });
-        table(dr, [{ k: "c", h: "Case" }, { k: "z", h: "Level z", u: "m", s: "n3" }, { k: "dm", h: "Max lateral disp.", u: "mm", s: "n3", d: "largest at this level" },
-          { k: "h", h: "Storey height h", u: "m", cell: function (r, rn) { return r.first ? { v: 0, s: "n3" } : { f: "=B" + rn + "-B" + (rn - 1), v: null, s: "f4" }; } },
-          { k: "dr", h: "Drift ratio Δ/h", cell: function (r, rn) { return r.first ? "" : { f: "=(C" + rn + "-C" + (rn - 1) + ")/(D" + rn + "*1000)", s: "f4" }; } },
-          { k: "lim", h: "Limit", cell: function (r) { return r.first || !r.eq ? "" : { f: "=p_dlim", v: 0.004, s: "f4" }; } },
-          { k: "st", h: "Check", cell: function (r, rn) { if (r.first || !r.eq) return ""; var row = S.drift.filter(function (x) { return x.c === r.c && Math.abs(x.z - r.z) < 1e-6; })[0]; return { f: '=IF(E' + rn + '<=F' + rn + ',"OK","FAIL")', v: row && row.ok ? "OK" : "FAIL", s: row && row.ok ? "ok" : "no" }; } }], rows, G);
-        dr.row([]); dr.row([{ v: "Drift from unfactored lateral load cases (IS 1893 cl 7.11.1: partial safety factor 1.0). Wind drifts reported for information.", s: "note" }]);
+        var dr = wb.sheet("Drift", { cols: [8, 10, 10, 10, 9, 9, 12, 12, 12, 10, 9, 12], color: TAB.result });
+        intro(dr, "Drift — storey drift check (IS 1893 cl 7.11.1)", "Storey drift is checked at corresponding locations: for each storey, the lateral displacement of a node at the top of the storey minus that of the node directly below it (same plan position), divided by the storey height. The largest value on each storey is shown, with the two node numbers, under the unfactored earthquake load. IS 1893 limits it to 0.004 (0.4 %); wind drifts are for information. 'Δmax/Δave' compares the largest and average extreme floor displacements — an indicator for torsional irregularity (IS 1893 Table 5 (i)) computed without accidental eccentricity.", 10);
+        table(dr, [{ k: "c", h: "Case" }, { k: "zb", h: "Bottom level", u: "m", s: "n3" }, { k: "z", h: "Top level", u: "m", s: "n3" },
+          { k: "h", h: "Storey height h", u: "m", f: "{z}-{zb}", s: "f3", d: "top − bottom" },
+          { k: "nt", h: "Node top", s: "n0", d: "governing location" }, { k: "nb", h: "Node below", s: "n0", d: m.twoD ? "same column line" : "same plan position (or nearest)" },
+          { k: "ut", h: "u top", u: "mm", s: "n3", d: "lateral displacement" }, { k: "ub", h: "u bottom", u: "mm", s: "n3", d: "lateral displacement" },
+          { k: "dr", h: "Drift Δu/h", f: "ABS({ut}-{ub})/({h}*1000)", s: "f4", d: "storey drift ratio" },
+          { k: "lim", h: "Limit", cell: function (q) { return q.eq ? { f: "=p_dlim", v: 0.004, s: "f4" } : { v: "info", s: "note" }; } },
+          { k: "st", h: "Check", f: function (q) { return q.eq ? 'IF({dr}<={lim},"OK","FAIL")' : null; }, s: "stat" },
+          { k: "tr", h: "Δmax/Δave", s: "n3", d: "> 1.2: review torsion" }],
+          S.drift.map(function (q) { return { c: q.c, zb: q.zb, z: q.z, nt: q.top + 1, nb: q.bot + 1, ut: q.ut * 1000, ub: q.ub * 1000, tr: m.twoD ? null : q.tr, eq: /^EQ/.test(q.c), st: "" }; }), G);
+        dr.row([]); dr.row([{ v: "Drift from unfactored lateral load cases (IS 1893 cl 7.11.1: partial safety factor 1.0). Wind drifts reported for information. Torsional-irregularity thresholds differ between IS 1893 (Part 1):2016 as first published and its Amendment 2 (2020); the ratio is an indicator for the engineer to review against the edition in force.", s: "note" }]);
       }
     }
 
@@ -371,13 +370,28 @@ var RX = (function () {
     }
     if (des && des.steel.length && !W) {
       var sd = wb.sheet("Steel Design", { cols: [8, 14, 10].concat(Array(16).fill(12)), color: TAB.design });
-      intro(sd, "Steel Design — IS 800 limit state method", "One row per steel member, at its governing combination. Capacities: Pd compression with flexural buckling (cl 7.1.2), Td tension yield (cl 6.2), Md,z bending including lateral-torsional buckling (Annex E, unrestrained length = member length), Md,y minor-axis bending. The ratio N/Nd + Mz/Mdz + My/Mdy (cl 9.3, simplified) must be ≤ 1.", 12);
+      intro(sd, "Steel Design — IS 800 limit state method", "One row per steel member, at its governing combination. Capacities: Pdy, Pdz flexural buckling (cl 7.1.2), Td tension (cl 6.2), Md,z with lateral-torsional buckling (Annex E, unrestrained length = member length), Md,y minor axis; moment reduced for high shear (cl 9.2.2). Checks: member buckling interaction with Ky, Kz, KLT and equivalent-moment factors Cm (cl 9.3.2.2, two equations) and section strength (cl 9.3.1.1) at the critical point. The largest ratio must be ≤ 1. Angle braces: axial check only.", 12);
       var t3 = table(sd, [{ k: "id", h: "Member", s: "n0" }, { k: "sec", h: "Section" }, { k: "type", h: "Type" }, { k: "L", h: "L", u: "mm", s: "n0" }, { k: "KLr", h: "KL/r max", s: "n2" },
-        { k: "cb", h: "Governing combination", d: "highest utilisation" }, { k: "N", h: "N (tension +)", u: "kN", s: "n2", d: "axial force" }, { k: "Mz", h: "Mz", u: "kNm", s: "n2", d: "major-axis moment" }, { k: "My", h: "My", u: "kNm", s: "n2", d: "minor-axis moment" },
-        { k: "Pd", h: "Pd (cl 7.1.2)", u: "kN", s: "n2", d: "compression capacity" }, { k: "Td", h: "Td = A·fy/γm0", u: "kN", s: "n2", d: "tension capacity" }, { k: "Mdz", h: "Md,z (LTB, Annex E)", u: "kNm", s: "n2", d: "major-axis bending capacity" }, { k: "Mdy", h: "Md,y", u: "kNm", s: "n2", d: "minor-axis bending capacity" },
-        { k: "ratio", h: "N/Nd + Mz/Mdz + My/Mdy (cl 9.3)", d: "utilisation, ≤ 1", f: "IF({N}<0,-{N}/{Pd},{N}/{Td})+IF({Mdz}>0,ABS({Mz})/{Mdz},0)+IF({Mdy}>0,ABS({My})/{Mdy},0)", s: "f4" },
+        { k: "cb", h: "Governing combination", d: "highest utilisation" },
+        { k: "P", h: "P compression", u: "kN", s: "n2", d: "member max" }, { k: "T", h: "T tension", u: "kN", s: "n2" }, { k: "Mz", h: "Mz max", u: "kNm", s: "n2" }, { k: "My", h: "My max", u: "kNm", s: "n2" },
+        { k: "Pdy", h: "Pdy", u: "kN", s: "n2", d: "buckling y-y, cl 7.1.2" }, { k: "Pdz", h: "Pdz", u: "kN", s: "n2", d: "buckling z-z" }, { k: "Td", h: "Td = Nd", u: "kN", s: "n2", d: "A·fy/γm0" },
+        { k: "Mdz", h: "Md,z (LTB)", u: "kNm", s: "n2", d: "cl 8.2.2" }, { k: "Mdy", h: "Md,y", u: "kNm", s: "n2" },
+        { k: "Ky", h: "Ky", s: "n3", d: "cl 9.3.2.2" }, { k: "Kz", h: "Kz", s: "n3" }, { k: "KLT", h: "KLT", s: "n3" }, { k: "Cmy", h: "Cmy", s: "n3", d: "Table 18" }, { k: "Cmz", h: "Cmz", s: "n3" },
+        { k: "u1", h: "P/Pdy + Ky·Cmy·My/Mdy + KLT·Mz/Mdz", d: "member buckling (a); tension: Mz/Mdz + My/Mdy", f: "IF({P}>0,{P}/{Pdy}+{Ky}*{Cmy}*{My}/{Mdy}+{KLT}*{Mz}/{Mdz},{Mz}/{Mdz}+{My}/{Mdy})", s: "f4" },
+        { k: "u2", h: "P/Pdz + 0.6Ky·Cmy·My/Mdy + Kz·Cmz·Mz/Mdz", d: "member buckling (b); tension: T/Td", f: "IF({P}>0,{P}/{Pdz}+0.6*{Ky}*{Cmy}*{My}/{Mdy}+{Kz}*{Cmz}*{Mz}/{Mdz},{T}/{Td})", s: "f4" },
+        { k: "sN", h: "N at section-check point", u: "kN", s: "n2" }, { k: "sMz", h: "Mz there", u: "kNm", s: "n2" }, { k: "sMy", h: "My there", u: "kNm", s: "n2" }, { k: "MdzV", h: "Md,z after shear reduction", u: "kNm", s: "n2", d: "cl 9.2.2" },
+        { k: "n", h: "n = N/Nd", f: "ABS({sN})/{Td}", s: "f4" },
+        { k: "Mndz", h: "Mndz = 1.11Mdz(1−n) ≤ Mdz", u: "kNm", f: "MIN({MdzV},1.11*{MdzV}*(1-{n}))" },
+        { k: "Mndy", h: "Mndy", u: "kNm", d: "Mdy if n ≤ 0.2", f: "IF({n}<=0.2,{Mdy},MIN({Mdy},1.56*{Mdy}*(1-{n})*({n}+0.6)))" },
+        { k: "us", h: "(My/Mndy)^α1 + (Mz/Mndz)²", d: "section strength cl 9.3.1.1, α1 = 5n ≥ 1", f: "IF({n}>=1,{n},(ABS({sMy})/MAX({Mndy},0.000000001))^MAX(1,5*{n})+(ABS({sMz})/MAX({Mndz},0.000000001))^2)", s: "f4" },
+        { k: "ratio", h: "Utilisation (max)", d: "must be ≤ 1", f: "MAX({u1},{u2},{us})", s: "f4" },
         { k: "st", h: "Status", f: 'IF({ratio}<=1,"OK","FAIL")', s: "stat" }],
-        des.steel.map(function (r) { var qq = r.q || {}; return { id: r.k + 1, sec: r.name, type: m.frames[r.k].type, L: Math.round(r.L), KLr: r.KLr, cb: r.cb || "-", N: qq.N || 0, Mz: qq.Mz || 0, My: qq.My || 0, Pd: r.Pd, Td: r.Td, Mdz: r.Mdz || 0, Mdy: r.Mdy || 0 }; }), G, { fc: 2 });
+        des.steel.map(function (r) {
+          var B = r.b || {}, sq = B.sq || {}, qq = sq.q || {}, angle = !r.b;
+          if (angle) { var qa = r.q || {}; return { id: r.k + 1, sec: r.name, type: m.frames[r.k].type, L: Math.round(r.L), KLr: r.KLr, cb: r.cb || "-", P: Math.max(0, -(qa.N || 0)), T: Math.max(0, qa.N || 0), Mz: 0, My: 0, Pdy: r.Pd, Pdz: r.Pd, Td: r.Td, Mdz: 1e9, Mdy: 1e9, Ky: 0, Kz: 0, KLT: 0, Cmy: 0, Cmz: 0, sN: 0, sMz: 0, sMy: 0, MdzV: 1e9 }; }
+          return { id: r.k + 1, sec: r.name, type: m.frames[r.k].type, L: Math.round(r.L), KLr: r.KLr, cb: r.cb || "-", P: B.P, T: B.T, Mz: B.Mz, My: B.My, Pdy: r.Pdy, Pdz: r.Pdz, Td: r.Td, Mdz: r.Mdz, Mdy: r.Mdy,
+            Ky: B.Ky, Kz: B.Kz, KLT: B.KLT, Cmy: B.Cmy, Cmz: B.Cmz, sN: qq.N || 0, sMz: qq.Mz || 0, sMy: qq.My || 0, MdzV: sq.MdzV || r.MdzS };
+        }), G, { fc: 2 });
       dsn.steel = { sh: "Steel Design", col: t3.L.st, a: t3.first, b: t3.last };
     }
     ["slabs", "walls"].forEach(function (gk) {
@@ -462,6 +476,9 @@ var RX = (function () {
     if (lin) {
       kv("Method", "Direct stiffness (displacement) method" + (m.shells.length ? " + 4-node shell FEA" : "") + (pdl ? ", P-Delta (iterated geometric stiffness)" : ", linear elastic"));
       kv("Equations solved", res.info.neq);
+      if (pdl) kv("P-Delta convergence", "all combinations converged; max " + Math.max.apply(null, res.combos.map(function (c) { return c.pdIter; })) + " iterations, residual ≤ " + Math.max.apply(null, res.combos.map(function (c) { return c.pdResid || 0; })).toExponential(1));
+      if (res.quality && res.quality.stats.shells) kv("Mesh quality", res.quality.stats.shells + " shells, max aspect ratio " + res.quality.stats.maxAR.toFixed(1) + ", min corner angle " + res.quality.stats.minAng.toFixed(0) + "°");
+      if (res.warn && res.warn.length) kv("Model warnings", res.warn.join(" | "));
       var umax = 0; res.combos.forEach(function (c) { for (var i = 0; i < c.U.length; i += 6) umax = Math.max(umax, Math.hypot(c.U[i], c.U[i + 1], c.U[i + 2])); });
       kv("Max displacement (all combinations)", { v: umax * 1000, s: "n2" }, "mm");
       Object.keys(S.L.eq).forEach(function (k) { kv("Design base shear " + k, { f: "=Loads!B" + findRow(wb, "Loads", "Design base shear Vb = Ah·W", k), v: S.L.eq[k].Vb, s: "f2" }, "kN"); });

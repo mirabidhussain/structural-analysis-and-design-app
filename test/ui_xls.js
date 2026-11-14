@@ -1,6 +1,6 @@
 const { chromium } = require('playwright'); const fs=require('fs');
 (async () => {
-  const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+  const b = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ['--no-sandbox'] });
   const ctx = await b.newContext({ acceptDownloads: true, viewport: { width: 390, height: 844 } }); const pg = await ctx.newPage();
   const errs = []; pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
   await pg.goto('file://' + __dirname + '/../dist/index.html');
