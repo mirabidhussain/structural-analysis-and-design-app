@@ -1,0 +1,12 @@
+# build outputs
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+# test artefacts
+test/*.png
+test/*.pdf
+test/*.xlsx
+test/r_*
+node_modules/

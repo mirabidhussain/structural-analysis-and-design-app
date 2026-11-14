@@ -1,0 +1,21 @@
+const c=require('./load.js');
+function show(r){console.log('==',r.title,'| all ok:',r.ok());r.summary.forEach(s=>console.log('  ',s[0],':',s[1]));r.checks.filter(x=>!x.ok).forEach(x=>console.log('   FAIL',x.l,x.d));}
+show(c.RCC.beam({b:230,D:450,cover:25,stir:8,dia:16,L:5,support:'ss',mode:'load',wu:30,fck:20,fy:415}));
+show(c.RCC.slab1({L:3.5,D:150,cover:20,dia:10,LL:3,FF:1,fck:20,fy:415,support:'ss'}));
+show(c.RCC.slab2({lx:4,ly:5,D:150,cover:20,dia:10,LL:3,FF:1,fck:20,fy:415,case_:4}));
+show(c.RCC.column({b:300,D:450,L:3,lex:3,ley:3,Pu:1500,Mux:60,Muy:30,fck:25,fy:415,cover:40,tie:8,dia:16,pmax:4,arr:'four'}));
+show(c.RCC.footing({P:1000,sbc:150,cb:300,cd:450,fck:20,fy:415,cover:50,dia:12,sw:10,shape:'rect',Mx:0}));
+show(c.RCC.strip({w:150,sbc:150,tw:350,fck:20,fy:415,cover:50,dia:10,sw:10}));
+show(c.RCC.stair({R:150,T:250,t:150,L:3.5,LL:3,FF:1,fck:20,fy:415,cover:20,dia:10,support:'ss'}));
+show(c.ST.tension({sec:'auto',n:1,Tu:150,L:2.5,fy:250,fu:410,db:16,nb:3,pitch:50,e:30,g:30,conn:'bolt',bgrade:'4.6',tg:8,lmax:400,gap:8}));
+show(c.ST.compression({type:'da',sec:'auto',Pu:200,L:2.5,K:0.85,fy:250,gap:8,lmax:180}));
+show(c.ST.compression({type:'sa',sec:'auto',Pu:60,L:1.8,fy:250,endc:'fixed2',lmax:180}));
+show(c.ST.compression({type:'mb',sec:'auto',Pu:800,L:4,K:1,fy:250,lmax:180}));
+show(c.ST.beam({sec:'auto',L:6,support:'ss',wu:30,Pu:0,lat:true,fy:250,dl:300}));
+show(c.ST.beam({sec:'auto',L:6,support:'ss',wu:30,Pu:0,lat:false,Lun:6,fy:250,dl:300}));
+show(c.ST.purlin({span:2.4,sp:1.0,slope:30,DL:0.10,LL:0.75,WL:0.5,WLup:1.2,kind:'angle',fy:250,sag:false}));
+show(c.ST.bolts({db:16,grade:'4.6',t:8,fu:410,e:30,pitch:50,nn:1,ns:0,nb:4,Vu:120,tw_thk:8,s:6,Lw:150,Fw:120,field:false}));
+show(c.LD.roofReport({span:9.65,slope:30,sheet:0.08,purl:0.06,s0:1.5,vb:39,k1:1,terrain:2,h:10,k3:1,k4:1,kd:0.9,ka:1,kc:0.9,hw:0.5,cpi:0.2}));
+show(c.LD.seismic({zone:'V',I:1.2,R:5,soil:'II',btype:'rcmrf',h:7,d:10,floors:[{name:'GF roof',w:1200,h:3.5},{name:'Roof',w:900,h:7}]}));
+const t=c.TR.design({type:'pratt',span:9.65,slope:30,n:3,spacing:2.4,sheet:0.08,purl:0.06,s0:1.5,vb:39,k1:1,terrain:2,h:10,hw:0.5,cpi:0.2,fy:250,fu:410,gusset:8,purlinSp:1.0,bracing:3.2});
+show(t); t.items.filter(i=>i.k==='t').slice(-1)[0].rows.forEach(r=>console.log('   ',r.join(' | ')));

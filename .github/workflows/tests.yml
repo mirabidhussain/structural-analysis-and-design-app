@@ -1,0 +1,24 @@
+name: Engineering tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Closed-form FE verification
+        run: node test/fem_verify.js | tee fem.txt && ! grep -q FAIL fem.txt
+      - name: Pushover verification
+        run: node test/po_verify.js | tee po.txt && ! grep -q FAIL po.txt
+      - name: Model / DXF / equilibrium
+        run: node test/model_test.js | tee model.txt && ! grep -q FAIL model.txt
+      - name: Design module checks
+        run: node test/verify.js | tee v.txt && ! grep -q FAIL v.txt

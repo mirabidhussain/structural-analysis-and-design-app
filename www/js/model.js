@@ -1,0 +1,378 @@
+/* Building model: sections & materials, parametric generator, load cases (IS 875 / IS 1893), IS 456 / IS 875-5 combinations,
+   member & element design from analysis results (IS 456, IS 800). Units kN, m unless noted. */
+var MD = {};
+
+/* ---------- sections ---------- */
+MD._pm = {};
+MD.secRCC = function (b, Dd, p, role) {
+  var fck = p.fck, fy = p.fy, E = 5000 * Math.sqrt(fck) * 1000, col = role === "column";
+  var cr = p.crack ? (col ? 0.70 : 0.35) : 1;
+  var s = Math.min(b, Dd), l = Math.max(b, Dd), beta = 1 / 3 - 0.21 * s / l * (1 - Math.pow(s / l, 4) / 12);
+  var pct = col ? p.pcCol : p.pcBeam, As = pct / 100 * b * Dd, arr = col ? "four" : "two";
+  var key = [b, Dd, fck, fy, As, arr].join("|");
+  if (!MD._pm[key]) MD._pm[key] = { z: MD.pmTable(b, Dd, As, fck, fy, arr), y: MD.pmTable(Dd, b, As, fck, fy, arr) };
+  var t = MD._pm[key];
+  return { kind: "rcc", name: b + "x" + Dd, b: b, D: Dd, E: E, G: E / 2.4, A: b * Dd / 1e6, Iz: cr * b * Math.pow(Dd, 3) / 12e12, Iy: cr * Dd * Math.pow(b, 3) / 12e12,
+    J: (p.crack ? 0.1 : 1) * beta * s * s * s * l / 1e12, gamma: 25, fck: fck, fy: fy, As: As, arr: arr,
+    Mpz: function (N) { return MD.pmGet(t.z, N); }, Mpy: function (N) { return MD.pmGet(t.y, N); },
+    Mpz0: MD.pmGet(t.z, 0), Pc: t.z.Pmax, Pt: 0.87 * fy * As / 1e3 };
+};
+MD.pmTable = function (b, Dd, As, fck, fy, arr) {
+  var lay = RCC.colLayers(Dd, 50, As, arr), Pmax = RCC.colPM(b, Dd, lay, 50 * Dd, fck, fy).P, Pt = -0.87 * fy * As / 1e3, pts = [];
+  for (var i = 0; i <= 16; i++) { var P = Pt + (Pmax - Pt) * i / 16; pts.push([P, i === 16 ? 0 : RCC.colMcap(b, Dd, As, P, fck, fy, 50, arr)]); }
+  return { pts: pts, Pmax: Pmax };
+};
+MD.pmGet = function (t, N) {
+  var p = t.pts; if (N <= p[0][0]) return Math.max(p[0][1], 1e-3); if (N >= p[p.length - 1][0]) return 1e-3;
+  for (var i = 1; i < p.length; i++) if (N <= p[i][0]) return Math.max(1e-3, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * (N - p[i - 1][0]) / (p[i][0] - p[i - 1][0]));
+  return 1e-3;
+};
+MD.secISMB = function (name, p) {
+  var r = D.ISMB.filter(function (x) { return x.name.replace(/\s/g, "") === name.replace(/\s/g, ""); })[0];
+  if (!r) return null;
+  var fy = p.fys, Py = r.A * 100 * fy / D.gm0 / 1e3, Mp = fy * r.Zpx / D.gm0 / 1e3;
+  var Zpy = (2 * r.tf * r.bf * r.bf / 4 + (r.D - 2 * r.tf) * r.tw * r.tw / 4) / 1e3, Mpy = fy * Math.min(Zpy, 1.2 * r.Iy * 2 / r.bf) / D.gm0 / 1e3;
+  return { kind: "steel", shape: "I", name: r.name, row: r, E: 2e8, G: 7.69e7, A: r.A * 1e-4, Iz: r.Ix * 1e-8, Iy: r.Iy * 1e-8,
+    J: (2 * r.bf * Math.pow(r.tf, 3) + (r.D - 2 * r.tf) * Math.pow(r.tw, 3)) / 3e12, gamma: 78.5, fy: fy, Zpy: Zpy,
+    Mpz0: Mp, Mpz: function (N) { var n = Math.abs(N) / Py; return Math.max(1e-3, Math.min(Mp, 1.18 * Mp * (1 - n))); },
+    Mpy: function (N) { var n = Math.abs(N) / Py; return Math.max(1e-3, Mpy * (1 - n * n)); }, Py: Py, Pt: Py, Pc: Py };
+};
+MD.secISA = function (name, p) {
+  var r = D.ISA.filter(function (x) { return x.name.replace(/\s/g, "") === name.replace(/\s/g, ""); })[0];
+  if (!r) return null;
+  var A = r.A * 1e-4, I = A * Math.pow(r.rxx / 100, 2), fy = p.fys;
+  return { kind: "steel", shape: "L", name: r.name, row: r, E: 2e8, G: 7.69e7, A: A, Iz: I, Iy: I, J: 2 * r.a * Math.pow(r.t, 3) / 3e12, gamma: 78.5, fy: fy,
+    Mpz0: 1e9, Mpz: function () { return 1e9; }, Mpy: function () { return 1e9; }, Pt: r.A * 100 * fy / D.gm0 / 1e3, Pc: r.A * 100 * fy / D.gm0 / 1e3 };
+};
+MD.parseSec = function (txt, p, role) {
+  var h = DXF.secHint(txt || "");
+  if (!h) return null;
+  if (h.kind === "ISMB") return MD.secISMB(h.name, p);
+  if (h.kind === "ISA") return MD.secISA(h.name, p);
+  if (h.kind === "RCC") return MD.secRCC(h.b, h.D, p, role);
+  return null;
+};
+
+/* ---------- parametric generator ---------- */
+MD.list = function (s) { return String(s || "").split(/[,\s]+/).map(Number).filter(function (x) { return x > 0; }); };
+MD.generate = function (g) {
+  var bx = MD.list(g.bx), by = g.twoD ? [] : MD.list(g.by), hs = MD.list(g.hs);
+  if (!bx.length || !hs.length) throw new Error("Give at least one bay width and one storey height");
+  var X = [0], Y = [0], Z = [0];
+  bx.forEach(function (b) { X.push(X[X.length - 1] + b); }); by.forEach(function (b) { Y.push(Y[Y.length - 1] + b); }); hs.forEach(function (h) { Z.push(Z[Z.length - 1] + h); });
+  var lines = [], faces = [];
+  function P(x, y, z) { return { x: x, y: y, z: z }; }
+  for (var k = 1; k < Z.length; k++) {
+    for (var j = 0; j < Y.length; j++) for (var i = 0; i < X.length; i++) {
+      lines.push({ a: P(X[i], Y[j], Z[k - 1]), b: P(X[i], Y[j], Z[k]), role: "column" });
+      if (i + 1 < X.length) lines.push({ a: P(X[i], Y[j], Z[k]), b: P(X[i + 1], Y[j], Z[k]), role: "beam" });
+      if (j + 1 < Y.length) lines.push({ a: P(X[i], Y[j], Z[k]), b: P(X[i], Y[j + 1], Z[k]), role: "beam" });
+      if (g.slabs && i + 1 < X.length && j + 1 < Y.length) faces.push({ p: [P(X[i], Y[j], Z[k]), P(X[i + 1], Y[j], Z[k]), P(X[i + 1], Y[j + 1], Z[k]), P(X[i], Y[j + 1], Z[k])], kind: "slab" });
+    }
+    if (g.brace) {   /* X-bracing in the end bays of the outer frames */
+      var ys = Y.length > 1 ? [Y[0], Y[Y.length - 1]] : [Y[0]], i2 = X.length - 2;
+      ys.forEach(function (y) { [0, i2].filter(function (v, q, a) { return a.indexOf(v) === q; }).forEach(function (i) {
+        lines.push({ a: P(X[i], y, Z[k - 1]), b: P(X[i + 1], y, Z[k]), role: "brace" }, { a: P(X[i + 1], y, Z[k - 1]), b: P(X[i], y, Z[k]), role: "brace" });
+      }); });
+    }
+    if (g.walls && Y.length > 1) {   /* shear walls in the end bays along Y at both ends */
+      [0, X.length - 1].forEach(function (i) { faces.push({ p: [P(X[i], Y[0], Z[k - 1]), P(X[i], Y[1], Z[k - 1]), P(X[i], Y[1], Z[k]), P(X[i], Y[0], Z[k])], kind: "wall" }); });
+    }
+  }
+  /* emit as DXF-like entities so the same builder handles meshing/splitting */
+  var ents = [];
+  lines.forEach(function (l) { ents.push({ k: "line", layer: l.role.toUpperCase(), p: [[l.a.x, l.a.y, l.a.z], [l.b.x, l.b.y, l.b.z]] }); });
+  faces.forEach(function (f) { ents.push({ k: "face", layer: f.kind.toUpperCase(), p: f.p.map(function (q) { return [q.x, q.y, q.z]; }) }); });
+  if (g.twoD) ents.forEach(function (e) { e.p = e.p.map(function (q) { return [q[0], q[2], 0]; }); });
+  return DXF.build({ ents: ents }, { mode: g.twoD ? "2d" : "3d", scale: 1, roles: {}, mesh: g.mesh || 1 });
+};
+
+/* ---------- member selection rules: "12", "1-12", "F20", "columns storey 1-2", "beams level 3.5", "layer BEAM" ---------- */
+MD.select = function (m, sel) {
+  var lv = MD.levels(m), out = [], bad = null;
+  function storey(e) { var z = Math.max(m.nodes[e.n1].z, m.nodes[e.n2].z); var i = -1, best = 1e9; lv.forEach(function (l, j) { if (Math.abs(l - z) < best) { best = Math.abs(l - z); i = j; } }); return i; }
+  String(sel).split(",").forEach(function (part) {
+    var t = part.trim(), mm; if (!t) return;
+    if ((mm = t.match(/^f?\s*(\d+)(?:\s*(?:-|to)\s*f?\s*(\d+))?$/i))) { var a = +mm[1], b = mm[2] ? +mm[2] : a; for (var i = Math.min(a, b); i <= Math.max(a, b); i++) if (i >= 1 && i <= m.frames.length) out.push(i - 1); return; }
+    var low = t.toLowerCase(), type = /^col/.test(low) ? "column" : /^beam/.test(low) ? "beam" : /^brac/.test(low) ? "brace" : /^(all|member)/.test(low) ? null : undefined;
+    if (type === undefined && !/^(storey|story|level|layer)/.test(low)) { bad = t; return; }
+    var st = low.match(/stor(?:e)?y\s*(\d+)(?:\s*(?:-|to)\s*(\d+))?/), lz = low.match(/level\s*(-?[\d.]+)/), ly = t.match(/layer\s+(.+)$/i);
+    m.frames.forEach(function (e, k) {
+      if (type && e.type !== type) return;
+      if (st) { var s = storey(e), a = +st[1], b = st[2] ? +st[2] : a; if (s < Math.min(a, b) || s > Math.max(a, b)) return; }
+      if (lz && Math.abs(Math.max(m.nodes[e.n1].z, m.nodes[e.n2].z) - +lz[1]) > 0.02) return;
+      if (ly && String(e.layer || "").toUpperCase() !== ly[1].trim().toUpperCase()) return;
+      out.push(k);
+    });
+  });
+  return { ids: out, bad: bad };
+};
+MD.rules = function (txt) {
+  return String(txt || "").split(/\n/).map(function (l, i) { var j = l.search(/[=:]/); return j > 0 ? { sel: l.slice(0, j).trim(), val: l.slice(j + 1).trim(), line: i + 1 } : (l.trim() ? { err: true, line: i + 1, txt: l.trim() } : null); }).filter(Boolean);
+};
+
+/* ---------- analysis model from geometry + properties ---------- */
+MD.make = function (geo, p) {
+  var warn = [];
+  var defs = { column: p.colSec, beam: p.beamSec, brace: p.braceSec };
+  var cache = {};
+  function sec(txt, role, layer) {
+    var k = role + "|" + layer + "|" + txt; if (cache[k]) return cache[k];
+    var s = MD.parseSec(layer, p, role) || MD.parseSec(txt, p, role);
+    if (!s) { warn.push("Section '" + txt + "' not recognised for " + role + " - using 300x450 RCC"); s = MD.secRCC(300, 450, p, role); }
+    return (cache[k] = s);
+  }
+  var m = { nodes: geo.nodes, sup: geo.sup, twoD: geo.twoD, frames: [], shells: [] };
+  geo.frames.forEach(function (f) {
+    var role = f.role === "brace" ? "brace" : f.role === "column" ? "column" : "beam";
+    var s = sec(defs[role], role, f.layer || ""), src = MD.parseSec(f.layer || "", p, role) ? "DXF layer" : "default";
+    var A = m.nodes[f.n1], B = m.nodes[f.n2], L = Math.hypot(B.x - A.x, B.y - A.y, B.z - A.z);
+    var e = { n1: f.n1, n2: f.n2, type: role, sec: s, layer: f.layer, L: L, pinned: role === "brace", src: src };
+    if (s.kind === "steel") {   /* member buckling capacity for pushover */
+      var r = s.row, rmin = s.shape === "L" ? r.rvv : r.ry, curve = s.shape === "L" ? "c" : "b";
+      var Pc = s.A * 1e6 * ST.fcd(Math.max(L * 1000 / (rmin * 10), 1), s.fy, curve) / 1e3;
+      e.sec = Object.assign({}, s, { Pc: Pc });
+    }
+    m.frames.push(e);
+  });
+  /* user section overrides */
+  MD.rules(p.secOver).forEach(function (r) {
+    if (r.err) { warn.push("Section rule line " + r.line + " ignored (use 'which = section'): " + r.txt); return; }
+    var se = MD.select(m, r.sel); if (se.bad) warn.push("Section rule line " + r.line + ": '" + se.bad + "' not understood");
+    if (!se.ids.length) { warn.push("Section rule line " + r.line + " matches no members"); return; }
+    se.ids.forEach(function (k) {
+      var e = m.frames[k], s = MD.parseSec(r.val, p, e.type);
+      if (!s) { warn.push("Section rule line " + r.line + ": '" + r.val + "' not recognised (use b×D mm, ISMB nnn or ISA a×a×t)"); return; }
+      if (s.kind === "steel") { var rw = s.row, rmin = s.shape === "L" ? rw.rvv : rw.ry; s = Object.assign({}, s, { Pc: s.A * 1e6 * ST.fcd(Math.max(e.L * 1000 / (rmin * 10), 1), s.fy, s.shape === "L" ? "c" : "b") / 1e3 }); }
+      e.sec = s; e.over = r.line; e.src = "rule line " + r.line;
+    });
+  });
+  var Ec = 5000 * Math.sqrt(p.fck) * 1000;
+  geo.shells.forEach(function (s) {
+    var h = DXF.secHint(s.layer || ""), t = (h && h.kind === "T" ? h.t : s.kind === "wall" ? p.tWall : p.tSlab) / 1000;
+    m.shells.push({ n: s.n, kind: s.kind, layer: s.layer, t: t, mat: { E: Ec * (p.crack ? (s.kind === "wall" ? 0.7 : 0.25) : 1), nu: 0.2, gamma: 25 } });
+  });
+  m.warn = (geo.warn || []).concat(warn);
+  return m;
+};
+
+/* ---------- load cases ---------- */
+MD.levels = function (m) {
+  var zs = []; m.nodes.forEach(function (n) { var z = Math.round(n.z * 100) / 100; if (zs.indexOf(z) < 0) zs.push(z); });
+  return zs.sort(function (a, b) { return a - b; });
+};
+MD.cases = function (m, p) {
+  var zmax = -Infinity, zmin = Infinity; m.nodes.forEach(function (n) { zmax = Math.max(zmax, n.z); zmin = Math.min(zmin, n.z); });
+  function isRoof(z) { return z > zmax - 0.05; }
+  var DL = { self: 1, frameUDL: [], shellP: [] }, LL = { frameUDL: [], shellP: [] }, notes = [];
+  m.frames.forEach(function (e, k) {
+    if (e.type !== "beam") return;
+    var A = m.nodes[e.n1], B = m.nodes[e.n2]; if (Math.abs(A.z - B.z) > 0.05 * e.L) return;   /* horizontal beams only */
+    var roof = isRoof(A.z), wd = (roof ? p.parapet : p.wall) + p.bDL, wl = p.bLL * (roof ? 0 : 1) + (roof ? p.bLLr : 0);
+    if (wd) DL.frameUDL.push({ e: k, w: [0, 0, -wd] }); if (wl) LL.frameUDL.push({ e: k, w: [0, 0, -wl] });
+  });
+  m.shells.forEach(function (s, k) {
+    if (s.kind !== "slab") return;
+    var roof = isRoof(m.nodes[s.n[0]].z);
+    DL.shellP.push({ e: k, q: [0, 0, -(roof ? p.ffRoof : p.ff)] });
+    LL.shellP.push({ e: k, q: [0, 0, -(roof ? p.llRoof : p.ll)] });
+  });
+  MD.rules(p.loadOver).forEach(function (r) {
+    if (r.err) { notes.push("Load rule line " + r.line + " ignored: " + r.txt); return; }
+    var se = MD.select(m, r.sel), dl = 0, ll = 0, mm, re = /(DL|LL)\s*[:=]?\s*(-?[\d.]+)/gi, any = false;
+    while ((mm = re.exec(r.val))) { any = true; if (mm[1].toUpperCase() === "DL") dl += +mm[2]; else ll += +mm[2]; }
+    if (!any && isFinite(parseFloat(r.val))) dl = parseFloat(r.val);
+    if (!se.ids.length) { notes.push("Load rule line " + r.line + " matches no members"); return; }
+    se.ids.forEach(function (k) { if (dl) DL.frameUDL.push({ e: k, w: [0, 0, -dl] }); if (ll) LL.frameUDL.push({ e: k, w: [0, 0, -ll] }); });
+  });
+  var cases = { DL: DL, LL: LL };
+  /* seismic weights (IS 1893 cl 7.3): DL + 25%/50% of imposed, roof imposed excluded */
+  var info = FE.prepare(m); m._shellCache = [];
+  var fd = FE.loadVector(m, DL, null).Ffull, fl = FE.loadVector(m, LL, null).Ffull, W = [], Wt = 0;
+  var llf = p.ll > 3 ? 0.5 : 0.25;
+  m.nodes.forEach(function (n, i) { var w = -fd[6 * i + 2] - (isRoof(n.z) ? 0 : llf * fl[6 * i + 2]); W.push(n.z - zmin > 0.01 ? w : 0); Wt += W[i]; });
+  var H = zmax - zmin, dirs = m.twoD ? [0] : [0, 1], eq = {};
+  if (p.eq) dirs.forEach(function (d) {
+    var ext = 0, a = Infinity, b = -Infinity; m.nodes.forEach(function (n) { var v = d ? n.y : n.x; a = Math.min(a, v); b = Math.max(b, v); }); ext = Math.max(b - a, 1);
+    var T = p.sys === "rc" ? 0.075 * Math.pow(H, 0.75) : p.sys === "steel" ? 0.085 * Math.pow(H, 0.75) : 0.09 * H / Math.sqrt(ext);
+    var Sa = LD.saG(T, p.soil), Z = D.zone[p.zone], Ah = Z / 2 * Sa / (p.R / p.I), rho = { II: 0.007, III: 0.011, IV: 0.016, V: 0.024 }[p.zone];
+    var Ahd = Math.max(Ah, rho), Vb = Ahd * Wt, pat = PO.pattern(m, W, d, "parabolic");
+    var nm = "EQ" + (d ? "Y" : "X");
+    cases[nm] = { nodal: pat.map(function (q) { var f = q.f.map(function (v) { return v * Vb; }); return { n: q.n, f: f }; }) };
+    eq[nm] = { T: T, Sa: Sa, Ah: Ah, Ahd: Ahd, Vb: Vb, W: Wt, H: H, d: ext };
+  });
+  var wind = {};
+  if (p.wind) dirs.forEach(function (d) {
+    var lv = MD.levels(m), nm = "WL" + (d ? "Y" : "X"), nod = [], B = m.twoD ? p.trib : (function () { var a = Infinity, b = -Infinity; m.nodes.forEach(function (n) { var v = d ? n.x : n.y; a = Math.min(a, v); b = Math.max(b, v); }); return Math.max(b - a, 1); })();
+    var Ftot = 0;
+    lv.forEach(function (z, i) {
+      if (i === 0) return;
+      var hz = z - zmin, k2 = U.interp(D.k2h, D.k2[p.terrain], Math.max(10, Math.min(hz, 100)));
+      var Vz = p.vb * k2, pz = 0.6 * Vz * Vz / 1000, pd = Math.max(0.9 * 0.8 * 0.9, 0.7) * pz;
+      var hb = (z - lv[i - 1]) / 2 + (i + 1 < lv.length ? (lv[i + 1] - z) / 2 : 0);
+      var F = p.cf * pd * B * hb, at = [];
+      m.nodes.forEach(function (n, j) { if (Math.abs(n.z - z) < 0.01) at.push(j); });
+      at.forEach(function (j) { var f = [0, 0, 0, 0, 0, 0]; f[d] = F / at.length; nod.push({ n: j, f: f }); });
+      Ftot += F;
+    });
+    cases[nm] = { nodal: nod }; wind[nm] = { B: B, F: Ftot };
+  });
+  return { cases: cases, eq: eq, wind: wind, W: W, Wt: Wt, notes: notes };
+};
+/* IS 456 Table 18 / IS 875 Part 5 combinations */
+MD.combos = function (cases, method) {
+  if (method === "wsm") return WS.combos(cases);
+  var c = [{ name: "1.5(DL+LL)", f: { DL: 1.5, LL: 1.5 } }];
+  Object.keys(cases).filter(function (k) { return /^(EQ|WL)/.test(k); }).forEach(function (L) {
+    [1, -1].forEach(function (s) {
+      var sg = s > 0 ? "+" : "-";
+      var f1 = { DL: 1.2, LL: 1.2 }; f1[L] = 1.2 * s; c.push({ name: "1.2(DL+LL" + sg + L + ")", f: f1 });
+      var f2 = { DL: 1.5 }; f2[L] = 1.5 * s; c.push({ name: "1.5(DL" + sg + L + ")", f: f2 });
+      var f3 = { DL: 0.9 }; f3[L] = 1.5 * s; c.push({ name: "0.9DL" + sg + "1.5" + L, f: f3 });
+    });
+  });
+  return c;
+};
+
+/* ---------- design ---------- */
+MD.design = function (m, res, p) {
+  p = Object.assign({}, p, { twoD: m.twoD });
+  var W = p.method === "wsm", inc = res.incMap || {};
+  var out = { beams: [], cols: [], steel: [], slabs: [], walls: [], fails: 0 };
+  m.frames.forEach(function (e, k) {
+    var s = e.sec, pts = [];
+    res.combos.forEach(function (cb) { FE.frameDiagram(cb.fr[k], 8).forEach(function (q) { q.cb = cb.name; q.inc = inc[cb.name] || 1; pts.push(q); }); });
+    if (s.kind === "rcc" && e.type === "beam") out.beams.push(W ? WS.dBeam(e, k, s, pts, p) : MD.rccBeam(e, k, s, pts, p));
+    else if (s.kind === "rcc") out.cols.push(W ? WS.dCol(e, k, s, pts, p) : MD.rccCol(e, k, s, pts, p, res));
+    else out.steel.push(W ? WS.dSteel(e, k, s, pts, p) : MD.steelMem(e, k, s, pts, p));
+  });
+  m.shells.forEach(function (sh, k) {
+    var env = { bx: 0, by: 0, tx: 0, ty: 0, Ncmax: 0, Ntmax: 0, tau: 0, w: 0 };
+    res.combos.forEach(function (cb) {
+      var f0 = cb.sh[k], ic = inc[cb.name] || 1, f = { Nx: f0.Nx / ic, Ny: f0.Ny / ic, Nxy: f0.Nxy / ic, Mx: f0.Mx / ic, My: f0.My / ic, Mxy: f0.Mxy / ic, R: f0.R };
+      var wa = FE.woodArmer(-f.Mx, -f.My, f.Mxy);
+      env.bx = Math.max(env.bx, wa.bx); env.by = Math.max(env.by, wa.by); env.tx = Math.min(env.tx, wa.tx); env.ty = Math.min(env.ty, wa.ty);
+      if (sh.kind === "wall") {
+        var c = f.R[0][2], sN = f.R[1][2], nv = f.Nx * c * c + f.Ny * sN * sN + 2 * f.Nxy * c * sN;
+        var nh = f.Nx * sN * sN + f.Ny * c * c - 2 * f.Nxy * c * sN, nt = (f.Ny - f.Nx) * c * sN + f.Nxy * (c * c - sN * sN);
+        env.Ncmax = Math.max(env.Ncmax, -nv); env.Ntmax = Math.max(env.Ntmax, nv, nh); env.tau = Math.max(env.tau, Math.abs(nt));
+      }
+    });
+    out[sh.kind === "wall" ? "walls" : "slabs"].push(W ? WS.dShell(sh, k, env, p) : MD.shellDesign(sh, k, env, p));
+  });
+  ["beams", "cols", "steel", "slabs", "walls"].forEach(function (g) { out[g].forEach(function (r) { if (!r.ok) out.fails++; }); });
+  return out;
+};
+MD.rccBeam = function (e, k, s, pts, p) {
+  var b = s.b, Dd = s.D, d = Dd - 50, fck = s.fck, fy = s.fy;
+  var Ms = 0, Mh = 0, V = 0, T = 0, My = 0, cs = "", ch = "";
+  pts.forEach(function (q) { if (q.Mz > Ms) { Ms = q.Mz; cs = q.cb; } if (-q.Mz > Mh) { Mh = -q.Mz; ch = q.cb; } V = Math.max(V, Math.abs(q.Vy)); T = Math.max(T, Math.abs(q.T)); My = Math.max(My, Math.abs(q.My)); });
+  /* IS 456 cl 41.4.2: equivalent moment & shear for torsion */
+  var Mt = T * (1 + Dd / b) / 1.7, Ve = V + 1.6 * T / (b / 1000);
+  var Mul = RCC.mulim(b, d, fck, fy), amin = 0.85 * b * d / fy, amax = 0.04 * b * Dd, dp = 50, ok = true, msg = [];
+  /* singly / doubly reinforced (IS 456 Annex G-1.2) */
+  function flex(M) {
+    if (M <= Mul) { var a = RCC.astFlex(M, b, d, fck, fy); return { t: Math.max(a, amin), c: 0 }; }
+    var xu = RCC.xumax(fy) * d, fsc = RCC.fs(0.0035 * (xu - dp) / xu, fy), fcc = 0.446 * fck;
+    var Asc = (M - Mul) * 1e6 / ((fsc - fcc) * (d - dp)), Ast1 = RCC.astFlex(Mul * 0.99999, b, d, fck, fy);
+    return { t: Ast1 + Asc * (fsc - fcc) / (0.87 * fy), c: Asc, dbl: true };
+  }
+  var fb = flex(Ms + Mt), ft = flex(Mh + Mt), Ab = Math.max(fb.t, ft.c), At = Math.max(ft.t, fb.c);
+  if (fb.dbl || ft.dbl) msg.push("Doubly reinforced: Mu > Mu,lim = " + Mul.toFixed(1) + " kNm (compression steel included in the opposite face)");
+  if (Ab + At > amax) { ok = false; msg.push("Total steel > 4% bD - increase section"); }
+  var pt = 100 * At / (b * d), tv = Ve * 1000 / (b * d), tc = RCC.tauc(fck, Math.min(pt, 3)), tcm = RCC.taucmax(fck);
+  var sv = null, Asv = 2 * Math.PI * 64 / 4;
+  if (tv > tcm) { ok = false; msg.push("τve " + tv.toFixed(2) + " > τc,max " + tcm + " N/mm² - enlarge section"); }
+  else {
+    var b1 = b - 60, d1 = Dd - 70, Vus = Math.max(0, (tv - tc) * b * d);
+    var svV = Vus > 0 ? 0.87 * fy * Asv * d / Vus : Infinity;
+    var svT = T > 0.5 ? 0.87 * fy * Asv / (T * 1e6 / (b1 * d1) + V * 1e3 / (2.5 * d1)) : Infinity;      /* cl 41.4.3 */
+    var svm = 0.87 * fy * Asv / (0.4 * b), lim = T > 0.5 ? Math.min(b1, (b1 + d1) / 4, 300) : Math.min(0.75 * d, 300);
+    sv = Math.max(50, Math.floor(Math.min(svV, svT, svm, lim) / 5) * 5);
+  }
+  if (My > 0.1 * Math.max(Ms, Mh) && My > 2) msg.push("Lateral moment My " + My.toFixed(1) + " kNm - check biaxial bending");
+  var xu0 = RCC.xumax(fy) * d, fsc = RCC.fs(0.0035 * (xu0 - dp) / xu0, fy);
+  return { k: k, name: s.name, b: b, D: Dd, d: d, fck: fck, fy: fy, fsc: fsc, Mul: Mul, Mt: Mt, Ve: Ve, Ms: Ms, Mh: Mh, V: V, T: T, Ab: Ab, At: At, sv: sv, tv: tv, tc: tc, ok: ok, msg: msg, cs: cs, ch: ch,
+    barsB: isNaN(Ab) ? "-" : U.pickBars(Ab, [12, 16, 20, 25], 2, Math.max(2, Math.floor((b - 50) / 40) + 1)).text, barsT: isNaN(At) ? "-" : U.pickBars(At, [12, 16, 20, 25], 2, Math.max(2, Math.floor((b - 50) / 40) + 1)).text };
+};
+MD.rccCol = function (e, k, s, pts, p, res) {
+  var b = s.b, Dd = s.D, fck = s.fck, fy = s.fy, L = e.L * 1000, Ag = b * Dd;
+  var exz = Math.max(L / 500 + Dd / 30, 20) / 1000, exy = Math.max(L / 500 + b / 30, 20) / 1000;
+  var le = (p.kcol || 1.2) * L, slz = le / Dd, sly = le / b, crit = null, need = null;
+  var steps = []; for (var pc = 0.8; pc <= 4.001; pc += 0.2) steps.push(pc);
+  /* governing (P, Mz, My) points: column ends of every combination */
+  var cand = pts.filter(function (q, i) { return i % 9 === 0 || i % 9 === 8; });
+  for (var si = 0; si < steps.length && need === null; si++) {
+    var As = steps[si] / 100 * Ag, Puz = (0.45 * fck * (Ag - As) + 0.75 * fy * As) / 1000, worst = 0, wq = null;
+    cand.forEach(function (q) {
+      var Pu = Math.max(-q.N, 0);
+      var Maz = slz > 12 ? Pu * Dd / 2000 * slz * slz / 1000 : 0, May = sly > 12 ? Pu * b / 2000 * sly * sly / 1000 : 0;
+      var Mz = Math.max(Math.abs(q.Mz), Pu * exz) + Maz, My = Math.max(Math.abs(q.My), Pu * exy) + May;
+      if (Pu > 0.98 * Puz) { worst = 9; wq = q; return; }
+      var M1 = RCC.colMcap(b, Dd, As, Pu, fck, fy, 50, "four"), M2 = RCC.colMcap(Dd, b, As, Pu, fck, fy, 50, "four");
+      var an = Math.max(1, Math.min(2, 1 + (Pu / Puz - 0.2) / 0.6)), r = Math.pow(Mz / Math.max(M1, 1e-6), an) + (m2d(My) ? Math.pow(My / Math.max(M2, 1e-6), an) : 0);
+      if (r > worst) { worst = r; wq = { cb: q.cb, Pu: Pu, Mz: Mz, My: My, an: an, M1: M1, M2: M2, Mz0: Math.abs(q.Mz), My0: Math.abs(q.My), Maz: Maz, May: May, Puz: Puz }; }
+    });
+    if (worst <= 1) need = { pc: steps[si], As: As, r: worst, q: wq };
+    crit = { r: worst, q: wq };
+  }
+  function m2d() { return !p.twoD; }
+  var msg = [];
+  if (slz > 12 || sly > 12) msg.push("Slender (le/D = " + slz.toFixed(1) + ", le/b = " + sly.toFixed(1) + ") - additional moments cl 39.7.1 included");
+  if (!need) msg.push("Fails even at 4% steel - enlarge section");
+  var Pmax = 0; pts.forEach(function (q) { Pmax = Math.max(Pmax, -q.N); });
+  return { k: k, name: s.name, b: b, D: Dd, L: L, le: le, exz: exz, exy: exy, fck: fck, fy: fy, Pu: Pmax, need: need, crit: crit, ok: !!need, msg: msg, bars: need ? U.pickBars(need.As, [12, 16, 20, 25, 32], 4, 24).text : "-" };
+};
+MD.steelMem = function (e, k, s, pts, p) {
+  var r = s.row, fy = s.fy, L = e.L * 1000, A = s.A * 1e6, msg = [], ok = true, worst = 0, wq = null;
+  if (s.shape === "L") {
+    var Pc = A * ST.fcd(L / (r.rvv * 10), fy, "c") / 1e3, Pt = A * fy / D.gm0 / 1e3;
+    pts.forEach(function (q) { var u = q.N < 0 ? -q.N / Pc : q.N / Pt; if (u > worst) { worst = u; wq = q; } });
+    if (L / (r.rvv * 10) > 180) { msg.push("KL/r = " + (L / (r.rvv * 10)).toFixed(0) + " > 180 (IS 800 Table 3) - tension-only bracing"); }
+    return { k: k, name: s.name, ratio: worst, ok: worst <= 1, msg: msg, txt: "Pd,c = " + Pc.toFixed(1) + " kN, Td = " + Pt.toFixed(1) + " kN", cb: wq && wq.cb, Pd: Pc, Td: Pt, Mdz: 0, Mdy: 0, q: wq, L: L, KLr: L / (r.rvv * 10) };
+  }
+  var lz = L / (r.rx * 10), ly = L / (r.ry * 10), Pdz = A * ST.fcd(lz, fy, "a") / 1e3, Pdy = A * ST.fcd(ly, fy, "b") / 1e3, Pd = Math.min(Pdz, Pdy), Td = A * fy / D.gm0 / 1e3;
+  /* LTB, IS 800 Annex E (unrestrained length = member length) */
+  var Iy = r.Iy * 1e4, It = s.J * 1e12, hf = r.D - r.tf, Iw = Iy * hf * hf / 4, E = 2e5, G = 76900;
+  var Mcr = Math.PI * Math.PI * E * Iy / (L * L) * Math.sqrt(Iw / Iy + G * It * L * L / (Math.PI * Math.PI * E * Iy)) / 1e6;
+  var Mp = fy * r.Zpx / 1e3, lLT = Math.min(Math.sqrt(Mp / Mcr), Math.sqrt(1.2 * r.Zex * fy / 1e3 / Mcr) * 10), phi = 0.5 * (1 + 0.21 * (lLT - 0.2) + lLT * lLT);
+  var chi = Math.min(1, 1 / (phi + Math.sqrt(phi * phi - lLT * lLT))), Mdz = chi * Mp / D.gm0, Mdy = fy * s.Zpy / 1e3 / D.gm0;
+  var Vd = r.D * r.tw * fy / (Math.sqrt(3) * D.gm0) / 1e3, Vmax = 0;
+  pts.forEach(function (q) {
+    Vmax = Math.max(Vmax, Math.abs(q.Vy));
+    var u = (q.N < 0 ? -q.N / Pd : q.N / Td) + Math.abs(q.Mz) / Mdz + Math.abs(q.My) / Mdy;
+    if (u > worst) { worst = u; wq = q; }
+  });
+  if (Vmax > 0.6 * Vd) msg.push("High shear V > 0.6Vd - moment capacity reduced (cl 9.2)");
+  if (Vmax > Vd) ok = false;
+  if (e.type === "column" && Math.max(lz, ly) > 180) { ok = false; msg.push("KL/r > 180"); }
+  return { k: k, name: s.name, ratio: worst, ok: ok && worst <= 1, msg: msg, cb: wq && wq.cb, Pd: Pd, Td: Td, Mdz: Mdz, Mdy: Mdy, Vd: Vd, Vmax: Vmax, chi: chi, Mcr: Mcr, q: wq, L: L, KLr: Math.max(lz, ly),
+    txt: "Pd = " + Pd.toFixed(0) + " kN, Md,z = " + Mdz.toFixed(1) + " kNm (χLT " + chi.toFixed(2) + "), Md,y = " + Mdy.toFixed(1) + " kNm, Vd = " + Vd.toFixed(0) + " kN" };
+};
+MD.shellDesign = function (sh, k, env, p) {
+  var t = sh.t * 1000, dx = t - 30, dy = t - 40, fck = p.fck, fy = p.fy, msg = [], ok = true;
+  var amin = (sh.kind === "wall" ? 0.0025 : (fy > 250 ? 0.0012 : 0.0015)) * 1000 * t;
+  function A(M, d) { var a = RCC.astFlex(Math.abs(M), 1000, d, fck, fy); if (isNaN(a)) { ok = false; return NaN; } return Math.max(a, amin); }
+  var r = { k: k, kind: sh.kind, t: t, dx: dx, dy: dy, amin: amin, bx: env.bx, by: env.by, tx: env.tx, ty: env.ty, Abx: A(env.bx, dx), Aby: A(env.by, dy), Atx: A(env.tx, dx), Aty: A(env.ty, dy) };
+  if (sh.kind === "wall") {
+    var sc = env.Ncmax / t, tau = env.tau / t, tmax = RCC.taucmax(fck);
+    r.sc = sc; r.tau = tau; r.Ast = Math.max(env.Ntmax * 1000 / (0.87 * fy), amin);
+    if (sc > 0.4 * fck) { ok = false; msg.push("Compression " + sc.toFixed(2) + " > 0.4fck"); }
+    if (tau > Math.min(0.17 * fck, tmax)) { ok = false; msg.push("In-plane shear " + tau.toFixed(2) + " N/mm² exceeds limit"); }
+  }
+  r.ok = ok; r.msg = msg; return r;
+};
+MD.drift = function (m, res) {
+  var lv = MD.levels(m), out = [];
+  Object.keys(res.cases).filter(function (c) { return /^(EQ|WL)/.test(c); }).forEach(function (c) {
+    var d = c.slice(-1) === "Y" ? 1 : 0, U = res.cases[c].U, prev = 0;
+    lv.forEach(function (z, i) {
+      var mx = 0; m.nodes.forEach(function (n, j) { if (Math.abs(n.z - z) < 0.01) mx = Math.max(mx, Math.abs(U[6 * j + d])); });
+      if (i > 0) { var h = z - lv[i - 1], dr = (mx - prev) / h; out.push({ c: c, z: z, d: mx, dr: dr, ok: !/^EQ/.test(c) || dr <= 0.004, lim: /^EQ/.test(c) ? 0.004 : null }); }
+      prev = mx;
+    });
+  });
+  return out;
+};
+
+if (typeof module !== "undefined") module.exports = MD;
