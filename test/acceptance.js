@@ -216,5 +216,65 @@ console.log('\n== E. Seismic: modal analysis, response spectrum, torsion, irregu
   ok('Heavy second floor (+60 kN/m on beams): mass irregularity detected', heavy.se.irr.some(r => r.i === 1 && r.mass), heavy.se.irr.filter(r => r.dir === 'X').map(r => (r.wr || 0).toFixed(2)).join(' '));
 })();
 
+console.log('\n== F. Reinforcement detailing: IS 13920 / IS 456 / SP 34 / IS 2502');
+(function () {
+  const { DT, RCC } = c;
+  /* bar-schedule arithmetic against hand values */
+  near('BBS: hoop 300×450, cover 30, 8φ: 2(240+390) + 2·80 − 12·8 = 1324 mm', DT.cut({ shape: 'ST', dia: 8, A: 240, B: 390 }), 1324, 1e-9);
+  near('BBS: L-bar 16φ, A 2000 + B 300 − 2φ = 2268 mm', DT.cut({ shape: 'L', dia: 16, A: 2000, B: 300, n90: 1 }), 2268, 1e-9);
+  near('BBS: crosstie 10φ over 320 mm: 320 + 2·100 − 60 = 460 mm', DT.cut({ shape: 'CT', dia: 10, A: 320 }), 460, 1e-9);
+  near('Unit weight φ²/162: 16 mm = 1.580 kg/m', DT.wpm(16), 1.5802, 1e-4);
+  near('Development length Ld = φ·0.87fy/(4τbd), 16φ Fe500 M25 (τbd 1.4×1.6)', DT.Ld(16, 500, 25), 16 * 0.87 * 500 / (4 * 1.4 * 1.6), 1e-9);
+  near('Lap = max(Ld, 30φ) rounded up to 25 mm: 16φ → 800 mm', DT.lap(16, 500, 25), 800, 1e-9);
+
+  const p = { fck: 25, fy: 500, fys: 250, crack: true, pcCol: 2, pcBeam: 1, colSec: '450x450', beamSec: '300x500', braceSec: 'ISA 75x75x6', tSlab: 150, tWall: 200, ff: 1.5, ffRoof: 2.5, ll: 3, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0, eq: true, zone: 'IV', I: 1, R: 5, soil: 'II', sys: 'rc', wind: false, vb: 39, terrain: 2, cf: 1.3, trib: 4, kcol: 1.2, accTor: true, rsa: false, method: 'lsm', sbc: 200 };
+  const m = MD.make(MD.generate({ bx: '5,5', by: '4,4', hs: '3.5,3.2', slabs: true, mesh: 1 }), p), S = { m, p };
+  S.L = MD.cases(m, p); S.cb = MD.combos(S.L.cases, p.method); S.res = FE.linear(m, S.L.cases, S.cb, { caseReac: true }); S.res.incMap = {};
+  S.des = MD.design(m, S.res, p);
+  const t0 = Date.now(), R = DT.run(m, S, p), ms = Date.now() - t0;
+  ok('Detailing runs for every beam line, column stack, footing and slab floor', R.beams.length === 12 && R.cols.length === 9 && R.foot.length === 9 && R.slabs.length === 2, R.beams.length + ' lines, ' + R.cols.length + ' stacks, ' + R.foot.length + ' footings, ' + R.slabs.length + ' floors, ' + ms + ' ms');
+  const bl = R.beams.find(b => b.ux && b.lev === 1 && Math.abs(b.xy[0].y - 4) < 0.01), sp = bl.spans[0], a = bl.a, d = bl.d;
+  ok('Beam: provided top at each support ≥ required (envelope of all combinations)', bl.sup.every(s => s.nt * a >= s.At - 1e-6), bl.sup.map(s => (s.nt * a).toFixed(0) + '≥' + s.At.toFixed(0)).join(' '));
+  ok('Beam: bottom at every station ≥ required (continuous + extra bars over their length)', bl.st.every(o => { if (o.s < sp.fL || o.s > bl.spans[bl.spans.length - 1].fR) return true; const s2 = bl.spans.find(q => o.s >= q.fL - 1 && o.s <= q.fR + 1); const n = bl.ncb + (s2 && o.s >= s2.cL - 1 && o.s <= s2.cR + 1 ? s2.nxb : 0); return n * a >= o.Ab - 1e-6; }));
+  ok('IS 13920 cl 6.2.3: bottom ≥ ½ top at every face; cl 6.2.4: ¼ rule', bl.sup.every(s => bl.ncb >= s.nt / 2 - 1e-9) && Math.min(bl.nct, bl.ncb) * 4 >= Math.max(...bl.sup.map(s => s.nt)));
+  const lim = Math.min(d / 4, 6 * bl.dia, 100), hz = bl.hoops[0].xs.filter(x => x <= sp.fL + 2 * d);
+  ok('IS 13920 cl 6.3.5: first hoop 50 mm from the face, spacing ≤ min(d/4, 6φ, 100) over 2d', Math.abs(hz[0] - sp.fL - 50) < 1e-6 && hz.every((x, i) => !i || x - hz[i - 1] <= lim + 1e-6), 'spacing ' + sp.sv.sh + ' ≤ ' + lim.toFixed(1));
+  const Ms = DT.Mcap(bl.ncb * a, bl.b, d, 25, 500);
+  const xu = 0.87 * 500 * bl.ncb * a / (0.36 * 25 * bl.b);
+  near('Capacity: Mu,s = 0.87fy·Ast·(d − 0.42xu) with the bottom bars provided', Ms, 0.87 * 500 * bl.ncb * a * (d - 0.42 * xu) / 1e6, 1e-9);
+  near('IS 13920 cl 6.3.3: Vu = 1.2(DL+LL) + 1.4(Mu,h + Mu,s)/Lc at the end support', sp.sv.VcL, sp.sv.VgL + 1.4 * Math.max(sp.sv.MhL + sp.sv.MsR, sp.sv.MsL + sp.sv.MhR) / (sp.Lc / 1000), 1e-9);
+  ok('Beam laps outside joints and 2d from faces (IS 13920 cl 6.2.6)', bl.laps.every(l => bl.spans.some(q => l.x0 >= q.fL + 2 * d - 1e-6 && l.x1 <= q.fR - 2 * d + 1e-6) || bl.spans.some(q => l.x0 >= q.fL && l.x1 <= q.fR && l.top)), bl.laps.length + ' laps');
+  ok('Every bar ≤ 12 m stock length', R.beams.every(b => b.bars.every(q => q.L <= 12000)) && R.cols.every(c0 => c0.bars.every(q => q.L <= 12000)));
+  const sumW = bl.bars.reduce((s, q) => s + q.n * q.L / 1000 * q.dia * q.dia / 162, 0);
+  near('BBS weight = Σ n·L·φ²/162', bl.wt, sumW, 1e-9);
+  const col = R.cols.find(c0 => c0.name === 'C-B2'), s1 = col.st[0], t = s1.tie, Lc = s1.h - s1.Db;
+  near('IS 13920 cl 8.1(a): confining length lo = max(D, Lc/6, 450)', t.lo, DT.r(Math.max(450, 450, Lc / 6), 25), 1e-9);
+  ok('IS 13920 cl 8.1(b): confining spacing ≤ min(B/4, 6φ, 100)', t.sc <= Math.min(450 / 4, 6 * s1.ar.dia, 100), t.dia + 'φ@' + t.sc);
+  const hleg = t.hleg, Ash = Math.max(0.18 * t.sc * hleg * 25 / 500 * (450 * 450 / (370 * 370) - 1), 0.05 * t.sc * hleg * 25 / 500);
+  ok('IS 13920 cl 8.1(c): Ash = max(0.18 s h fck/fy (Ag/Ak − 1), 0.05 s h fck/fy) ≤ hoop bar area', Math.abs(Ash - t.Ash) < 1e-9 && Ash <= c.D.barArea(t.dia), Ash.toFixed(1) + ' ≤ ' + c.D.barArea(t.dia).toFixed(1) + ' mm²');
+  ok('Column: provided ≥ required steel, 0.8 – 4 %, hoop legs ≤ 300 mm apart', col.st.every(s => s.As >= s.Areq - 1e-6 && s.pct >= 0.8 && s.pct <= 4 && Math.max(370 / (s.tie.lB - 1), 370 / (s.tie.lD - 1)) <= 300));
+  ok('Column laps in the central half of the storey (IS 13920 cl 7.2.1)', col.laps.every(l => { const s = col.st[l.i]; return l.z0 >= s.z0 + s.h / 4 - 1e-6 && l.z1 <= s.z0 + 3 * s.h / 4 + 1e-6; }));
+  const w = R.scwb.find(q => q.col === 'C-B2' && q.dir === 'X'), bx = R.beams.find(b => b.ux && b.lev === 1 && Math.abs(b.xy[0].y - 4) < 0.01), si = bx.sup.findIndex(s => s.n === col.st[0].nTop);
+  const Mb = DT.Mcap(bx.sup[si].nt * bx.a, bx.b, bx.d, 25, 500) + DT.Mcap(bx.ncb * bx.a, bx.b, bx.d, 25, 500);
+  near('Strong column – weak beam: ΣMb at an interior joint = Mu,hog + Mu,sag of the beams', w.Mb, Mb, 1e-9);
+  near('Strong column – weak beam: ΣMc = capacities of the columns below and above', w.Mc, col.st[0].McX + col.st[1].McX, 1e-9);
+  const ft = R.foot.find(f0 => f0.name === 'F-B2'), G = ft.sets[0].r, A = ft.Lx * ft.Ly / 1e6;
+  ok('Footing: service pressure 1.1P/A + 6M/Z ≤ SBC (and ×1.25 with EQ, IS 1893 Table 1)', ft.sets.every(st => { const q = 1.1 * st.r[2] / A + 6 * Math.abs(st.r[3]) / (ft.Lx / 1000 * (ft.Ly / 1000) ** 2) + 6 * Math.abs(st.r[4]) / (ft.Ly / 1000 * (ft.Lx / 1000) ** 2); return q <= st.lim + 1e-6; }), ft.Lx + '×' + ft.Ly + '×' + ft.D + ', P ' + G[2].toFixed(0) + ' kN');
+  ok('Footing: one-way shear, punching (IS 456 cl 31.6.3) and bearing pass', ft.checks.every(q => q.ok));
+  const sl = R.slabs[0];
+  ok('Slab panels: bottom steel ≥ required of every element, spacing ≤ min(3d, 300)', sl.panels.every(P => P.bot.X.As >= Math.max(P.req.bX, P.amin) - 1e-6 && P.bot.Y.As >= Math.max(P.req.bY, P.amin) - 1e-6 && P.bot.X.s <= Math.min(3 * P.d, 300)), sl.panels.length + ' panels');
+  const tot = R.tot.reduce((s, q) => s + q.all, 0), byG = R.gB.reduce((s, G0) => s + G0.n * G0.rep.wt, 0) + R.gC.reduce((s, G0) => s + G0.n * G0.rep.wt, 0) + R.gF.reduce((s, G0) => s + G0.n * G0.rep.wt, 0) + R.slabs.reduce((s, q) => s + q.wt, 0);
+  near('Steel totals by diameter = Σ groups × members', tot, byG, 1e-9);
+  const dxf = DT.dxf([{ title: 'B', dws: DT.drawBeam(bl, R.cf, 1) }, { title: 'C', dws: DT.drawCol(col, R.cf, 1) }, { title: 'F', dws: DT.drawFoot(ft, R.cf) }, { title: 'S', dws: DT.drawSlab(sl, R.cf) }]);
+  const m2 = MD.make(MD.generate({ bx: '6,6,6', by: '5', hs: '3.5', slabs: true, mesh: 1.5 }), p), S2 = { m: m2, p };
+  S2.L = MD.cases(m2, p); S2.cb = MD.combos(S2.L.cases, p.method); S2.res = FE.linear(m2, S2.L.cases, S2.cb, { caseReac: true }); S2.res.incMap = {}; S2.des = MD.design(m2, S2.res, p);
+  const R2 = DT.run(m2, S2, p), lb = R2.beams.find(b => b.ux && b.L > 17000);
+  ok('18 m beam line: bars spliced (stock 12 m), top laps at mid-span, bottom laps outside 2d of the faces', lb.laps.length >= 2 && lb.laps.every(l => lb.spans.some(q => l.x0 >= q.fL + 2 * lb.d - 1e-6 && l.x1 <= q.fR - 2 * lb.d + 1e-6)) && lb.bars.every(q => q.L <= 12000), lb.laps.map(l => (l.top ? 'T ' : 'B ') + (l.x0 / 1000).toFixed(2) + '–' + (l.x1 / 1000).toFixed(2) + ' m').join(', '));
+  const hpL = lb.hoops.flatMap(h => h.xs);
+  ok('IS 13920 cl 6.2.6: hoops at ≤ 150 mm over every lap', lb.laps.every(l => { const xs = hpL.filter(x => x >= l.x0 && x <= l.x1).sort((u, v) => u - v); return xs.length > 1 && xs.every((x, i) => !i || x - xs[i - 1] <= 150 + 1e-6); }));
+  const back = c.DXF.parse(dxf);
+  ok('Detail drawings: DXF written and read back (lines, circles, text)', back.ents.length > 500 && /REBAR/.test(dxf) && /EOF\n$/.test(dxf), back.ents.length + ' entities');
+})();
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;

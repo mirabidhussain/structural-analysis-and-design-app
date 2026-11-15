@@ -419,6 +419,7 @@ var RX = (function () {
       dsn[gk] = { sh: nm, col: t4.L.st, a: t4.first, b: t4.last };
     });
 
+    if (S.det && !S.det.err && (S.det.beams.length || S.det.cols.length)) detailSheets(wb, S, G);
     /* ===== Design basis & worked calculations ===== */
     if (des) {
       var bs = wb.sheet("Design Basis", { cols: [34, 90, 26], color: TAB.guide });
@@ -507,6 +508,69 @@ var RX = (function () {
     readme(wb, rd, S, date);
     wb.sheets.forEach(function (s, i) { if (s._pt) wb.define("_xlnm.Print_Titles", q(s.name) + "!" + s._pt, i); });
     return wb;
+  }
+
+  /* ===== Reinforcement detailing: bar bending schedule, ductile-detailing checks, footings ===== */
+  function detailSheets(wb, S, G) {
+    var dt = S.det, cf = dt.cf, rows = [];
+    function grpRows(kind, G0, bars) { bars.forEach(function (q) { rows.push({ grp: G0.id, kind: kind, mem: G0.list.map(function (o) { return o.name; }).join(", "), nm: G0.n, mark: q.mark, desc: q.desc, dia: q.dia, shape: q.shape, A: Math.round(q.A), B: Math.round(q.B || 0), C: Math.round(q.C || 0), n90: q.n90 || 0, np: q.n }); }); }
+    dt.gB.forEach(function (G0) { grpRows("Beam", G0, G0.rep.bars); });
+    dt.gC.forEach(function (G0) { grpRows("Column", G0, G0.rep.bars); });
+    dt.slabs.forEach(function (sl) { grpRows("Slab", { id: "S" + (dt.slabs.indexOf(sl) + 1), list: [{ name: sl.name }], n: 1 }, sl.bars); });
+    dt.gF.forEach(function (G0) { grpRows("Footing", G0, G0.rep.bars); });
+    var sh = wb.sheet("BBS", { cols: [7, 8, 26, 6, 5, 34, 6, 7, 8, 7, 7, 5, 8, 10, 9, 10, 8, 10], color: TAB.design });
+    intro(sh, "Bar Bending Schedule — IS 2502 / SP 34", "One row per bar mark of each group of identical members (the Members column lists them). Shapes: S straight; L one 90° bend; U two 90° bends (A = straight length, B and C = bend legs); ST closed hoop/stirrup with two 135° hooks (A × B outer dimensions); CT crosstie with 135° hooks. Cutting length = A + B + C − 2φ per 90° bend; hoop = 2(A+B) + 2 hooks − 12φ, hook allowance = MAX(10φ, 75 mm); crosstie = A + 2 hooks − 6φ. Weight = φ²/162 kg/m. Every length, count and weight is a live formula — change a dimension or count and the totals update.", 14);
+    var t = table(sh, [{ k: "grp", h: "Group" }, { k: "kind", h: "Element" }, { k: "mem", h: "Members" }, { k: "nm", h: "No. of members", s: "n0" }, { k: "mark", h: "Mark" }, { k: "desc", h: "Description" },
+      { k: "dia", h: "φ", u: "mm", s: "n0" }, { k: "shape", h: "Shape" }, { k: "A", h: "A", u: "mm", s: "n0" }, { k: "B", h: "B", u: "mm", s: "n0" }, { k: "C", h: "C", u: "mm", s: "n0" }, { k: "n90", h: "90° bends", s: "n0" },
+      { k: "np", h: "Bars per member", s: "n0" },
+      { k: "L", h: "Cutting length", u: "m", f: 'IF({shape}="ST",(2*({A}+{B})+2*MAX(10*{dia},75)-12*{dia})/1000,IF({shape}="CT",({A}+2*MAX(10*{dia},75)-6*{dia})/1000,({A}+{B}+{C}-2*{dia}*{n90})/1000))', s: "f3" },
+      { k: "tn", h: "Total bars", f: "{nm}*{np}", s: "f0" }, { k: "tl", h: "Total length", u: "m", f: "{tn}*{L}", s: "f2" }, { k: "w", h: "Unit weight", u: "kg/m", f: "{dia}^2/162", s: "f3" }, { k: "wt", h: "Weight", u: "kg", f: "{tl}*{w}", s: "f2" }], rows, G, { fc: 5 });
+    sh.row([]);
+    sh.row(["Summary by diameter and element (kg)"], "tb");
+    var L = t.L, rg = function (c) { return "$" + L[c] + "$" + t.first + ":$" + L[c] + "$" + t.last; }, r0 = sh.next() + 1;
+    sh.row(["φ (mm)", "", "Beams", "Columns", "Slabs", "Footings", "Total", "", "Total (t)"], "h");
+    dt.tot.forEach(function (q) {
+      var rn = sh.next(), cell = function (kind, v) { return { f: '=SUMIFS(' + rg("wt") + ',' + rg("dia") + ',A' + rn + ',' + rg("kind") + ',"' + kind + '")', v: v, s: "f0" }; };
+      sh.row([q.dia, "", cell("Beam", q.beams), cell("Column", q.cols), cell("Slab", q.slabs), cell("Footing", q.foot), { f: "=SUM(C" + rn + ":F" + rn + ")", v: q.all, s: "f0" }, "", { f: "=G" + rn + "/1000", v: q.all / 1000, s: "f3" }]);
+    });
+    var r1 = sh.next() - 1, rt = sh.next();
+    sh.row(["Total", "", { f: "=SUM(C" + r0 + ":C" + r1 + ")", s: "f0" }, { f: "=SUM(D" + r0 + ":D" + r1 + ")", s: "f0" }, { f: "=SUM(E" + r0 + ":E" + r1 + ")", s: "f0" }, { f: "=SUM(F" + r0 + ":F" + r1 + ")", s: "f0" }, { f: "=SUM(G" + r0 + ":G" + r1 + ")", v: dt.total, s: "f0" }, "", { f: "=SUM(I" + r0 + ":I" + r1 + ")", v: dt.total / 1000, s: "f3" }], "b");
+    if (dt.area) sh.row(["Steel per m² of slab area (" + dt.area.toFixed(1) + " m²)", "", "", "", "", "", { f: "=G" + rt + "/" + dt.area.toFixed(3), v: dt.total / dt.area, s: "f2" }, "kg/m²"]);
+    sh.row([{ v: "Rolling margin and wastage are not included. Laps: max(Ld, 30φ) with Ld = 0.87fy·φ/(4τbd), τbd from IS 456 cl 26.2.1.1 (+60 % for deformed bars); beam bars spliced outside joints and 2d from the faces, column bars in the central half of the storey (IS 13920 cl 6.2.6, 7.2.1). Stock length 12 m.", s: "note" }]);
+
+    /* ductile detailing & detailing checks */
+    var ck = wb.sheet("Detailing Checks", { cols: [10, 16, 9, 50, 34, 26, 8], color: TAB.design });
+    intro(ck, "Detailing checks — " + (cf.duct ? "IS 13920:2016 ductile detailing" : "IS 456 / SP 34"), "Every detailing rule checked for each beam line, column stack, joint and footing, with the value and the clause. Beams: minimum/maximum steel, bottom ≥ ½ top at the faces, ¼ rule, hinge-zone hoops, capacity-design shear. Columns: dimensions, confining length and spacing, Ash, hoop legs, capacity shear, steel ratio. Joints: strong column – weak beam ΣMc ≥ 1.4 ΣMb (live formula). Footings: bearing pressure, shear, punching, bearing and anchorage.", 7);
+    var cr = [];
+    dt.gB.forEach(function (G0) { G0.rep.checks.forEach(function (q) { cr.push({ grp: G0.id, mem: G0.rep.name + (G0.n > 1 ? " ×" + G0.n : ""), at: q.sp !== undefined ? "span " + (q.sp + 1) : "", t: q.t, v: q.v, cl: q.cl, st: q.ok ? "OK" : "FAIL" }); }); });
+    dt.gC.forEach(function (G0) { G0.rep.checks.forEach(function (q) { cr.push({ grp: G0.id, mem: G0.list.map(function (c) { return c.name; }).join(", "), at: q.st !== undefined ? "storey " + (q.st + 1) : "", t: q.t, v: q.v, cl: q.cl, st: q.ok ? "OK" : "FAIL" }); }); });
+    dt.gF.forEach(function (G0) { G0.rep.checks.forEach(function (q) { cr.push({ grp: G0.id, mem: G0.list.map(function (c) { return c.name; }).join(", "), at: "", t: q.t, v: q.v, cl: q.cl, st: q.ok ? "OK" : "FAIL" }); }); });
+    table(ck, [{ k: "grp", h: "Group" }, { k: "mem", h: "Member(s)" }, { k: "at", h: "Where" }, { k: "t", h: "Check" }, { k: "v", h: "Value" }, { k: "cl", h: "Clause" }, { k: "st", h: "Status", s: "" }], cr, G, { fc: 2 });
+    var tl = ck.next() - 1; ck.status("G" + (tl - cr.length + 1) + ":G" + tl);
+    if (dt.scwb.length) {
+      ck.row([]); ck.row(["Strong column – weak beam (IS 13920 cl 7.2.1)"], "tb");
+      table(ck, [{ k: "col", h: "Column" }, { k: "z", h: "Joint level", u: "m", s: "n2" }, { k: "dir", h: "Direction" }, { k: "Mc", h: "ΣMc (columns above + below)", u: "kNm", s: "n1" }, { k: "Mb", h: "ΣMb (beam hogging + sagging)", u: "kNm", s: "n1" },
+        { k: "r", h: "ΣMc / ΣMb", f: "{Mc}/{Mb}", s: "f2" }, { k: "st", h: "Status", f: 'IF({r}>=1.4,"OK","FAIL")', s: "stat" }],
+        dt.scwb.map(function (q) { return { col: q.col, z: q.z, dir: q.dir, Mc: q.Mc, Mb: q.Mb }; }), G, { freeze: false });
+      ck.row([{ v: "Column moment capacities from the P–M interaction with the bars provided at the least favourable axial load of all combinations; beam capacities Mu = 0.87fy·Ast·(d − 0.42xu) with the bars provided, hogging on one side + sagging on the other (larger of the two senses).", s: "note" }]);
+    }
+
+    /* footings with live pressure formulas */
+    if (dt.gF.length) {
+      var fs = wb.sheet("Footings", { cols: [8, 22, 9, 9, 9, 9, 10, 10, 10, 12, 10, 11, 11, 11, 12, 10, 9, 10, 10], color: TAB.design });
+      intro(fs, "Isolated footings — IS 456 cl 34, IS 1893 cl 6.3.5.2", "Plan size from the service column reactions with 10 % for the footing's self weight: q = 1.1P/A ± 6Mx/(Lx·Ly²) ± 6My/(Ly·Lx²) ≤ SBC (DL+LL) or ≤ SBC × (1 + allowable seismic increase) for DL+LL±EQ. Depth from bending at the column face, one-way shear at d and punching at d/2 under the factored net pressure qu; bars at spacing ≤ min(3d, 300).", 12);
+      fs.row(["Safe bearing capacity", "", { v: cf.sbc, s: "in" }, "kN/m²", "", "Seismic increase factor", { v: dt.foot[0] ? dt.foot[0].incr : 1.25, s: "in" }]);
+      var sr = fs.next() - 1;
+      table(fs, [{ k: "grp", h: "Group" }, { k: "mem", h: "Columns" }, { k: "a", h: "Column D (X)", u: "mm", s: "n0" }, { k: "bc", h: "Column b (Y)", u: "mm", s: "n0" }, { k: "Lx", h: "Lx", u: "mm", s: "in" }, { k: "Ly", h: "Ly", u: "mm", s: "in" }, { k: "D", h: "Depth D", u: "mm", s: "in" },
+        { k: "set", h: "Governing service set" }, { k: "P", h: "P", u: "kN", s: "n1" }, { k: "Mx", h: "Mx", u: "kNm", s: "n1" }, { k: "My", h: "My", u: "kNm", s: "n1" },
+        { k: "q", h: "qmax = 1.1P/A + 6Mx/(LxLy²) + 6My/(LyLx²)", u: "kN/m²", f: "1.1*{P}/({Lx}*{Ly}/10^6)+6*ABS({Mx})/({Lx}/1000*({Ly}/1000)^2)+6*ABS({My})/({Ly}/1000*({Lx}/1000)^2)", s: "f1" },
+        { k: "lim", h: "Allowable", u: "kN/m²", cell: function (r) { return { f: "=$C$" + sr + (r.seis ? "*$G$" + sr : ""), v: r.lim, s: "f0" }; } },
+        { k: "qu", h: "Factored qu", u: "kN/m²", s: "n1" }, { k: "bx", h: "Bars along X" }, { k: "by", h: "Bars along Y" },
+        { k: "tp", h: "Punching τv", u: "N/mm²", s: "n3" }, { k: "kp", h: "ks·0.25√fck", u: "N/mm²", s: "n3" },
+        { k: "st", h: "Status", f: 'IF(AND({q}<={lim},{tp}<={kp}),"OK","FAIL")', s: "stat" }],
+        dt.gF.map(function (G0) { var f0 = G0.rep, g = f0.gov; return { grp: G0.id, mem: G0.list.map(function (c) { return c.name; }).join(", "), a: f0.a, bc: f0.bc, Lx: f0.Lx, Ly: f0.Ly, D: f0.D, set: g.set.name, P: g.set.r[2], Mx: g.set.r[3], My: g.set.r[4], seis: g.set.lim > f0.q + 1e-9, lim: g.set.lim, qu: f0.qu, bx: f0.bx.dia + "φ@" + f0.bx.s, by: f0.by.dia + "φ@" + f0.by.s, tp: f0.tp, kp: f0.kp }; }), G, { fc: 2 });
+      fs.row([{ v: "Blue cells are inputs: change a footing size or the SBC and the pressure check updates. Moments are the support reactions of the analysis (fixed bases). Overlapping footings are flagged in the app — use a combined footing or raft there.", s: "note" }]);
+    }
   }
   function seismicSheet(wb, S, G) {
     var se = S.se, m = S.m, p = S.p, sh = wb.sheet("Seismic", { cols: [11, 11, 11, 12, 12, 12, 12, 12, 13, 13, 12, 12], color: TAB.load });
@@ -716,7 +780,7 @@ var RX = (function () {
     }
     return 1;
   }
-  var SHEETDESC = { Seismic: "Modal analysis, response spectrum, centres of mass/rigidity, accidental torsion, irregularity checks (formulas)", Summary: "Key results and pass/fail counts for each member group", Notation: "Meaning and units of every symbol", Inputs: "Design parameters you can change (named cells p_fck, p_fy, p_Zz …)", Nodes: "Node coordinates and restraints", Members: "Frame members, lengths and section properties (formulas)", Shells: "Shell (slab / wall) elements",
+  var SHEETDESC = { BBS: "Bar bending schedule of every member group, cutting lengths and weights (formulas), totals by diameter", "Detailing Checks": "IS 13920 / IS 456 detailing rules for beams, columns, joints (strong column–weak beam) and footings", Footings: "Isolated footing sizes, soil pressure (formulas), reinforcement and shear checks", Seismic: "Modal analysis, response spectrum, centres of mass/rigidity, accidental torsion, irregularity checks (formulas)", Summary: "Key results and pass/fail counts for each member group", Notation: "Meaning and units of every symbol", Inputs: "Design parameters you can change (named cells p_fck, p_fy, p_Zz …)", Nodes: "Node coordinates and restraints", Members: "Frame members, lengths and section properties (formulas)", Shells: "Shell (slab / wall) elements",
     Loads: "Load-case totals, IS 1893 base shear & vertical distribution, IS 875-3 wind (formulas)", Combinations: "Load factors (IS 456 Table 18)", Disp_Cases: "Nodal displacements per load case", Disp_Combos: "Nodal displacements per combination",
     Forces_Cases: "Member end forces per load case", Forces_Combos: "Member end forces per combination", Reactions: "Support reactions with equilibrium check", Drift: "Storey drift check (formulas)", Pushover: "Capacity curve (chart), hinge sequence, ductility", "Design Basis": "Equations and IS code limits used, with clause numbers", "Worked Calcs": "Step-by-step calculation of every member: equation, substituted values, limit, clause, status", "Method & Formulas": "Element formulations, solver, design equations and clauses" };
   var METHOD = [
