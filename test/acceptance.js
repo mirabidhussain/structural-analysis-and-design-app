@@ -324,13 +324,29 @@ console.log('\n== H. Professional platform: BOQ, automatic design, projects, ver
   const S = PIPE.run(geo, p), b = S.boq, q = id => (b.items.find(i => i.id === id) || { qty: 0 }).qty;
   near('BOQ: slab concrete = 12 × 10 m × 0.15 m × 3 floors', q('rcs'), 12 * 10 * 0.15 * 3, 1e-9);
   const necks = S.det.foot.reduce((a, f) => a + 0.4 * 0.4 * (1.5 - f.D / 1000), 0);
-  near('BOQ: column concrete = 12 × 0.4 × 0.4 × (9.9 − 3 × 0.15) + necks to the plinth', q('rcc'), 12 * 0.16 * (9.9 - 0.45) + necks, 1e-9);
+  near('BOQ: column concrete = 12 × 0.4 × 0.4 × (9.9 − 3 × 0.15)', q('rcc'), 12 * 0.16 * (9.9 - 0.45), 1e-9);
+  near('BOQ: column necks from the footing to the plinth', q('rcn'), necks, 1e-9);
   const beamHand = S.det.beams.reduce((a, bl) => a + 0.3 * 0.3 * bl.spans.reduce((x, sp) => x + sp.Lc / 1000, 0), 0);
   near('BOQ: beam concrete = b × (D − t) × clear spans', q('rcb'), beamHand, 1e-9);
   near('BOQ: footing concrete = Σ L × B × D', q('rcf'), S.det.foot.reduce((a, f) => a + f.Lx * f.Ly * f.D / 1e9, 0), 1e-9);
-  near('BOQ: steel = bar bending schedule total', q('stl'), S.det.total, 1e-9);
+  near('BOQ: excavation up to 1.5 m + extra lift = Σ (L + 0.8)(B + 0.8)(Df + 0.1)', q('exc') + q('exl'), S.det.foot.reduce((a, f) => a + (f.Lx / 1000 + 0.8) * (f.Ly / 1000 + 0.8) * 1.6, 0), 1e-9);
+  near('BOQ: extra lift = the part below 1.5 m', q('exl'), S.det.foot.reduce((a, f) => a + (f.Lx / 1000 + 0.8) * (f.Ly / 1000 + 0.8) * 0.1, 0), 1e-9);
+  near('BOQ: steel = bar bending schedule total + 3 % wastage', q('stl'), S.det.total * 1.03, 1e-9);
+  /* masonry by hand: per level 2 × 10.8 + 2 × 9.2 = 40 m external, 10.8 + 2 × 9.2 = 29.2 m internal; heights 3.5/3.2/3.2 − 0.45 */
+  const hW = (3.5 - 0.45) + 2 * (3.2 - 0.45);
+  near('BOQ: masonry = 69.2 m × Σ(h − D) × 0.23 × 0.85 + parapet 40 m × 1 m × 0.23', q('mss'), 69.2 * hW * 0.23 * 0.85 + 40 * 1 * 0.23, 1e-9);
+  near('BOQ: plinth masonry 69.2 m × 0.45 m × 0.23 m', q('msp'), 69.2 * 0.45 * 0.23, 1e-9);
+  near('BOQ: internal plaster = (2 × internal + external) wall area × 0.85', q('pli'), (2 * 29.2 + 40) * hW * 0.85, 1e-9);
+  near('BOQ: external plaster = perimeter 40 m × (9.9 + 0.45) × 0.85 + parapet both faces', q('ple'), 40 * 10.35 * 0.85 + 2 * 40, 1e-9);
+  near('BOQ: flooring = ground + two floors (roof excluded)', q('flr'), 3 * S.det.slabs[0].panels.reduce((a, P) => a + (P.Lx - P.bw) * (P.Ly - P.bw) / 1e6, 0), 1e-9);
+  near('BOQ: anti-termite over the plinth area 12.4 × 10.4', q('atr'), 12.4 * 10.4, 1e-9);
+  ok('BOQ: default rates are JKSOR 2022 items (M25 design mix above plinth 5.34.2 = ₹ 9412.05; Fe 500 5.22.6 = ₹ 123.20)', b.items.find(i => i.id === 'rcs').sor[1] === 9412.05 && b.items.find(i => i.id === 'stl').sor[1] === 123.2 && b.items.find(i => i.id === 'rcf').sor[0] === '5.34.1');
+  ok('BOQ: richer grades add the JKSOR extra (M30 = 5.34.2 + 5.35.1); M20 uses the nominal-mix items', BOQ.sorFor(BOQ.ITEMS.find(x => x[0] === 'rcb'), { fck: 30 })[1] === 9510.85 && BOQ.sorFor(BOQ.ITEMS.find(x => x[0] === 'rcc'), { fck: 20 })[0] === '5.2.2');
   BOQ.price(b, { rcs: 6500, stl: 75 });
-  near('BOQ amount = Σ quantity × rate', b.amount, q('rcs') * 6500 + q('stl') * 75, 1e-9);
+  const sub = b.items.reduce((a, it) => a + (it.id === 'rcs' ? 6500 : it.id === 'stl' ? 75 : it.sor ? it.sor[1] : 0) * it.qty, 0);
+  near('BOQ amount = Σ quantity × (own rate, else JKSOR)', b.amount, sub, 1e-9);
+  near('BOQ abstract: + 3 % contingencies + 1 % cess + 18 % GST', b.abs.total, sub * 1.22, 1e-9);
+  ok('BOQ: anti-termite (not in JKSOR) is left for the user to price', b.unpriced.length === 1 && b.unpriced[0] === 'atr');
 
   const r = AUTO.run(geo, p);
   const scwbF = r.S.det.scwb.filter(x => !x.ok).length, jF = r.S.det.joints.filter(x => !x.ok || !x.anch).length;
@@ -375,6 +391,41 @@ console.log('\n== H. Professional platform: BOQ, automatic design, projects, ver
   const ad = PRO.advise(S), w = S.det.scwb.filter(x => !x.ok).sort((a, b2) => a.r - b2.r)[0], need = 1.4 * w.Mb - w.Mc;
   ok('Assistant: strong column–weak beam finding with the missing column capacity', ad.some(a => /strong column/.test(a.t) && a.d.indexOf(need.toFixed(0) + ' kNm') > 0), need.toFixed(0) + ' kNm');
   ok('Assistant: member lookup and code notes work offline', PRO.memberInfo(S, 'C-B2').type === 'column' && PRO.kbFind('how do I fix joint shear')[0][1].indexOf('joint') > 0 && /C-B2/.test(PRO.offlineAnswer(S, 'why does C-B2 fail?')));
+})();
+
+console.log('\n== I. Snow, pattern and reduced imposed load, exposure / fire cover');
+(function () {
+  const { PIPE } = c;
+  const base = { fck: 25, fy: 500, fys: 250, crack: true, pcCol: 2, pcBeam: 1, colSec: '400x400', beamSec: '300x450', braceSec: 'ISA 75x75x6', tSlab: 150, tWall: 200, ff: 1.5, ffRoof: 2.5, ll: 3, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0, eq: false, zone: 'V', I: 1.2, R: 5, soil: 'II', sys: 'rc', wind: false, vb: 39, terrain: 2, cf: 1.3, trib: 4, kcol: 1.2, method: 'lsm', sbc: 200, Df: 1.5, secOver: '', entered: [] };
+  const geo = MD.generate({ bx: '4,4,4', by: '5,5', hs: '3.5,3.2,3.2', slabs: true, mesh: 1 }), m = MD.make(geo, base);
+  const roofQ = L => { let q = null; L.cases.LL.shellP.forEach(s => { const z = m.nodes[m.shells[s.e].n[0]].z; if (z > 9.8) q = -s.q[2]; }); return q; };
+  const L1 = MD.cases(m, Object.assign({}, base, { snow: true, s0: 2.5, mu: 0.8 })), L2 = MD.cases(m, Object.assign({}, base, { snow: true, s0: 1.5, mu: 0.8 }));
+  ok('Snow: s = μ·s0 = 0.8 × 2.5 = 2.0 kN/m² governs over roof imposed 1.5 (IS 875 Pt 4)', Math.abs(roofQ(L1) - 2.0) < 1e-12 && L1.snow === 2.0, roofQ(L1));
+  ok('Snow: 0.8 × 1.5 = 1.2 < 1.5 — roof imposed load stays', Math.abs(roofQ(L2) - 1.5) < 1e-12);
+  const Lp = MD.cases(m, Object.assign({}, base, { ll: 5 })), Ln = MD.cases(m, base), Lo = MD.cases(m, Object.assign({}, base, { ll: 5, pattern: 'off' })), Lf = MD.cases(m, Object.assign({}, base, { pattern: 'on' }));
+  const sumP = c0 => c0.shellP.reduce((a, s) => a + s.q[2], 0);
+  ok('Pattern load: auto when LL 5 > ¾ DL (0.75 × 5.25 = 3.94); not for LL 3; off when chosen; always when on', !!Lp.cases.LP1 && !Ln.cases.LP1 && !Lo.cases.LP1 && !!Lf.cases.LP1);
+  ok('Pattern load: the two checkerboard cases add up to the full imposed load, each with half the panels', Math.abs(sumP(Lp.cases.LP1) + sumP(Lp.cases.LP2) - sumP(Lp.cases.LL)) < 1e-9 && Lp.cases.LP1.shellP.length === Lp.cases.LP2.shellP.length);
+  const cb = MD.combos(Lp.cases, 'lsm').map(x => x.name), wc = WS.combos ? WS.combos(Lp.cases).map(x => x.name) : ['DL+LP1'];
+  ok('Pattern load: 1.5(DL+LP1), 1.5(DL+LP2) and DL+LP1/LP2 (working stress) are in the combinations', cb.indexOf('1.5(DL+LP1)') >= 0 && cb.indexOf('1.5(DL+LP2)') >= 0 && wc.indexOf('DL+LP1') >= 0, cb.join(', '));
+  const g2 = MD.generate({ bx: '4,4,4', hs: '3.5,3.2', twoD: true }), m2 = MD.make(g2, base), L2d = MD.cases(m2, Object.assign({}, base, { bLL: 10, pattern: 'on' }));
+  ok('Pattern load in a 2D frame (no slabs): alternate spans — spans 1 and 3 in LP1, span 2 in LP2', L2d.cases.LP1.frameUDL.length === 2 && L2d.cases.LP2.frameUDL.length === 1 && L2d.cases.LL.frameUDL.length === 3);
+  const Sp = PIPE.run(geo, Object.assign({}, base, { ll: 5 })), Sn = PIPE.run(geo, Object.assign({}, base, { ll: 5, pattern: 'off' }));
+  const dMs = Sp.des.beams.map((r, k) => r.Ms - Sn.des.beams[k].Ms);
+  ok('Pattern load: no beam sagging moment is smaller than with full load only, and many are larger', dMs.every(x => x > -1e-6) && dMs.filter(x => x > 0.5).length > 10, dMs.filter(x => x > 0.5).length + ' elements larger, max +' + Math.max.apply(null, dMs).toFixed(2) + ' kNm');
+  const Sr = PIPE.run(geo, Object.assign({}, base, { llRed: true })), S0 = PIPE.run(geo, base);
+  const f0 = S0.det.foot[0], fr = Sr.det.foot[0];
+  ok('Imposed-load reduction: footing under 3 floors takes 20 % off the imposed load (IS 875 Pt 2 cl 3.2.1)', fr.nfl === 3 && fr.red === 0.2 && f0.red === 0 && fr.Pser < f0.Pser, fr.nfl + ' floors, ' + fr.Pser.toFixed(1) + ' < ' + f0.Pser.toFixed(1) + ' kN');
+  const cs = MD.cover({ exposure: 'severe', fire: 2 }), cm = MD.cover({ exposure: 'mild', fire: 3 }), cx = MD.cover({ exposure: 'extreme', fire: 1 });
+  ok('Cover: severe 45 mm, M30 minimum (IS 456 Table 16, Table 5)', cs.cb === 45 && cs.cs === 45 && cs.cc === 45 && cs.minGrade === 30);
+  ok('Cover: mild exposure but 3 h fire → beams 40, slabs 35 (Table 16A); columns ≥ 40, footings ≥ 50', cm.cb === 40 && cm.cs === 35 && cm.cc === 40 && cm.cf === 50);
+  ok('Cover: extreme 75 mm everywhere, M40 minimum', cx.cb === 75 && cx.cc === 75 && cx.cf === 75 && cx.minGrade === 40);
+  const Ss = PIPE.run(geo, Object.assign({}, base, { exposure: 'severe', fire: 2 }));
+  ok('Cover: effective depth of beams follows the exposure (d = D − cover − 20)', Ss.det.beams[0].d === 450 - 65 && S0.det.beams[0].d === 450 - 50, Ss.det.beams[0].d + ' / ' + S0.det.beams[0].d);
+  ok('Durability: M25 in severe exposure is flagged as a failure', Ss.det.dur.some(t => /M25 is below the minimum M30/.test(t)) && Ss.det.fails >= 1 && !S0.det.dur.length, Ss.det.dur[0]);
+  const Sf = PIPE.run(geo, Object.assign({}, base, { fire: 3 }));
+  const S4 = PIPE.run(geo, Object.assign({}, base, { fire: 4 }));
+  ok('Fire: 3 h (beam ≥ 240, column ≥ 400, slab ≥ 150) passes 300×450 / 400×400 / 150; 4 h flags the 150 mm slabs and 400 mm columns (≥ 170 / 450)', !Sf.det.dur.length && S4.det.dur.some(t => /thickness 150 < 170/.test(t)) && S4.det.dur.some(t => /^Column .*400 < 450/.test(t)) && !S4.det.dur.some(t => /^Beam/.test(t)), S4.det.dur.length + ' items');
 })();
 
 console.log(`\n${pass} passed, ${fail} failed`);

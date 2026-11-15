@@ -18,8 +18,8 @@ DT.cut = function (b) {
   return b.A + (b.B || 0) + (b.C || 0) - 2 * d * (b.n90 || 0);
 };
 DT.cfg = function (p) {
-  var duct = p.eq !== false && String(p.zone) !== "II";
-  return { duct: duct, cb: 30, cc: 40, cs: 20, cf: 50, wsm: p.method === "wsm", fck: p.fck, fy: p.fy, sbc: p.sbc > 0 ? p.sbc : 200, Df: p.Df > 0 ? p.Df : 1.5 };
+  var duct = p.eq !== false && String(p.zone) !== "II", cv = MD.cover(p);
+  return { duct: duct, cb: cv.cb, cc: cv.cc, cs: cv.cs, cf: cv.cf, dB: cv.dB, dC: cv.dC, cv: cv, wsm: p.method === "wsm", fck: p.fck, fy: p.fy, sbc: p.sbc > 0 ? p.sbc : 200, Df: p.Df > 0 ? p.Df : 1.5 };
 };
 /* plan grid: column x and y coordinates → labels 1,2,3 (x) and A,B,C (y); floor levels */
 DT.grid = function (m) {
@@ -89,7 +89,7 @@ DT.beams = function (m, S, p, cf, g) {
   des.beams.forEach(function (r) { desB[r.k] = r; });
   var gcases = ["DL", "LL"].filter(function (c) { return res.cases[c]; });
   DT.lines(m).forEach(function (seq, li) {
-    var e0 = m.frames[seq[0].k], sec = e0.sec, b = sec.b, Dd = sec.D, fck = sec.fck, fy = sec.fy, d = Dd - 50, n0 = m.nodes[seq[0].a], n1 = m.nodes[seq[seq.length - 1].b];
+    var e0 = m.frames[seq[0].k], sec = e0.sec, b = sec.b, Dd = sec.D, fck = sec.fck, fy = sec.fy, d = Dd - cf.dB, n0 = m.nodes[seq[0].a], n1 = m.nodes[seq[seq.length - 1].b];
     var ux = Math.abs(n1.x - n0.x) >= Math.abs(n1.y - n0.y), z = n0.z;
     /* node positions along the line (mm) */
     var nodes = [seq[0].a].concat(seq.map(function (it) { return it.b; })), pos = [0];
@@ -376,10 +376,10 @@ DT.colDetail = function (col, cf) {
     function ash(s0, ph) { return Math.max(0.18 * s0 * hleg * s.fck / s.fy * (Ag / Ak - 1), 0.05 * s0 * hleg * s.fck / s.fy); }
     if (cf.duct) { var guard = 0; while (ash(sc, pt) > D.barArea(pt) && guard++ < 40) { if (pt < 10) pt = 10; else sc -= 5; } sc = Math.max(sc, 50); }
     /* column shear (capacity, IS 13920 cl 7.5): Vu = 1.4 (Mu,top + Mu,bot) / Lc with the moment capacity at Pmin..Pmax */
-    var Mc = Math.min(RCC.colMcap(b, Dd, s.As, Math.max(s.Pmin, 0), s.fck, s.fy, 50, "four"), RCC.colMcap(b, Dd, s.As, Math.max(s.Pmax, 0), s.fck, s.fy, 50, "four"));
-    var Mc2 = Math.min(RCC.colMcap(Dd, b, s.As, Math.max(s.Pmin, 0), s.fck, s.fy, 50, "four"), RCC.colMcap(Dd, b, s.As, Math.max(s.Pmax, 0), s.fck, s.fy, 50, "four"));
+    var dc = cf.dC || 50, Mc = Math.min(RCC.colMcap(b, Dd, s.As, Math.max(s.Pmin, 0), s.fck, s.fy, dc, "four"), RCC.colMcap(b, Dd, s.As, Math.max(s.Pmax, 0), s.fck, s.fy, dc, "four"));
+    var Mc2 = Math.min(RCC.colMcap(Dd, b, s.As, Math.max(s.Pmin, 0), s.fck, s.fy, dc, "four"), RCC.colMcap(Dd, b, s.As, Math.max(s.Pmax, 0), s.fck, s.fy, dc, "four"));
     s.McX = Mc; s.McY = Mc2;
-    var Vu = cf.duct ? 1.4 * 2 * Math.max(Mc, Mc2) / (Lc / 1000) : 0, dd = Math.max(b, Dd) - 50, bw = Math.min(b, Dd), tc = RCC.tauc(s.fck, Math.min(100 * s.As / 2 / (bw * dd), 3));
+    var Vu = cf.duct ? 1.4 * 2 * Math.max(Mc, Mc2) / (Lc / 1000) : 0, dd = Math.max(b, Dd) - (cf.dC || 50), bw = Math.min(b, Dd), tc = RCC.tauc(s.fck, Math.min(100 * s.As / 2 / (bw * dd), 3));
     var Asv = Math.min(lB, lD) * D.barArea(pt), Vus = Vu * 1000 - tc * bw * dd, sV = Vus > 0 ? DT.rf(0.87 * s.fy * Asv * dd / Vus, 5) : Infinity;
     smid = Math.max(50, Math.min(smid, sV)); if (sc) sc = Math.min(sc, Math.max(sV, 50));
     s.tie = { dia: pt, lo: lo, sc: sc, sm: smid, slap: cf.duct ? Math.min(smid, 150) : smid, lB: lB, lD: lD, Ash: cf.duct ? ash(sc, pt) : 0, hleg: hleg, Ag: Ag, Ak: Ak, Vu: Vu, sV: sV, Lc: Lc };
@@ -519,7 +519,10 @@ DT.footings = function (m, S, p, cf, g) {
     var n = +ns, c = DT.colAt(m, n); if (!c || c.sec.kind !== "rcc" || !cr.DL) return;
     var a = c.sec.D / 1000, bc = c.sec.b / 1000;     /* column D along X, b along Y (m) */
     function R(name) { return cr[name] && cr[name][n] ? cr[name][n] : [0, 0, 0, 0, 0, 0]; }
-    var G = [0, 1, 2, 3, 4, 5].map(function (t) { return R("DL")[t] + R("LL")[t]; }), sets = [{ name: "DL+LL", r: G, lim: q }];
+    /* imposed-load reduction for the floors carried (IS 875 Pt 2 cl 3.2.1, Table 3) */
+    var nfl = 0; m.frames.forEach(function (e) { if (e.type === "column") { var a0 = m.nodes[e.n1], b0 = m.nodes[e.n2]; if (Math.abs(a0.x - m.nodes[n].x) < 0.01 && Math.abs(a0.y - m.nodes[n].y) < 0.01) nfl = Math.max(nfl, g.lev(Math.max(a0.z, b0.z))); } });
+    var red = p.llRed ? (nfl <= 1 ? 0 : nfl === 2 ? 0.1 : nfl === 3 ? 0.2 : nfl === 4 ? 0.3 : nfl <= 10 ? 0.4 : 0.5) : 0;
+    var G = [0, 1, 2, 3, 4, 5].map(function (t) { return R("DL")[t] + (1 - red) * R("LL")[t]; }), sets = [{ name: "DL+" + (red ? (1 - red).toFixed(1) + "LL" : "LL"), r: G, lim: q }];
     lat.forEach(function (Ls) {
       var E = [0, 0, 0, 0, 0, 0]; Object.keys(Ls.f).forEach(function (cn) { var r = R(cn); for (var t = 0; t < 6; t++) E[t] += Ls.f[cn] * r[t]; });
       [1, -1].forEach(function (sg) { sets.push({ name: "DL+LL" + (sg > 0 ? "+" : "−") + Ls.name, r: G.map(function (v, t) { return v + sg * E[t]; }), lim: q * incr }); });
@@ -539,7 +542,8 @@ DT.footings = function (m, S, p, cf, g) {
     }
     /* factored net upward pressure (self weight excluded) */
     var qu = 0, gq = "";
-    if (!cf.wsm) res.combos.forEach(function (cb) { if (!cb.reac || !cb.reac[n]) return; var pr = press(cb.reac[n], Lx, Ly, false); if (pr.max > qu) { qu = pr.max; gq = cb.name; } });
+    var llr = R("LL");
+    if (!cf.wsm) res.combos.forEach(function (cb, ci) { if (!cb.reac || !cb.reac[n]) return; var fl0 = (((S.cb || [])[ci] || {}).f || {}).LL || 0, rr = cb.reac[n].map(function (v, t) { return v - red * fl0 * llr[t]; }), pr = press(rr, Lx, Ly, false); if (pr.max > qu) { qu = pr.max; gq = cb.name; } });
     else sets.forEach(function (st) { var f = st.name === "DL+LL" ? 1.5 : 1.2, pr = press(st.r, Lx, Ly, false); if (f * pr.max > qu) { qu = f * pr.max; gq = f + "(" + st.name + ")"; } });
     var cx = (Lx - a) / 2, cy = (Ly - bc) / 2, dia = 12, d = 150, Ast = [0, 0], tv = [0, 0], tc = [0, 0], tp = 0, kp = 0, ok2 = false;
     for (var it = 0; it < 120 && !ok2; it++) {
@@ -563,10 +567,10 @@ DT.footings = function (m, S, p, cf, g) {
     function anch(f, cant) { var Ld = DT.Ld(f, fy, fck), av = cant * 1000 - cf.cf; return av >= Ld ? { leg: 0, Ld: Ld, av: av } : { leg: DT.r(Math.max(D0 - 2 * cf.cf - 2 * f, Ld - av - 8 * f), 25), Ld: Ld, av: av }; }
     var axx = anch(bx.dia, cx), ayy = anch(by.dia, cy);
     var A2 = Math.min(Lx * Ly, (a + 4 * D0 / 1000) * (bc + 4 * D0 / 1000)), A1 = a * bc, fbr = 0.45 * fck * Math.min(2, Math.sqrt(A2 / A1)), Pu = 0;
-    if (!cf.wsm) res.combos.forEach(function (cb) { if (cb.reac && cb.reac[n]) Pu = Math.max(Pu, cb.reac[n][2]); }); else Pu = 1.5 * G[2];
+    if (!cf.wsm) res.combos.forEach(function (cb, ci) { if (cb.reac && cb.reac[n]) { var fl1 = (((S.cb || [])[ci] || {}).f || {}).LL || 0; Pu = Math.max(Pu, cb.reac[n][2] - red * fl1 * llr[2]); } }); else Pu = 1.5 * G[2];
     var fact = Pu * 1000 / (A1 * 1e6);
     var nd = m.nodes[n], ft = { n: n, x: nd.x, y: nd.y, name: "F-" + g.gy(nd.y) + g.gx(nd.x), a: a * 1000, bc: bc * 1000, Lx: Lx * 1000, Ly: Ly * 1000, D: D0, d: d, sets: sets, gov: gov, q: q, incr: incr, qu: qu, gq: gq,
-      Mux: qu * Ly * cx * cx / 2, Muy: qu * Lx * cy * cy / 2, Ast: Ast, bx: bx, by: by, tv: tv, tc: tc, tp: tp, kp: kp, ax: axx, ay: ayy, fbr: fbr, fact: fact, dia: Math.max(bx.dia, by.dia), Pser: G[2], fck: fck, fy: fy };
+      Mux: qu * Ly * cx * cx / 2, Muy: qu * Lx * cy * cy / 2, Ast: Ast, bx: bx, by: by, tv: tv, tc: tc, tp: tp, kp: kp, ax: axx, ay: ayy, fbr: fbr, fact: fact, dia: Math.max(bx.dia, by.dia), Pser: G[2], fck: fck, fy: fy, red: red, nfl: nfl };
     ft.checks = [
       { t: "Max pressure ≤ SBC (" + gov.set.name + ")", ok: gov.u <= 1 + 1e-9, v: gov.pr.max.toFixed(1) + " ≤ " + gov.set.lim.toFixed(0) + " kN/m²", cl: gov.set.lim > q ? "IS 1893 cl 6.3.5.2 / Table 1 (+" + Math.round((incr - 1) * 100) + " %)" : "IS 456 cl 34.1" },
       { t: "No tension under DL+LL", ok: press(G, Lx, Ly, true).min >= -1e-9, v: press(G, Lx, Ly, true).min.toFixed(1) + " kN/m²", cl: "" },
@@ -894,6 +898,13 @@ DT.run = function (m, S, p) {
   if (cf.duct) { out.scwb = DT.scwb(m, out.cols, out.beams); out.joints = DT.joints(m, out.cols, out.beams); } else out.joints = [];
   try { out.slabs = DT.slabs(m, S, p, cf, g); } catch (e) { out.warn.push("Slabs: " + e.message); }
   try { out.walls = DT.walls(m, S, p, cf, g, out.cols); } catch (e) { out.warn.push("Walls: " + e.message); }
+  /* durability (IS 456 Table 5) and fire resistance (Table 16A, Fig. 1) */
+  var cv = cf.cv, fr = cv.fire, dur = [];
+  if (p.fck < cv.minGrade) dur.push("Concrete M" + p.fck + " is below the minimum M" + cv.minGrade + " for " + cv.expo + " exposure (IS 456 Table 5)");
+  out.beams.forEach(function (bl) { if (bl.b < fr[2]) dur.push("Beam " + bl.name + ": width " + bl.b + " < " + fr[2] + " mm for " + cv.hrs + " h fire (IS 456 Fig. 1)"); });
+  out.cols.forEach(function (c) { var s0 = c.st[0]; if (Math.min(s0.b, s0.D) < fr[4]) dur.push("Column " + c.name + ": " + Math.min(s0.b, s0.D) + " < " + fr[4] + " mm for " + cv.hrs + " h fire (IS 456 Fig. 1)"); });
+  out.slabs.forEach(function (sl) { if (sl.t < fr[3]) dur.push(sl.name + ": thickness " + sl.t + " < " + fr[3] + " mm for " + cv.hrs + " h fire (IS 456 Fig. 1)"); });
+  out.dur = dur; dur.slice(0, 6).forEach(function (t) { out.warn.push(t); }); if (dur.length > 6) out.warn.push("… " + (dur.length - 6) + " more durability / fire items");
   /* group identical members */
   function grp(list, nm) {
     var gs = {}, order = [];
@@ -918,6 +929,7 @@ DT.run = function (m, S, p) {
   out.foot.forEach(function (f) { f.checks.forEach(function (q) { if (!q.ok) out.fails++; }); });
   out.walls.forEach(function (w) { w.checks.forEach(function (q) { if (!q.ok) out.fails++; }); });
   out.scwb.forEach(function (q) { if (!q.ok) out.fails++; });
+  out.fails += (out.dur || []).length;
   out.joints.forEach(function (q) { if (!q.ok || !q.anch) out.fails++; });
   return out;
 };

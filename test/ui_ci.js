@@ -50,7 +50,15 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   ok('Verification: an item can be accepted and is signed', /Accepted by Checker/.test(await pg.textContent('#results')));
   await pg.evaluate(() => document.querySelectorAll('.rep.pro details').forEach(d => d.open = true));
   await pg.fill('input.rate[data-ri=rcs]', '6500'); await pg.dispatchEvent('input.rate[data-ri=rcs]', 'change'); await pg.waitForTimeout(300);
-  ok('BOQ: rates entered give amounts', /Amount at your rates/.test(await pg.textContent('#results')));
+  const bq = await pg.evaluate(() => { const t = document.querySelector('#results').textContent; return { sor: /JKSOR 5\.34\.2/.test(t), own: /own rate/.test(t), gst: /GST 18 %/.test(t), total: /Estimated cost incl\. GST/.test(t), mas: /Brick masonry/.test(t) }; });
+  ok('BOQ: whole-building items priced with JKSOR 2022, own rate overrides, abstract with GST', bq.sor && bq.own && bq.gst && bq.total && bq.mas, JSON.stringify(bq));
+  const vol = async () => pg.evaluate(() => { const r = [...document.querySelectorAll('#results tr')].find(tr => /Brick masonry \(class 7\.5\) in CM 1:6 in superstructure/.test(tr.textContent)); return r ? parseFloat(r.children[3].textContent.replace(/,/g, '')) : null; });
+  const v230 = await vol();
+  await pg.evaluate(() => { const e = document.querySelector('[data-k=mT]'); e.value = '115'; e.dispatchEvent(new Event('change', { bubbles: true })); });
+  await pg.evaluate(() => document.querySelector('#bBoq').click()); await pg.waitForTimeout(600); const v115 = await vol();
+  ok('BOQ: "Recalculate BOQ" applies a new masonry thickness without re-analysis', v230 > 0 && Math.abs(v115 / v230 - 115 / 230) < 0.02, v230 + ' → ' + v115);
+  await pg.evaluate(() => { const e = document.querySelector('[data-k=mT]'); e.value = ''; e.dispatchEvent(new Event('change', { bubbles: true })); });
+  ok('Load inputs: snow, pattern load, imposed-load reduction, exposure and fire are on the form', await pg.evaluate(() => ['snow', 's0', 'mu', 'pattern', 'llRed', 'exposure', 'fire', 'gst', 'sorOn'].every(k => document.querySelector('[data-k=' + k + ']'))));
   await pg.evaluate(() => document.querySelectorAll('.rep.pro details').forEach(d => d.open = true));
   await pg.fill('#aQ', 'why does C-B2 fail?'); await pg.click('#aGo'); await pg.waitForTimeout(300);
   ok('Assistant answers offline (member lookup)', /C-B2/.test(await pg.textContent('#aOut')));

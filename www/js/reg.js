@@ -2,15 +2,18 @@
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "3.0";
+REG.ENGINE = "3.1";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],
   ["IS 1893 (Part 1):2016", "Criteria for earthquake resistant design of structures (Sixth Revision), with Amendments 1 and 2", "In use (reinstated)", "IS 1893 (Part 1):2025 and (Part 5):2025 were published in Nov 2025 and withdrawn by BIS gazette notification of 3 March 2026; the 2016 edition is the applicable standard. Torsional irregularity reported to both the 2016 text and Amendment 2."],
   ["IS 800:2007", "General construction in steel (Third Revision)", "In use", "Limit state design of members; working stress cl 11"],
   ["IS 875 (Part 1)", "Dead loads — unit weights", "1987 values used; 2026 revision published", "Only concrete 25 kN/m³ is built in — finishes and wall loads are user inputs. Unit weights not yet reviewed against IS 875 (Part 1):2026."],
-  ["IS 875 (Part 2):1987", "Imposed loads", "In use", "Imposed loads are user inputs; seismic weight reduction per IS 1893 Table 10"],
+  ["IS 875 (Part 2):1987", "Imposed loads", "In use", "Imposed loads are user inputs; pattern loading (IS 456 cl 22.4.1) and reduction for floors carried (cl 3.2.1, footings) are options; seismic weight per IS 1893 Table 10"],
   ["IS 875 (Part 3):2015", "Wind loads", "In use", "Vz = Vb·k1·k2·k3·k4, pressure on the building frontal area (no building pressure-coefficient workflow)"],
+  ["IS 875 (Part 4):2021", "Snow loads (Third Revision)", "In use", "Roof snow s = μ·s0 (flat roof μ = 0.8), designed for the more severe of snow and roof imposed load (cl 1); drift, unbalanced and the exposure/thermal effects are not modelled — enter an adjusted s0 where they matter"],
+  ["IS 1200", "Method of measurement of building and civil engineering works", "In use", "Measurement rules of the bill of quantities"],
+  ["JKSOR 2022", "Jammu & Kashmir Schedule of Rates 2022 (PW(R&B) Department)", "In use", "Default BOQ rates (exclusive of GST); project rates override them; apply the cost index / premium of your work"],
   ["IS 875 (Part 5):1987", "Special loads and load combinations", "In use", "Combinations as IS 456 Table 18 / IS 800 Table 4"],
   ["SP 16:1980, SP 34:1987", "Design aids (IS 456); handbook on concrete reinforcement and detailing", "In use", "Reference values in tests; detailing practice (curtailment, slab top bars)"],
   ["IS 2502:1963", "Bending and fixing of bars for concrete reinforcement", "In use", "Bar bending schedule, bend deductions and hooks"]
@@ -49,13 +52,17 @@ REG.CHECKS = [
   ["Foundations", "Combined footings, rafts, piles, settlement, soil–structure interaction", "Not implemented", "Overlapping isolated footings are flagged"],
   ["Loads", "Wind on buildings (IS 875-3): pressure coefficients, internal pressure, torsion cases", "Simplified", "Frontal-area pressure with a single force coefficient"],
   ["Loads", "Working stress projects: walls designed by limit state with 1.5 × service forces", "Simplified", "Stated in the wall results"],
-  ["Quantities", "Bill of quantities (IS 1200 style measurement)", "Calculated", "Slab and column volumes checked by hand in acceptance.js H; rates are user inputs"],
+  ["Loads", "Snow on roofs (IS 875 Pt 4): s = μ·s0, the larger of snow and roof imposed load", "Simplified", "Uniform balanced snow only — no drift at parapets or steps; s0 is a user input (acceptance.js I)"],
+  ["Loads", "Pattern imposed load — checkerboard alternate bays (IS 456 cl 22.4.1)", "Calculated", "The two patterns add up to the full imposed load (acceptance.js I); envelope with the full-load combination"],
+  ["Loads", "Imposed-load reduction for floors carried (IS 875 Pt 2 cl 3.2.1)", "Calculated", "Table values checked in acceptance.js I; applied to footing sizing and design only, not to columns"],
+  ["Detailing", "Nominal cover for exposure and fire (IS 456 Table 16, 16A, Fig. 1) and minimum grade (Table 5)", "Verified", "Table values and the effective depths that use them checked in acceptance.js I"],
+  ["Quantities", "Bill of quantities of the whole building (IS 1200 style) priced with JKSOR 2022", "Calculated", "Concrete, masonry, plaster, floor and excavation quantities checked by hand in acceptance.js H; every default rate is traced to its JKSOR 2022 item"],
   ["Automation", "Automatic design (storey-wise enlargement until all checks pass)", "Calculated", "Converges on the test building in acceptance.js H; sizes are written as editable section rules"]
 ];
 /* stable ids of REG.CHECKS rows, used by the verification mode */
 REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "timehist",
   "rcbeam", "rccol", "rcslab", "rcwallel", "rcwall", "servic", "stfcd", "stltb", "stklen", "dtbeam", "dtcol", "scwb", "joint", "dtslab", "bbs",
-  "foot", "footpress", "foundmore", "wind", "wsmwall", "boq", "auto"];
+  "foot", "footpress", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto"];
 REG.byId = function (id) { var i = REG.IDS.indexOf(id); return i >= 0 ? { id: id, area: REG.CHECKS[i][0], t: REG.CHECKS[i][1], st: REG.CHECKS[i][2], ev: REG.CHECKS[i][3] } : null; };
 REG.RANK = { "Not implemented": 0, Simplified: 1, Calculated: 2, Verified: 3 };
 /* checks behind each kind of result; the weakest decides the result's verification state */

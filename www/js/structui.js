@@ -10,7 +10,9 @@ var SU = (function () {
     ff: 1.5, ll: 3, ffRoof: 2.5, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0,
     eq: true, zone: "V", I: 1.2, R: 5, soil: "II", sys: "rc", wind: false, vbp: "Srinagar", terrain: 2, cf: 1.3, trib: 4,
     pdir: 0, ppat: "parabolic", pdrift: 4, ppd: true, pev: 80, secOver: "", loadOver: "",
-    accTor: true, rsa: true, nModes: 12, rsComb: "cqc", ortho: false, rsScaleDisp: false, sbc: 200, Df: 1.5
+    accTor: true, rsa: true, nModes: 12, rsComb: "cqc", ortho: false, rsScaleDisp: false, sbc: 200, Df: 1.5,
+    snow: false, s0: 1.5, mu: 0.8, snowW: 0, pattern: "auto", llRed: false, exposure: "moderate", fire: "1",
+    mT: 230, mOpen: 15, plinthH: 0.45, parH: 1.0, wastage: 3, cont: 3, cess: 1, gst: 18, sorOn: true
   };
   /* defaults that depend on the frame material */
   var MATDEF = { rcc: { colSec: "400x400", beamSec: "300x450", sys: "rc" }, steel: { colSec: "ISMB 300", beamSec: "ISMB 250", sys: "steel" } };
@@ -81,6 +83,7 @@ var SU = (function () {
     h += panel("p1", "1 · Geometry", srcForm(), true);
     h += panel("p2", "2 · Materials & sections", propForm());
     h += panel("p3", "3 · Loads (IS 875, IS 1893)", loadForm());
+    h += panel("p5", "5 · Estimate & BOQ (JKSOR 2022)", boqForm());
     h += panel("p4", "4 · Analyse", anaForm(), true);
     h += '<div id="mstat"></div><div id="viewer"></div><div id="results"></div>';
     app.innerHTML = h;
@@ -145,7 +148,9 @@ var SU = (function () {
     return '<div class="form">' + sel("method", "Design method", [["lsm", "Limit state method (IS 456 / IS 800)"], ["wsm", "Working stress method (IS 456 Annex B / IS 800 Sec 11)"]]) + sel("mat", "Frame material", [["rcc", "RCC (IS 456)"], ["steel", "Structural steel (IS 800)"]]) +
       sel("fck", "Concrete grade", [[20, "M20"], [25, "M25"], [30, "M30"], [35, "M35"], [40, "M40"]]) + sel("fy", "Rebar grade", [[415, "Fe415"], [500, "Fe500"], [550, "Fe550"]]) + sel("fys", "Steel fy", [[250, "E250 (fy 250)"], [350, "E350 (fy 350)"]]) +
       txt("colSec", "Columns", "b×D mm (D along X) or ISMB…") + txt("beamSec", "Beams", "b×D mm or ISMB…") + txt("braceSec", "Braces", "ISA a×a×t or ISMB") +
-      num("tSlab", "Slab thickness", "mm") + num("tWall", "Wall thickness", "mm") + chk("crack", "Cracked stiffness (IS 1893 cl 6.4.3.1: beams 0.35, columns 0.70)") +
+      num("tSlab", "Slab thickness", "mm") + num("tWall", "Wall thickness", "mm") +
+      sel("exposure", "Exposure condition (IS 456 Table 3)", [["mild", "Mild — cover 20, ≥ M20"], ["moderate", "Moderate — cover 30, ≥ M25"], ["severe", "Severe — cover 45, ≥ M30"], ["very severe", "Very severe — cover 50, ≥ M35"], ["extreme", "Extreme — cover 75, ≥ M40"]]) +
+      sel("fire", "Fire resistance (IS 456 Table 16A)", [["0.5", "0.5 h"], ["1", "1 h"], ["1.5", "1.5 h"], ["2", "2 h"], ["3", "3 h"], ["4", "4 h"]]) + chk("crack", "Cracked stiffness (IS 1893 cl 6.4.3.1: beams 0.35, columns 0.70)") +
       num("pcCol", "Column steel for hinges / P-M", "%") + num("pcBeam", "Beam steel (both faces) for hinges", "%") + num("kcol", "Column effective length factor", "", "IS 456 Table 28 / Annex E (1.2 for sway frames)") +
       area("secOver", "Member section overrides (optional)", "One rule per line: <i>which = section</i>. Which: member numbers (12, 1-12, F20), <i>columns / beams / braces / all</i>, optionally with <i>storey 1</i>, <i>storey 2-4</i>, <i>level 3.5</i> (m) or <i>layer NAME</i>. Later lines win. Tap a member in the 3D view to assign it directly.", "columns storey 1-2 = 450x450\nbeams storey 3 = 300x400\n15, 18-20 = ISMB 350") +
       '<div class="btns full"><button type="button" class="rstd" data-p="p2">Clear my entries (use defaults)</button></div><div class="note full">Priority: override rules › section written in the DXF layer name › the default sections above. Sections are standard-table values (SP 6).</div></div>';
@@ -155,7 +160,11 @@ var SU = (function () {
   }
   function loadForm() {
     return '<div class="form">' + num("ff", "Floor finish + partitions", "kN/m²") + num("ll", "Imposed load (floors)", "kN/m²", "IS 875 Pt 2: office 2.5–4, residence 2") +
-      num("ffRoof", "Roof finish / waterproofing", "kN/m²") + num("llRoof", "Roof imposed load", "kN/m²") + num("wall", "Wall load on floor beams", "kN/m", "230 mm brick × 3 m ≈ 13") +
+      num("ffRoof", "Roof finish / waterproofing", "kN/m²") + num("llRoof", "Roof imposed load", "kN/m²") +
+      chk("snow", "Snow load — IS 875 (Part 4) on the roof (larger of snow and roof imposed load)") + num("s0", "Ground snow load s0", "kN/m²", "Kashmir valley ≈ 1.5–2.5; higher reaches more — confirm locally") + num("mu", "Shape coefficient μ", "", "0.8 for flat / ≤ 30° roofs (IS 875 Pt 4)") +
+      num("snowW", "Snow included in seismic weight", "%", "roof imposed load is otherwise excluded; see IS 1893 cl 7.3 for heavy-snow regions") +
+      sel("pattern", "Pattern imposed load (IS 456 cl 22.4.1)", [["auto", "Auto — alternate bays when LL > ¾ DL"], ["on", "Always"], ["off", "Off"]]) +
+      chk("llRed", "Reduce imposed load on footings for the floors carried (IS 875 Pt 2 cl 3.2.1)") + num("wall", "Wall load on floor beams", "kN/m", "230 mm brick × 3 m ≈ 13") +
       num("parapet", "Parapet load on roof beams", "kN/m") + num("bDL", "Extra DL on all beams", "kN/m", "use for 2D frames / no slabs") + num("bLL", "Extra LL on floor beams", "kN/m") + num("bLLr", "Extra LL on roof beams", "kN/m") +
       area("loadOver", "Extra member loads (optional)", "One rule per line: <i>which = DL x, LL y</i> in kN/m acting downward, added to the loads above. Same 'which' syntax as section overrides.", "beams storey 1 = DL 6, LL 2\n21-24 = DL 10") +
       chk("eq", "Seismic — IS 1893 (Part 1):2016 equivalent static") + sel("zone", "Seismic zone", [["II", "II (0.10)"], ["III", "III (0.16)"], ["IV", "IV (0.24)"], ["V", "V (0.36) — Kashmir valley"]]) +
@@ -169,6 +178,13 @@ var SU = (function () {
       sel("terrain", "Terrain category", [[1, "1 open sea/flat"], [2, "2 open terrain"], [3, "3 suburban"], [4, "4 city centre"]]) + num("cf", "Net force coefficient Cf") + num("trib", "Frame spacing (2D only)", "m") +
       num("sbc", "Safe bearing capacity (footings)", "kN/m²", "net allowable; +50/25/0 % with seismic for soil I/II/III (IS 1893 Table 1)") + num("Df", "Founding depth", "m") +
       '<div class="btns full"><button type="button" class="rstd" data-p="p3">Clear my entries (use defaults)</button></div><div class="note full">Combinations (IS 456 Table 18 / IS 875 Pt 5): 1.5(DL+LL), 1.2(DL+LL±EL), 1.5(DL±EL), 0.9DL±1.5EL. Seismic weight = DL + 25% LL (50% if LL>3 kN/m²), roof LL excluded. Lateral loads to nodes ∝ W·h² (cl 7.6.3).</div></div>';
+  }
+  function boqForm() {
+    return '<div class="form">' + chk("sorOn", "Use JKSOR 2022 rates (Jammu & Kashmir Schedule of Rates) — your own rates in the BOQ override them") +
+      num("mT", "Masonry wall thickness", "mm", "230 = one brick") + num("mOpen", "Openings in masonry walls", "%", "doors & windows deducted from masonry and plaster") +
+      num("plinthH", "Plinth height above ground", "m", "earth filling and plinth masonry") + num("parH", "Parapet height", "m") +
+      num("wastage", "Reinforcement wastage / rolling margin", "%") + num("cont", "Contingencies", "%") + num("cess", "Labour welfare cess", "%") + num("gst", "GST on works contract", "%", "JKSOR rates are exclusive of GST; 18 % since Sep 2025 — confirm for your contract") +
+      '<div class="note full">Masonry is measured under every beam line when the wall load is above zero (ground-storey walls on the plinth, on the first-floor layout); perimeter lines are external walls. Re-run the analysis, or tap "Recalculate BOQ" in the results, after changing these.</div></div>';
   }
   function anaForm() {
     return '<div class="form">' + '<div class="btns full"><button class="pri" id="bAna" type="button">Linear static</button><button id="bPD" type="button">Linear + P-Delta</button></div>' +
@@ -744,6 +760,6 @@ var SU = (function () {
     try { load(); UV.src = "dxf"; UV.roles = {}; save(); S.dx = DXF.parse(text); S.dxName = name; if (typeof PDB !== "undefined") PDB.setDxf(name, text); var a = document.getElementById("app");
       if (!$("srcbox")) return; a.querySelector("[data-k=src]").value = "dxf"; $("srcbox").innerHTML = srcInner(); bindSrc(); $("p1").classList.add("open"); toast("DXF loaded: " + S.dx.ents.length + " entities"); } catch (e) { err(e); }
   }
-  function ctx() { return { download: download, toast: toast, rerender: renderResults, S: function () { return S; }, opened: function (p) { load(); } }; }
+  function ctx() { return { download: download, toast: toast, rerender: renderResults, S: function () { return S; }, params: function () { return params(); }, opened: function (p) { load(); } }; }
   return { view: view, S: S, openText: openText, ctx: ctx, download: function (n, t) { download(n, t); }, toast: function (t) { toast(t); } };
 })();

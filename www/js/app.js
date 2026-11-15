@@ -206,9 +206,9 @@
     title.textContent = "About & scope"; back.hidden = false;
     app.innerHTML = '<div class="rep"><h4>IS StructDesign — engine ' + (window.REG ? REG.ENGINE : "") + '</h4><p>Analysis, design, detailing and documentation of buildings to Indian Standards. Works offline; projects are stored on this device.</p>' +
       '<h4>What it does</h4><ul><li>Frame & shell FE analysis: linear static, P-Delta, modal and response spectrum (IS 1893:2016), accidental torsion, pushover</li>' +
-      '<li>Design: IS 456 (limit state or working stress), IS 800, with worked calculations</li><li>Automatic design & detailing: storey-wise enlargement until every check passes</li>' +
+      '<li>Design: IS 456 (limit state or working stress), IS 800, with worked calculations</li><li>Loads & durability: snow (IS 875 Pt 4), pattern imposed load, imposed-load reduction, covers for exposure and fire (IS 456 Table 16/16A)</li><li>Automatic design & detailing: storey-wise enlargement until every check passes</li>' +
       '<li>Detailing: IS 13920 beams, columns, joints, strong column–weak beam, shear walls, slabs, isolated footings; bar bending schedule (IS 2502)</li>' +
-      '<li>Outputs: Excel with live formulas, calculation report (print/PDF), drawing set DXF, STAAD.Pro input, BOQ and reinforcement schedules</li>' +
+      '<li>Outputs: Excel with live formulas, calculation report (print/PDF), drawing set DXF, STAAD.Pro input, BOQ of the whole building priced with JKSOR 2022 (with contingencies, cess and GST) and reinforcement schedules</li>' +
       '<li>Projects: offline database with revisions, backups and an engineering verification mode with reviewer sign-off; engineering assistant</li><li>Standalone modules for beams, slabs, columns, footings, stairs, steel members, connections, trusses and loads</li></ul>' +
       '<h4>Not covered</h4><ul><li>Time-history analysis, combined / raft / pile foundations, settlement, soil–structure interaction</li><li>Deflection and crack width in the frame design (use the beam and slab modules)</li><li>Full building wind pressure-coefficient workflow</li></ul>' +
       (window.REG ? REG.html(esc) : '') +

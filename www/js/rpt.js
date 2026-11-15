@@ -79,7 +79,12 @@ var RPT = (function () {
       body += '<h3>Reinforcement by diameter (kg)</h3>' + tbl(["φ", "Beams", "Columns", "Slabs", "Footings", "Walls", "Total"], dt.tot.map(function (t) { return [t.dia + " mm", f(t.beams, 0), f(t.cols, 0), f(t.slabs, 0), f(t.foot, 0), f(t.walls || 0, 0), "<b>" + f(t.all, 0) + "</b>"]; }).concat([["<b>Total</b>", "", "", "", "", "", "<b>" + f(dt.total, 0) + "</b>"]]));
     }
     /* 10 BOQ */
-    if (S.boq) { var b = BOQ.price(S.boq, (p && p.rates) || {}); body += H("Bill of quantities") + tbl(["Item", "Description", "Unit", "Quantity", "Rate", "Amount"], b.items.map(function (it, i) { return [i + 1, esc(it.desc) + (it.grade ? " (" + it.grade + ")" : ""), it.unit, f(it.qty, it.unit === "kg" ? 0 : 2), it.rate ? f(it.rate, 2) : "", it.amt ? Math.round(it.amt).toLocaleString("en-IN") : ""]; }).concat(b.amount ? [["", "<b>Total</b>", "", "", "", "<b>₹ " + Math.round(b.amount).toLocaleString("en-IN") + "</b>"]] : [])) + '<p class="note">Rates are the project\'s own entries. Measurement as described in the app (IS 1200 style); steel from the bar bending schedule without wastage.</p>'; }
+    if (S.boq) {
+      var b = BOQ.price(S.boq, (p && p.rates) || {}), A = b.abs, I = b.inp, inr = function (v) { return Math.round(v).toLocaleString("en-IN"); };
+      body += H("Bill of quantities and estimate") + tbl(["Item", "Description", "Unit", "Quantity", "Rate (₹)", "Source", "Amount (₹)"], b.items.map(function (it, i) { return [i + 1, esc(it.desc), it.unit, f(it.qty, it.unit === "kg" ? 0 : 2), it.rate ? f(it.rate, 2) : "", esc(it.src || "—"), it.amt ? inr(it.amt) : ""]; })
+        .concat([["", "Sub-total", "", "", "", "", inr(A.sub)], ["", "Contingencies " + I.cont + " %", "", "", "", "", inr(A.cont)], ["", "Labour welfare cess " + I.cess + " %", "", "", "", "", inr(A.cess)], ["", "GST " + I.gst + " %", "", "", "", "", inr(A.gst)], ["", "<b>Total estimated cost</b>", "", "", "", "", "<b>₹ " + inr(A.total) + "</b>"]])) +
+        '<p class="note">' + (I.sorOn ? "Rates: Jammu & Kashmir Schedule of Rates 2022 (exclusive of GST) unless the project's own rate is entered. " : "Rates: the project's own entries. ") + "Measurement in IS 1200 style from the designed model; " + I.mT + " mm masonry under every beam line less " + I.open + " % openings; steel from the bar bending schedule + " + I.wst + " % wastage. Doors, windows, roofing, painting, services and external works are not included." + (b.unpriced.length ? " Unpriced items: " + b.unpriced.length + "." : "") + "</p>";
+    }
     /* 11 verification */
     var rv = (p && p.review) || {};
     body += H("Verification status and review") + '<div class="vb ' + vc[0] + '"><b>' + vc[1] + '</b><br>' + esc(vc[2]) + '</div>' +

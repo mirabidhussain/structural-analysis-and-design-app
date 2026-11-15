@@ -205,7 +205,7 @@ WS.column = function (p) {
 
 /* ---------------- analysis-screen member design (working stress) ---------------- */
 WS.dBeam = function (e, k, s, pts, p) {
-  var b = s.b, Dd = s.D, d = Dd - 50, fck = s.fck, fy = s.fy, dp = 50;
+  var cvr = MD.cover(p), b = s.b, Dd = s.D, d = Dd - cvr.dB, fck = s.fck, fy = s.fy, dp = cvr.dB;
   var Ms = 0, Mh = 0, V = 0, T = 0, cs = "", ch = "", incS = 1, incH = 1, incV = 1;
   pts.forEach(function (q) {
     var i = q.inc || 1;
@@ -283,7 +283,7 @@ WS.dSteel = function (e, k, s, pts, p) {
     txt: "fac = " + fac.toFixed(1) + ", fat = " + fat.toFixed(0) + ", fbcz = " + fbcz.toFixed(1) + " (χLT " + chiLT.toFixed(2) + "), fbcy = " + fbcy.toFixed(0) + ", fv = " + fv.toFixed(0) + " N/mm²" };
 };
 WS.dShell = function (sh, k, env, p) {
-  var t = sh.t * 1000, dx = t - 30, dy = t - 40, fck = p.fck, fy = p.fy, msg = [], ok = true, C = WS.consts(fck, fy, 1);
+  var cvs = MD.cover(p), t = sh.t * 1000, dx = t - cvs.dS, dy = dx - 10, fck = p.fck, fy = p.fy, msg = [], ok = true, C = WS.consts(fck, fy, 1);
   var amin = (sh.kind === "wall" ? 0.0025 : (fy > 250 ? 0.0012 : 0.0015)) * 1000 * t;
   function A(M, d) { M = Math.abs(M); if (M * 1e6 > C.R * 1000 * d * d) ok = false; return Math.max(M * 1e6 / (C.sst * C.j * d), amin); }
   var r = { k: k, wsm: true, kind: sh.kind, t: t, dx: dx, dy: dy, amin: amin, C: C, bx: env.bx, by: env.by, tx: env.tx, ty: env.ty, Abx: A(env.bx, dx), Aby: A(env.by, dy), Atx: A(env.tx, dx), Aty: A(env.ty, dy) };
@@ -299,6 +299,7 @@ WS.dShell = function (sh, k, env, p) {
 /* IS 456 B-2 / IS 875 Pt 5 working-stress combinations; inc = permissible stress increase */
 WS.combos = function (cases) {
   var c = [{ name: "DL+LL", f: { DL: 1, LL: 1 }, inc: 1 }];
+  if (cases.LP1) c.push({ name: "DL+LP1", f: { DL: 1, LP1: 1 }, inc: 1 }, { name: "DL+LP2", f: { DL: 1, LP2: 1 }, inc: 1 });
   MD.lateralSets(cases).forEach(function (L) {
     [1, -1].forEach(function (s) {
       var sg = s > 0 ? "+" : "-", f1 = { DL: 1, LL: 1 }, f2 = { DL: 1 };

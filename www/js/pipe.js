@@ -17,7 +17,7 @@ PIPE.steps = function (S, p, pd) {
       S.des = MD.design(S.m, S.res, p); S.det = null;
       try { S.det = DT.run(S.m, S, p); } catch (e) { S.det = { err: e.message }; }
       S.drift = MD.drift(S.m, S.res).concat(S.se && S.se.drift ? S.se.drift : []); S.po = null;
-      if (typeof BOQ !== "undefined" && S.det && !S.det.err) { try { S.boq = BOQ.run(S.m, S, p); } catch (e) { S.boq = null; } }
+      if (typeof BOQ !== "undefined" && S.det && !S.det.err) { try { S.boq = BOQ.run(S.m, S, p); var pr = null; try { pr = typeof PDB !== "undefined" ? PDB.current() : null; } catch (e1) { pr = null; } BOQ.price(S.boq, (pr && pr.rates) || {}); } catch (e) { S.boq = null; } }
     }]];
 };
 PIPE.run = function (geo, p, pd) {
@@ -32,6 +32,6 @@ PIPE.summary = function (S) {
   ["beams", "cols", "slabs", "walls", "steel"].forEach(function (k) { (d[k] || []).forEach(function (r) { n++; if (!r.ok) nf++; }); });
   var dt = S.det && !S.det.err ? S.det : null, dr = (S.drift || []).filter(function (q) { return q.ok === false; }).length;
   return { date: new Date().toISOString(), members: n, memberFails: nf, detailFails: dt ? dt.fails : null, driftFails: dr, steel_t: dt ? +(dt.total / 1000).toFixed(3) : null,
-    concrete_m3: S.boq ? +S.boq.conc.toFixed(2) : null, cost: S.boq && S.boq.amount ? Math.round(S.boq.amount) : null, method: S.p ? S.p.method : null, zone: S.p ? S.p.zone : null };
+    concrete_m3: S.boq ? +S.boq.conc.toFixed(2) : null, cost: S.boq && S.boq.abs && S.boq.abs.total ? Math.round(S.boq.abs.total) : null, method: S.p ? S.p.method : null, zone: S.p ? S.p.zone : null };
 };
 if (typeof module !== "undefined") module.exports = PIPE;

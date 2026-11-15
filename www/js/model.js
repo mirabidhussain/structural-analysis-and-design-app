@@ -156,6 +156,14 @@ MD.make = function (geo, p) {
   return m;
 };
 
+/* ---------- covers (IS 456 Table 16 / 16A, cl 26.4.2) and effective-depth offsets ---------- */
+MD.EXPO = { mild: [20, 20], moderate: [30, 25], severe: [45, 30], "very severe": [50, 35], extreme: [75, 40] };   /* nominal cover, minimum grade (Table 5) */
+MD.FIRE = { "0.5": [20, 20, 200, 75, 150], "1": [20, 20, 200, 95, 200], "1.5": [20, 20, 200, 110, 250], "2": [30, 25, 200, 125, 300], "3": [40, 35, 240, 150, 400], "4": [50, 45, 280, 170, 450] };   /* continuous beam / slab cover, beam width, slab t, column size (Table 16A, Fig. 1) */
+MD.cover = function (p) {
+  var e = MD.EXPO[p.exposure] || MD.EXPO.moderate, fr = MD.FIRE[String(p.fire || 1)] || MD.FIRE["1"], nom = e[0];
+  var cb = Math.max(nom, fr[0]), cs = Math.max(nom, fr[1]), cc = Math.max(40, nom, 40), cf = Math.max(50, nom);
+  return { nom: nom, minGrade: e[1], cb: cb, cs: cs, cc: cc, cf: cf, dB: cb + 20, dS: cs + 10, dC: Math.max(50, cc + 10), fire: fr, expo: p.exposure || "moderate", hrs: String(p.fire || 1) };
+};
 /* ---------- load cases ---------- */
 MD.levels = function (m) {
   var zs = []; m.nodes.forEach(function (n) { var z = Math.round(n.z * 100) / 100; if (zs.indexOf(z) < 0) zs.push(z); });
@@ -171,12 +179,26 @@ MD.cases = function (m, p) {
     var roof = isRoof(A.z), wd = (roof ? p.parapet : p.wall) + p.bDL, wl = p.bLL * (roof ? 0 : 1) + (roof ? p.bLLr : 0);
     if (wd) DL.frameUDL.push({ e: k, w: [0, 0, -wd] }); if (wl) LL.frameUDL.push({ e: k, w: [0, 0, -wl] });
   });
+  /* snow (IS 875 Part 4): s = μ·s0 on the roof, taken with roof imposed load as the larger of the two (not additive) */
+  var snow = p.snow ? (p.mu > 0 ? p.mu : 0.8) * (p.s0 > 0 ? p.s0 : 1.5) : 0, llR = Math.max(p.llRoof, snow);
+  if (snow) notes.push("Snow s = μ·s0 = " + (snow).toFixed(2) + " kN/m² " + (snow > p.llRoof ? "governs over" : "is less than") + " roof imposed load " + p.llRoof + " kN/m² (IS 875 Pt 4; the larger is applied)");
+  /* pattern imposed load, IS 456 cl 22.4.1: alternate bays (checkerboard) when LL > ¾ DL, or always if chosen */
+  var dlF = 25 * p.tSlab / 1000 + p.ff, pat = p.pattern === "on" || (p.pattern !== "off" && p.ll > 0.75 * dlF), xs = [], ys = [];
+  if (pat) {
+    m.frames.forEach(function (e) { if (e.type === "column") { var A = m.nodes[e.n1]; [[xs, A.x], [ys, A.y]].forEach(function (q) { var v = Math.round(q[1] * 1000) / 1000; if (!q[0].some(function (w) { return Math.abs(w - v) < 0.005; })) q[0].push(v); }); } });
+    xs.sort(function (a, b) { return a - b; }); ys.sort(function (a, b) { return a - b; });
+    if (xs.length < 3 && ys.length < 3) pat = false;
+  }
+  function bay(a, v) { var i = 0; while (i + 1 < a.length && v > a[i + 1] - 1e-6) i++; return i; }
+  var LP1 = { frameUDL: [], shellP: [] }, LP2 = { frameUDL: [], shellP: [] };
   m.shells.forEach(function (s, k) {
     if (s.kind !== "slab") return;
-    var roof = isRoof(m.nodes[s.n[0]].z);
+    var roof = isRoof(m.nodes[s.n[0]].z), q = roof ? llR : p.ll;
     DL.shellP.push({ e: k, q: [0, 0, -(roof ? p.ffRoof : p.ff)] });
-    LL.shellP.push({ e: k, q: [0, 0, -(roof ? p.llRoof : p.ll)] });
+    LL.shellP.push({ e: k, q: [0, 0, -q] });
+    if (pat) { var cx = 0, cy = 0; s.n.forEach(function (i) { cx += m.nodes[i].x / 4; cy += m.nodes[i].y / 4; }); var par = (bay(xs, cx) + bay(ys, cy)) % 2; (par ? LP2 : LP1).shellP.push({ e: k, q: [0, 0, -q] }); }
   });
+  if (pat) notes.push("Pattern imposed load (IS 456 cl 22.4.1): alternate-bay cases LP1/LP2 added" + (p.pattern === "on" ? "" : " because LL " + p.ll + " > ¾ DL " + (0.75 * dlF).toFixed(2) + " kN/m²"));
   MD.rules(p.loadOver).forEach(function (r) {
     if (r.err) { notes.push("Load rule line " + r.line + " ignored: " + r.txt); return; }
     var se = MD.select(m, r.sel), dl = 0, ll = 0, mm, re = /(DL|LL)\s*[:=]?\s*(-?[\d.]+)/gi, any = false;
@@ -186,11 +208,22 @@ MD.cases = function (m, p) {
     se.ids.forEach(function (k) { if (dl) DL.frameUDL.push({ e: k, w: [0, 0, -dl] }); if (ll) LL.frameUDL.push({ e: k, w: [0, 0, -ll] }); });
   });
   var cases = { DL: DL, LL: LL };
+  if (pat) {
+    /* beam imposed loads: with slabs they stay in both patterns (the slabs carry the checkerboard); without slabs (2D frames) alternate spans */
+    var hasSlab = m.shells.some(function (s) { return s.kind === "slab"; });
+    LL.frameUDL.forEach(function (l) {
+      if (hasSlab) { LP1.frameUDL.push(l); LP2.frameUDL.push(l); return; }
+      var e = m.frames[l.e], A = m.nodes[e.n1], B = m.nodes[e.n2], par = (bay(xs, (A.x + B.x) / 2) + bay(ys, (A.y + B.y) / 2)) % 2;
+      (par ? LP2 : LP1).frameUDL.push(l);
+    });
+    cases.LP1 = LP1; cases.LP2 = LP2;
+  }
   /* seismic weights (IS 1893 cl 7.3): DL + 25%/50% of imposed, roof imposed excluded */
   var info = FE.prepare(m); m._shellCache = [];
   var fd = FE.loadVector(m, DL, null).Ffull, fl = FE.loadVector(m, LL, null).Ffull, W = [], Wt = 0;
   var llf = p.ll > 3 ? 0.5 : 0.25;
-  m.nodes.forEach(function (n, i) { var w = -fd[6 * i + 2] - (isRoof(n.z) ? 0 : llf * fl[6 * i + 2]); W.push(n.z - zmin > 0.01 ? w : 0); Wt += W[i]; });
+  var sw = snow && p.snowW > 0 ? p.snowW / 100 * snow / Math.max(llR, 1e-9) : 0;   /* share of snow in the seismic weight (roof imposed otherwise excluded, IS 1893 cl 7.3) */
+  m.nodes.forEach(function (n, i) { var w = -fd[6 * i + 2] - (isRoof(n.z) ? sw * fl[6 * i + 2] : llf * fl[6 * i + 2]); W.push(n.z - zmin > 0.01 ? w : 0); Wt += W[i]; });
   var H = zmax - zmin, dirs = m.twoD ? [0] : [0, 1], eq = {};
   if (p.eq) dirs.forEach(function (d) {
     var ext = 0, a = Infinity, b = -Infinity; m.nodes.forEach(function (n) { var v = d ? n.y : n.x; a = Math.min(a, v); b = Math.max(b, v); }); ext = Math.max(b - a, 1);
@@ -240,12 +273,13 @@ MD.cases = function (m, p) {
     });
     cases[nm] = { nodal: nod }; wind[nm] = { B: B, F: Ftot };
   });
-  return { cases: cases, eq: eq, wind: wind, W: W, Wt: Wt, notes: notes, tor: tor };
+  return { cases: cases, eq: eq, wind: wind, W: W, Wt: Wt, notes: notes, tor: tor, snow: snow, pattern: pat };
 };
 /* IS 456 Table 18 / IS 875 Part 5 combinations */
 MD.combos = function (cases, method) {
   if (method === "wsm") return WS.combos(cases);
   var c = [{ name: "1.5(DL+LL)", f: { DL: 1.5, LL: 1.5 } }];
+  if (cases.LP1) c.push({ name: "1.5(DL+LP1)", f: { DL: 1.5, LP1: 1.5 } }, { name: "1.5(DL+LP2)", f: { DL: 1.5, LP2: 1.5 } });
   MD.lateralSets(cases).forEach(function (L) {
     [1, -1].forEach(function (s) {
       var sg = s > 0 ? "+" : "-";
@@ -300,12 +334,12 @@ MD.design = function (m, res, p) {
   return out;
 };
 MD.rccBeam = function (e, k, s, pts, p) {
-  var b = s.b, Dd = s.D, d = Dd - 50, fck = s.fck, fy = s.fy;
+  var cvr = MD.cover(p), b = s.b, Dd = s.D, d = Dd - cvr.dB, fck = s.fck, fy = s.fy;
   var Ms = 0, Mh = 0, V = 0, T = 0, My = 0, cs = "", ch = "";
   pts.forEach(function (q) { if (q.Mz > Ms) { Ms = q.Mz; cs = q.cb; } if (-q.Mz > Mh) { Mh = -q.Mz; ch = q.cb; } V = Math.max(V, Math.abs(q.Vy)); T = Math.max(T, Math.abs(q.T)); My = Math.max(My, Math.abs(q.My)); });
   /* IS 456 cl 41.4.2: equivalent moment & shear for torsion */
   var Mt = T * (1 + Dd / b) / 1.7, Ve = V + 1.6 * T / (b / 1000);
-  var Mul = RCC.mulim(b, d, fck, fy), amin = 0.85 * b * d / fy, amax = 0.04 * b * Dd, dp = 50, ok = true, msg = [];
+  var Mul = RCC.mulim(b, d, fck, fy), amin = 0.85 * b * d / fy, amax = 0.04 * b * Dd, dp = cvr.dB, ok = true, msg = [];
   /* singly / doubly reinforced (IS 456 Annex G-1.2) */
   function flex(M) {
     if (M <= Mul) { var a = RCC.astFlex(M, b, d, fck, fy); return { t: Math.max(a, amin), c: 0 }; }
@@ -346,7 +380,7 @@ MD.rccCol = function (e, k, s, pts, p, res) {
       var Maz = slz > 12 ? Pu * Dd / 2000 * slz * slz / 1000 : 0, May = sly > 12 ? Pu * b / 2000 * sly * sly / 1000 : 0;
       var Mz = Math.max(Math.abs(q.Mz), Pu * exz) + Maz, My = Math.max(Math.abs(q.My), Pu * exy) + May;
       if (Pu > 0.98 * Puz) { if (9 > worst) { worst = 9; wq = { cb: q.cb, Pu: Pu, Mz: Mz, My: My, an: 2, M1: 1e-6, M2: 1e-6, Mz0: Math.abs(q.Mz), My0: Math.abs(q.My), Maz: Maz, May: May, Puz: Puz }; } if (rs) rs.push([q, 9]); return quick && worst > 1; }
-      var M1 = RCC.colMcap(b, Dd, As, Pu, fck, fy, 50, "four"), M2 = m2d() ? RCC.colMcap(Dd, b, As, Pu, fck, fy, 50, "four") : 1;
+      var dC = MD.cover(p).dC, M1 = RCC.colMcap(b, Dd, As, Pu, fck, fy, dC, "four"), M2 = m2d() ? RCC.colMcap(Dd, b, As, Pu, fck, fy, dC, "four") : 1;
       var an = Math.max(1, Math.min(2, 1 + (Pu / Puz - 0.2) / 0.6)), r = Math.pow(Mz / Math.max(M1, 1e-6), an) + (m2d(My) ? Math.pow(My / Math.max(M2, 1e-6), an) : 0);
       if (rs) rs.push([q, r]);
       if (r > worst) { worst = r; wq = { cb: q.cb, Pu: Pu, Mz: Mz, My: My, an: an, M1: M1, M2: M2, Mz0: Math.abs(q.Mz), My0: Math.abs(q.My), Maz: Maz, May: May, Puz: Puz }; }
@@ -442,7 +476,7 @@ MD.steelMem = function (e, k, s, pts, p) {
     txt: "Pdy = " + Pdy.toFixed(0) + ", Pdz = " + Pdz.toFixed(0) + " kN, Md,z = " + Mdz.toFixed(1) + " kNm (χLT " + chi.toFixed(2) + "), Md,y = " + Mdy.toFixed(1) + " kNm, Vd = " + Vd.toFixed(0) + " kN; governs: " + (best ? best.gov : "-") };
 };
 MD.shellDesign = function (sh, k, env, p) {
-  var t = sh.t * 1000, dx = t - 30, dy = t - 40, fck = p.fck, fy = p.fy, msg = [], ok = true;
+  var cvs = MD.cover(p), t = sh.t * 1000, dx = t - cvs.dS, dy = dx - 10, fck = p.fck, fy = p.fy, msg = [], ok = true;
   var amin = (sh.kind === "wall" ? 0.0025 : (fy > 250 ? 0.0012 : 0.0015)) * 1000 * t;
   function A(M, d) { var a = RCC.astFlex(Math.abs(M), 1000, d, fck, fy); if (isNaN(a)) { ok = false; return NaN; } return Math.max(a, amin); }
   var r = { k: k, kind: sh.kind, t: t, dx: dx, dy: dy, amin: amin, bx: env.bx, by: env.by, tx: env.tx, ty: env.ty, Abx: A(env.bx, dx), Aby: A(env.by, dy), Atx: A(env.tx, dx), Aty: A(env.ty, dy) };
