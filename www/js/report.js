@@ -420,6 +420,8 @@ var RX = (function () {
     });
 
     if (S.det && !S.det.err && (S.det.beams.length || S.det.cols.length)) detailSheets(wb, S, G);
+    if (S.boq && typeof BOQ !== "undefined") boqSheets(wb, S, G);
+    if (typeof PRO !== "undefined" && S.des) verifySheet(wb, S, G);
     if (typeof REG !== "undefined") {
       var rg0 = wb.sheet("Standards Register", { cols: [24, 46, 22, 70], color: TAB.guide });
       intro(rg0, "Standards register and verification status — engine " + REG.ENGINE, "Which edition of each code is used and how, and the verification status of every check: Verified (agrees with an independent benchmark in the test suite), Calculated (implemented from the clauses, not independently benchmarked), Simplified (stated approximation), Not implemented (check separately). A PASS elsewhere in this workbook means the check that was made passed; it is not a certificate of structural safety — independent review by a qualified engineer is required before construction.", 4);
@@ -589,6 +591,35 @@ var RX = (function () {
         dt.gF.map(function (G0) { var f0 = G0.rep, g = f0.gov; return { grp: G0.id, mem: G0.list.map(function (c) { return c.name; }).join(", "), a: f0.a, bc: f0.bc, Lx: f0.Lx, Ly: f0.Ly, D: f0.D, set: g.set.name, P: g.set.r[2], Mx: g.set.r[3], My: g.set.r[4], seis: g.set.lim > f0.q + 1e-9, lim: g.set.lim, qu: f0.qu, bx: f0.bx.dia + "φ@" + f0.bx.s, by: f0.by.dia + "φ@" + f0.by.s, tp: f0.tp, kp: f0.kp }; }), G, { fc: 2 });
       fs.row([{ v: "Blue cells are inputs: change a footing size or the SBC and the pressure check updates. Moments are the support reactions of the analysis (fixed bases). Overlapping footings are flagged in the app — use a combined footing or raft there.", s: "note" }]);
     }
+  }
+
+  /* ===== Bill of quantities (rates are inputs, amounts formulas), reinforcement schedules ===== */
+  function boqSheets(wb, S, G) {
+    var b = S.boq, pr = typeof PDB !== "undefined" ? PDB.current() : null, rates = (pr && pr.rates) || {};
+    var sh = wb.sheet("BOQ", { cols: [6, 62, 7, 13, 13, 16], color: TAB.design });
+    intro(sh, "Bill of quantities — measured from the designed model", "Quantities follow IS 1200 style measurement: columns floor to floor less the slab (+ necks from the footing to the plinth), beams below the slab between column faces, slabs over the panels, walls between end columns, footings L×B×D, PCC 100 mm with 100 mm offset, excavation with 300 mm working space, steel from the bar bending schedule (no wastage). Enter your schedule-of-rates prices in the blue Rate column — amounts and the total are formulas.", 6);
+    var t = table(sh, [{ k: "no", h: "Item", s: "n0" }, { k: "desc", h: "Description" }, { k: "unit", h: "Unit" }, { k: "qty", h: "Quantity", s: "n2" }, { k: "rate", h: "Rate", u: "₹", s: "in" }, { k: "amt", h: "Amount", u: "₹", f: "{qty}*{rate}", s: "f0" }],
+      b.items.map(function (it, i) { return { no: i + 1, desc: it.desc + (it.grade ? " (" + it.grade + ")" : ""), unit: it.unit, qty: it.qty, rate: rates[it.id] || 0 }; }), G, { fc: 2 });
+    var L = t.L, tr = sh.next();
+    sh.row(["", "Total", "", "", "", { f: "=SUM(" + L.amt + t.first + ":" + L.amt + t.last + ")", s: "f0" }], "b");
+    sh.row(["", "Concrete total (m³)", "", { f: "=SUMIFS(" + L.qty + t.first + ":" + L.qty + t.last + "," + L.desc + t.first + ":" + L.desc + t.last + ',"RCC*")', v: b.conc, s: "f2" }]);
+    sh.row(["", "Steel per m³ of concrete (kg/m³)", "", { f: "=" + b.steelKg.toFixed(3) + "/D" + (tr + 1), v: b.ratio, s: "f1" }]);
+    var sc = b.schedules, s2 = wb.sheet("Schedules", { cols: [8, 30, 14, 14, 14, 14, 22, 18, 14], color: TAB.design });
+    intro(s2, "Reinforcement schedules", "Column, beam, wall, slab and footing schedules of the member groups (identical members grouped; the marks match the drawings, the BBS and the app).", 9);
+    [["cols", "Column schedule"], ["beams", "Beam schedule"], ["walls", "Wall schedule"], ["slabs", "Slab schedule"], ["foot", "Footing schedule"]].forEach(function (g) {
+      if (!sc[g[0]].length) return; s2.row([]); s2.row([g[1]], "tb"); s2.row(BOQ.HEAD[g[0]], "h"); sc[g[0]].forEach(function (r) { s2.row(r); });
+    });
+  }
+  /* ===== Engineering verification: design summary and the checking engineer's list ===== */
+  function verifySheet(wb, S, G) {
+    var pr = typeof PDB !== "undefined" ? PDB.current() : null, v = PRO.verifyState(pr, S), c = PRO.vClass(v), rv = (pr && pr.review) || {};
+    var sh = wb.sheet("Verification", { cols: [8, 34, 34, 11, 22, 9, 16, 40], color: TAB.guide });
+    intro(sh, "Engineering verification — " + c[1], c[2] + ". Utilisation is the governing demand/capacity ratio; a group also fails when any of its detailing checks fails. The verification state is the weakest of the checks behind each result (Verified / Calculated / Simplified / Not implemented, see Standards Register). A result is a verified engineering result only when it passes and the checking engineer has accepted every open item below.", 8);
+    table(sh, [{ k: "id", h: "Group" }, { k: "mem", h: "Members" }, { k: "res", h: "Result" }, { k: "u", h: "Utilisation", s: "n3" }, { k: "why", h: "Governing" }, { k: "st", h: "Status" }, { k: "v", h: "Verification" }, { k: "vt", h: "Weakest check" }],
+      PRO.summary(S).map(function (r) { return { id: r.id, mem: r.mem, res: r.res, u: r.u, why: r.why, st: r.ok ? "PASS" : "FAIL", v: r.v ? r.v.st : "", vt: r.v ? r.v.t : "" }; }), G, { fc: 1 });
+    sh.row([]); sh.row(["Checking engineer's list"], "tb");
+    sh.row(["Area", "Item", "Why it needs review", "State", "Review", "By", "Date", "Note"], "h");
+    v.items.forEach(function (i) { var r = rv[i.key]; sh.row([i.area, i.t, i.why, { v: i.st, s: i.st === "FAIL" ? "no" : "" }, r ? { ok: "Accepted", query: "Query", na: "N/A" }[r.state] : { v: "open", s: "no" }, r ? r.by : "", r ? r.date.slice(0, 10) : "", r ? r.note : ""]); });
   }
   function seismicSheet(wb, S, G) {
     var se = S.se, m = S.m, p = S.p, sh = wb.sheet("Seismic", { cols: [11, 11, 11, 12, 12, 12, 12, 12, 13, 13, 12, 12], color: TAB.load });
@@ -798,7 +829,7 @@ var RX = (function () {
     }
     return 1;
   }
-  var SHEETDESC = { "Standards Register": "Code editions used (IS 1893:2025 withdrawn — 2016 applies) and Verified / Calculated / Simplified / Not implemented status of every check", BBS: "Bar bending schedule of every member group (incl. walls), cutting lengths and weights (formulas), totals by diameter", "Detailing Checks": "IS 13920 / IS 456 detailing rules for beams, columns, joints (strong column–weak beam) and footings", Footings: "Isolated footing sizes, soil pressure (formulas), reinforcement and shear checks", Seismic: "Modal analysis, response spectrum, centres of mass/rigidity, accidental torsion, irregularity checks (formulas)", Summary: "Key results and pass/fail counts for each member group", Notation: "Meaning and units of every symbol", Inputs: "Design parameters you can change (named cells p_fck, p_fy, p_Zz …)", Nodes: "Node coordinates and restraints", Members: "Frame members, lengths and section properties (formulas)", Shells: "Shell (slab / wall) elements",
+  var SHEETDESC = { BOQ: "Bill of quantities with your rates (amounts as formulas)", Schedules: "Column, beam, wall, slab and footing reinforcement schedules", Verification: "Design summary with utilisation, verification state and the checking engineer's list", "Standards Register": "Code editions used (IS 1893:2025 withdrawn — 2016 applies) and Verified / Calculated / Simplified / Not implemented status of every check", BBS: "Bar bending schedule of every member group (incl. walls), cutting lengths and weights (formulas), totals by diameter", "Detailing Checks": "IS 13920 / IS 456 detailing rules for beams, columns, joints (strong column–weak beam) and footings", Footings: "Isolated footing sizes, soil pressure (formulas), reinforcement and shear checks", Seismic: "Modal analysis, response spectrum, centres of mass/rigidity, accidental torsion, irregularity checks (formulas)", Summary: "Key results and pass/fail counts for each member group", Notation: "Meaning and units of every symbol", Inputs: "Design parameters you can change (named cells p_fck, p_fy, p_Zz …)", Nodes: "Node coordinates and restraints", Members: "Frame members, lengths and section properties (formulas)", Shells: "Shell (slab / wall) elements",
     Loads: "Load-case totals, IS 1893 base shear & vertical distribution, IS 875-3 wind (formulas)", Combinations: "Load factors (IS 456 Table 18)", Disp_Cases: "Nodal displacements per load case", Disp_Combos: "Nodal displacements per combination",
     Forces_Cases: "Member end forces per load case", Forces_Combos: "Member end forces per combination", Reactions: "Support reactions with equilibrium check", Drift: "Storey drift check (formulas)", Pushover: "Capacity curve (chart), hinge sequence, ductility", "Design Basis": "Equations and IS code limits used, with clause numbers", "Worked Calcs": "Step-by-step calculation of every member: equation, substituted values, limit, clause, status", "Method & Formulas": "Element formulations, solver, design equations and clauses" };
   var METHOD = [

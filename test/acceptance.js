@@ -316,5 +316,66 @@ console.log('\n== G. Shear walls (IS 13920 cl 10) and beam–column joints (cl 9
   near('Joint capacity k·√fck·bj·hc, k = 1.5 only if beams ≥ ¾ column width frame into all faces (here k = ' + kj + ')', j.cap, kj * 5 * Math.min(450, bl.b + 450) * 450 / 1000, 1e-9);
 })();
 
+console.log('\n== H. Professional platform: BOQ, automatic design, projects, verification, report, CAD, assistant');
+(function () {
+  const { BOQ, AUTO, PIPE, PDB, CAD, RPT, PRO, REG, DXF } = c;
+  const p = { fck: 25, fy: 500, fys: 250, crack: true, pcCol: 2, pcBeam: 1, colSec: '400x400', beamSec: '300x450', braceSec: 'ISA 75x75x6', tSlab: 150, tWall: 200, ff: 1.5, ffRoof: 2.5, ll: 3, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0, eq: true, zone: 'V', I: 1.2, R: 5, soil: 'II', sys: 'rc', wind: false, vb: 39, terrain: 2, cf: 1.3, trib: 4, kcol: 1.2, accTor: true, rsa: true, nModes: 12, rsComb: 'cqc', method: 'lsm', sbc: 200, Df: 1.5, secOver: '', entered: [] };
+  const geo = MD.generate({ bx: '4,4,4', by: '5,5', hs: '3.5,3.2,3.2', slabs: true, mesh: 1 });
+  const S = PIPE.run(geo, p), b = S.boq, q = id => (b.items.find(i => i.id === id) || { qty: 0 }).qty;
+  near('BOQ: slab concrete = 12 × 10 m × 0.15 m × 3 floors', q('rcs'), 12 * 10 * 0.15 * 3, 1e-9);
+  const necks = S.det.foot.reduce((a, f) => a + 0.4 * 0.4 * (1.5 - f.D / 1000), 0);
+  near('BOQ: column concrete = 12 × 0.4 × 0.4 × (9.9 − 3 × 0.15) + necks to the plinth', q('rcc'), 12 * 0.16 * (9.9 - 0.45) + necks, 1e-9);
+  const beamHand = S.det.beams.reduce((a, bl) => a + 0.3 * 0.3 * bl.spans.reduce((x, sp) => x + sp.Lc / 1000, 0), 0);
+  near('BOQ: beam concrete = b × (D − t) × clear spans', q('rcb'), beamHand, 1e-9);
+  near('BOQ: footing concrete = Σ L × B × D', q('rcf'), S.det.foot.reduce((a, f) => a + f.Lx * f.Ly * f.D / 1e9, 0), 1e-9);
+  near('BOQ: steel = bar bending schedule total', q('stl'), S.det.total, 1e-9);
+  BOQ.price(b, { rcs: 6500, stl: 75 });
+  near('BOQ amount = Σ quantity × rate', b.amount, q('rcs') * 6500 + q('stl') * 75, 1e-9);
+
+  const r = AUTO.run(geo, p);
+  const scwbF = r.S.det.scwb.filter(x => !x.ok).length, jF = r.S.det.joints.filter(x => !x.ok || !x.anch).length;
+  ok('Automatic design converges: no design, strong column–weak beam, joint or drift failures left', r.ok && scwbF === 0 && jF === 0 && r.S.des.cols.every(x => x.ok) && r.S.des.beams.every(x => x.ok) && r.S.drift.every(x => x.ok !== false), r.log.length + ' iterations → ' + r.rules.split('\n')[0] + ' …');
+  ok('Automatic design writes editable section rules and only enlarges members', /^columns storey 1 = \d+x\d+/.test(r.rules) && MD.rules(r.rules).every(x => !x.err) && r.log.length >= 2 && r.S.m.frames.filter(e => e.type === 'column').every(e => e.sec.b >= 400));
+
+  /* projects (memory store in the tests) */
+  PDB._reset(); PDB.init();
+  const p1 = PDB.current(); PDB.update(p1.id, { name: 'SKIMS block', jobNo: 'J-12', engineer: 'MAH' });
+  PDB.setInputs({ zone: 'V', secOver: r.rules }); PDB.setSummary(PIPE.summary(r.S)); PDB.issue('for checking');
+  const exp = PDB.exportOne(p1.id), cp = PDB.duplicate(p1.id), imp = PDB.importText(exp)[0];
+  ok('Projects: create, edit, issue revision, duplicate, export and import round trip', PDB.list().length === 3 && imp.name === 'SKIMS block' && imp.id !== p1.id && imp.inputs.secOver === r.rules && imp.revs[0].rev === 'R0' && imp.revs[0].engine === REG.ENGINE && cp.revs.length === 0);
+  const bak = PDB.exportAll(); PDB._reset(); PDB.init(); const n0 = PDB.list().length; PDB.importText(bak);
+  ok('Projects: full backup restores every project', PDB.list().length === n0 + 3);
+  PDB.remove(cp.id);
+  ok('Projects: delete', !PDB.get(cp.id));
+
+  /* verification mode on the converged design */
+  PDB.open(PDB.list().find(x => x.name === 'SKIMS block').id);
+  const vi = PRO.vItems(r.S);
+  ok('Verification: deflection/crack width (not implemented) and Calculated checks are listed for review; no failures', vi.some(i => i.key === 'chk:servic' && i.st === 'Not implemented') && vi.some(i => i.key === 'chk:rccol') && !vi.some(i => i.st === 'FAIL'), vi.length + ' items');
+  ok('Verification: unreviewed → "Calculated result"', PRO.vClass(PRO.verifyState(PDB.current(), r.S))[1] === 'Calculated result');
+  vi.forEach(i => PDB.setReview(i.key, { state: 'ok', by: 'Checker', date: new Date().toISOString(), note: '' }));
+  ok('Verification: every item accepted → "Verified engineering result"', PRO.vClass(PRO.verifyState(PDB.current(), r.S))[1] === 'Verified engineering result');
+  const vFail = PRO.verifyState(PDB.current(), S);
+  ok('Verification: the original design with failures stays "Not acceptable"', PRO.vClass(vFail)[1] === 'Not acceptable' && vFail.fails > 0, vFail.fails + ' failures');
+  const sm = PRO.summary(r.S);
+  ok('Design summary: every group has utilisation ≤ 1 and a verification state', sm.length > 10 && sm.every(x => x.ok && x.u <= 1 + 1e-9 && x.v), sm.length + ' groups, max ' + Math.max(...sm.map(x => x.u)).toFixed(2));
+  ok('Verification state is the weakest check (beams: serviceability not implemented)', sm.find(x => x.kind === 'beam').v.st === 'Not implemented' && sm.find(x => x.kind === 'column').v.st === 'Calculated');
+
+  /* report */
+  const html = RPT.html(r.S, PDB.current(), {});
+  ok('Calculation report: all sections, design summary and signed review', ['Codes and standards', 'Design basis', 'Assumptions register', 'Structural model', 'Loads', 'Analysis results', 'Design summary', 'Calculation trace', 'Detailing and ductility checks', 'Bill of quantities', 'Verification status and review', 'Limitations'].every(t => html.indexOf(t) > 0) && /Verified engineering result/.test(html) && /Checked by/.test(html), (html.length / 1024).toFixed(0) + ' kB');
+
+  /* CAD */
+  const dxf = CAD.drawingSet(r.S, PDB.current()), back = DXF.parse(dxf), titles = (dxf.match(/\nGA plan \+/g) || []).length;
+  ok('Drawing set DXF: GA plan per floor, foundation layout, schedules, details with title blocks', titles >= 3 && /Foundation layout/.test(dxf) && /Column schedule/.test(dxf) && /Drawing no\./.test(dxf) && back.ents.length > 2000, back.ents.length + ' entities, ' + Object.keys(back.layers).length + ' layers');
+  const std = CAD.staad(r.S, PDB.current()), nJ = (std.split('MEMBER INCIDENCES')[0].match(/^\d+ [-\d.e]+ [-\d.e]+ [-\d.e]+;$/gm) || []).length;
+  ok('STAAD.Pro input: every joint, member, shell, support, load case and static combination', nJ === r.S.m.nodes.length && (std.match(/^LOAD \d+ LOADTYPE/gm) || []).length === Object.keys(r.S.L.cases).length && (std.match(/^LOAD COMBINATION/gm) || []).length === r.S.cb.filter(x => !x.rs).length && (std.match(/ FIXED$/gm) || []).length === Object.keys(r.S.m.sup).length && /SET Z UP/.test(std), nJ + ' joints');
+
+  /* assistant */
+  const ad = PRO.advise(S), w = S.det.scwb.filter(x => !x.ok).sort((a, b2) => a.r - b2.r)[0], need = 1.4 * w.Mb - w.Mc;
+  ok('Assistant: strong column–weak beam finding with the missing column capacity', ad.some(a => /strong column/.test(a.t) && a.d.indexOf(need.toFixed(0) + ' kNm') > 0), need.toFixed(0) + ' kNm');
+  ok('Assistant: member lookup and code notes work offline', PRO.memberInfo(S, 'C-B2').type === 'column' && PRO.kbFind('how do I fix joint shear')[0][1].indexOf('joint') > 0 && /C-B2/.test(PRO.offlineAnswer(S, 'why does C-B2 fail?')));
+})();
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;

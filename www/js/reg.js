@@ -2,7 +2,7 @@
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "2.9";
+REG.ENGINE = "3.0";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],
@@ -48,8 +48,20 @@ REG.CHECKS = [
   ["Foundations", "Footing soil pressure distribution", "Simplified", "Rigid footing, full contact (no partial-uplift redistribution), +10 % self weight"],
   ["Foundations", "Combined footings, rafts, piles, settlement, soil–structure interaction", "Not implemented", "Overlapping isolated footings are flagged"],
   ["Loads", "Wind on buildings (IS 875-3): pressure coefficients, internal pressure, torsion cases", "Simplified", "Frontal-area pressure with a single force coefficient"],
-  ["Loads", "Working stress projects: walls designed by limit state with 1.5 × service forces", "Simplified", "Stated in the wall results"]
+  ["Loads", "Working stress projects: walls designed by limit state with 1.5 × service forces", "Simplified", "Stated in the wall results"],
+  ["Quantities", "Bill of quantities (IS 1200 style measurement)", "Calculated", "Slab and column volumes checked by hand in acceptance.js H; rates are user inputs"],
+  ["Automation", "Automatic design (storey-wise enlargement until all checks pass)", "Calculated", "Converges on the test building in acceptance.js H; sizes are written as editable section rules"]
 ];
+/* stable ids of REG.CHECKS rows, used by the verification mode */
+REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "timehist",
+  "rcbeam", "rccol", "rcslab", "rcwallel", "rcwall", "servic", "stfcd", "stltb", "stklen", "dtbeam", "dtcol", "scwb", "joint", "dtslab", "bbs",
+  "foot", "footpress", "foundmore", "wind", "wsmwall", "boq", "auto"];
+REG.byId = function (id) { var i = REG.IDS.indexOf(id); return i >= 0 ? { id: id, area: REG.CHECKS[i][0], t: REG.CHECKS[i][1], st: REG.CHECKS[i][2], ev: REG.CHECKS[i][3] } : null; };
+REG.RANK = { "Not implemented": 0, Simplified: 1, Calculated: 2, Verified: 3 };
+/* checks behind each kind of result; the weakest decides the result's verification state */
+REG.KIND = { beam: ["frame", "rcbeam", "dtbeam", "servic"], column: ["frame", "rccol", "dtcol", "scwb", "joint"], slab: ["shell", "rcslab", "dtslab", "servic"],
+  wall: ["shell", "rcwall", "rcwallel"], steel: ["frame", "stfcd", "stltb", "stklen"], footing: ["foot", "footpress", "foundmore"], seismic: ["spectrum", "statbase", "modal", "rsa", "torsion", "irreg"] };
+REG.state = function (ids) { var w = null; ids.forEach(function (id) { var r = REG.byId(id); if (r && (!w || REG.RANK[r.st] < REG.RANK[w.st])) w = r; }); return w; };
 REG.html = function (esc) {
   var col = { Verified: "okt", Calculated: "", Simplified: "warnt", "Not implemented": "not" };
   var h = '<h4>Standards register — engine ' + REG.ENGINE + '</h4><div class="tw"><table class="basis"><tr><th>Standard</th><th>Status</th><th>How it is used</th></tr>';

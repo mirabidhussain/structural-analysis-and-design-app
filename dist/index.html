@@ -41,7 +41,7 @@ button.pri{background:var(--acc);border-color:var(--acc);color:#fff;flex:1}
 .chk.ok span{color:var(--ok)}.chk.no{background:var(--nobg)}.chk.no span{color:var(--no);font-weight:600}
 .note{font-size:12.5px;color:var(--mut);margin:6px 0;padding-left:8px;border-left:2px solid var(--acc)}
 .err{background:var(--nobg);color:var(--no);padding:10px;border-radius:8px;margin:8px 0;font-weight:600}
-.tw{overflow-x:auto;margin:6px 0}.warnt{color:#b26a00;font-weight:600}.dwg{display:block;background:#fff}.dwgt{font-size:12px;font-weight:600;margin-top:8px;color:var(--ink,#1d3557)}table{border-collapse:collapse;width:100%;font-size:12.5px}th,td{border:1px solid var(--line);padding:5px 6px;text-align:right;white-space:nowrap}th{background:var(--eq);font-weight:600}td:first-child,th:first-child{text-align:left}
+.tw{overflow-x:auto;margin:6px 0}.warnt{color:#b26a00;font-weight:600}.projbar{display:flex;align-items:center;gap:8px;margin:0 2px 8px;font-size:14px}.projbar a{font-weight:650;color:var(--pri);text-decoration:none}.stchip{font-size:11px;font-weight:700;border-radius:10px;padding:2px 8px;background:var(--eq);color:var(--mut)}.stchip.st1{background:#e3eefb;color:#1d5fa8}.stchip.st2{background:#fff3dd;color:#a35d00}.stchip.st3{background:var(--okbg);color:var(--ok)}.stchip.st4{background:#1d3557;color:#fff}.stchip.st5{background:var(--nobg);color:var(--no)}.prow{display:flex;justify-content:space-between;gap:8px;align-items:center;border-bottom:1px solid var(--line);padding:8px 2px}.prow.cur{background:var(--eq);border-radius:8px;padding:8px}.prow small{color:var(--mut)}.pbtn{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}.pbtn button{padding:6px 9px;font-size:12.5px}.pbtn .del{color:var(--no)}.btnl{display:inline-flex;align-items:center;justify-content:center;font-weight:600;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:11px 16px;text-decoration:none}.btnl.pri{background:var(--acc);border-color:var(--acc);color:#fff;flex:1}.vchip{display:inline-block;font-size:10.5px;font-weight:700;border-radius:9px;padding:1px 7px;margin-right:3px;vertical-align:1px;white-space:nowrap}.vchip.v3{background:var(--okbg);color:var(--ok)}.vchip.v2{background:#e3eefb;color:#1d5fa8}.vchip.v1{background:#fff3dd;color:#a35d00}.vchip.v0,.vchip.vf{background:var(--nobg);color:var(--no)}.vbox{border-left:5px solid #b26a00;background:#fff7e8;color:#4a3200;padding:9px 11px;border-radius:0 8px 8px 0;margin:8px 0}.vbox.vok{border-color:var(--ok);background:var(--okbg);color:inherit}.vbox.vno{border-color:var(--no);background:var(--nobg);color:inherit}.vprog{height:8px;background:var(--eq);border-radius:5px;overflow:hidden;margin:4px 0 8px}.vprog i{display:block;height:100%;background:var(--ok)}.vitem{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dashed var(--line);padding:7px 0;font-size:13px}.vitem small{color:var(--mut)}.vitem.r-ok{opacity:.75}.vitem.r-query{background:var(--nobg)}.vsign{font-weight:600}.vbtn{display:flex;gap:4px;flex-wrap:wrap;align-items:flex-start;justify-content:flex-end}.vbtn button{padding:5px 8px;font-size:12px}.rep.pro details.sub{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:8px 0}.rep.pro summary{cursor:pointer}input.rate{width:110px;padding:5px 6px;font-size:14px}.afind{border-left:4px solid var(--line);padding:6px 9px;margin:6px 0;background:var(--eq);border-radius:0 8px 8px 0;font-size:13px}.afind small{color:var(--mut)}.afind.s3{border-color:var(--no)}.afind.s2{border-color:var(--acc)}.afind.s1{border-color:#1d5fa8}.asev{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}.aans{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px;white-space:normal}.aans.ai{border-color:var(--pri)}.aans pre{white-space:pre-wrap;font-size:11.5px;margin:4px 0 0}.card.proj{border-color:var(--pri)}table.tl td{text-align:left;white-space:normal}.dwg{display:block;background:#fff}.dwgt{font-size:12px;font-weight:600;margin-top:8px;color:var(--ink,#1d3557)}table{border-collapse:collapse;width:100%;font-size:12.5px}th,td{border:1px solid var(--line);padding:5px 6px;text-align:right;white-space:nowrap}th{background:var(--eq);font-weight:600}td:first-child,th:first-child{text-align:left}
 .svg{margin:10px 0;background:#fff;border-radius:8px;padding:4px}
 .disc{font-size:11.5px;color:var(--mut);margin-top:12px;font-style:italic}
 ul{padding-left:20px}.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#16202c;color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;z-index:9}li{margin:3px 0}
@@ -4314,7 +4314,7 @@ if (typeof module !== "undefined") module.exports = DT;
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "2.9";
+REG.ENGINE = "3.0";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],
@@ -4360,8 +4360,20 @@ REG.CHECKS = [
   ["Foundations", "Footing soil pressure distribution", "Simplified", "Rigid footing, full contact (no partial-uplift redistribution), +10 % self weight"],
   ["Foundations", "Combined footings, rafts, piles, settlement, soil–structure interaction", "Not implemented", "Overlapping isolated footings are flagged"],
   ["Loads", "Wind on buildings (IS 875-3): pressure coefficients, internal pressure, torsion cases", "Simplified", "Frontal-area pressure with a single force coefficient"],
-  ["Loads", "Working stress projects: walls designed by limit state with 1.5 × service forces", "Simplified", "Stated in the wall results"]
+  ["Loads", "Working stress projects: walls designed by limit state with 1.5 × service forces", "Simplified", "Stated in the wall results"],
+  ["Quantities", "Bill of quantities (IS 1200 style measurement)", "Calculated", "Slab and column volumes checked by hand in acceptance.js H; rates are user inputs"],
+  ["Automation", "Automatic design (storey-wise enlargement until all checks pass)", "Calculated", "Converges on the test building in acceptance.js H; sizes are written as editable section rules"]
 ];
+/* stable ids of REG.CHECKS rows, used by the verification mode */
+REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "timehist",
+  "rcbeam", "rccol", "rcslab", "rcwallel", "rcwall", "servic", "stfcd", "stltb", "stklen", "dtbeam", "dtcol", "scwb", "joint", "dtslab", "bbs",
+  "foot", "footpress", "foundmore", "wind", "wsmwall", "boq", "auto"];
+REG.byId = function (id) { var i = REG.IDS.indexOf(id); return i >= 0 ? { id: id, area: REG.CHECKS[i][0], t: REG.CHECKS[i][1], st: REG.CHECKS[i][2], ev: REG.CHECKS[i][3] } : null; };
+REG.RANK = { "Not implemented": 0, Simplified: 1, Calculated: 2, Verified: 3 };
+/* checks behind each kind of result; the weakest decides the result's verification state */
+REG.KIND = { beam: ["frame", "rcbeam", "dtbeam", "servic"], column: ["frame", "rccol", "dtcol", "scwb", "joint"], slab: ["shell", "rcslab", "dtslab", "servic"],
+  wall: ["shell", "rcwall", "rcwallel"], steel: ["frame", "stfcd", "stltb", "stklen"], footing: ["foot", "footpress", "foundmore"], seismic: ["spectrum", "statbase", "modal", "rsa", "torsion", "irreg"] };
+REG.state = function (ids) { var w = null; ids.forEach(function (id) { var r = REG.byId(id); if (r && (!w || REG.RANK[r.st] < REG.RANK[w.st])) w = r; }); return w; };
 REG.html = function (esc) {
   var col = { Verified: "okt", Calculated: "", Simplified: "warnt", "Not implemented": "not" };
   var h = '<h4>Standards register — engine ' + REG.ENGINE + '</h4><div class="tw"><table class="basis"><tr><th>Standard</th><th>Status</th><th>How it is used</th></tr>';
@@ -4371,6 +4383,905 @@ REG.html = function (esc) {
   return h + '</table></div>';
 };
 if (typeof module !== "undefined") module.exports = REG;
+
+/* js/pipe.js */
+/* Analysis → seismic → design → detailing pipeline shared by the analysis screen, automatic design and the tests. */
+var PIPE = {};
+PIPE.steps = function (S, p, pd) {
+  return [
+    ["Solving load cases and combinations…", function () {
+      S.L = MD.cases(S.m, p); S.cb = MD.combos(S.L.cases, p.method);
+      S.res = FE.linear(S.m, S.L.cases, S.cb, { pdelta: pd, caseReac: true }); S.res.pd = pd; S.res.incMap = {}; S.cb.forEach(function (c) { S.res.incMap[c.name] = c.inc || 1; });
+      S.se = null;
+    }],
+    [p.rsa ? "Modal analysis and response spectrum…" : "Seismic checks…", function () {
+      if (!p.eq) return;
+      S.se = SE.run(S.m, S, p);
+      S.se.irr = SE.irregular(S.m, S, S.se); S.se.tc = SE.torsionCheck(S.m, S, S.se);
+      if (S.se.md) { var low = S.se.md.modes.length; ["X", "Y"].forEach(function (D0, d) { var rs = S.se.rs[d]; if (rs && rs.cum < 0.9) S.res.warn.push("Modal mass participation in " + D0 + " is " + (rs.cum * 100).toFixed(1) + " % with " + low + " modes — IS 1893 cl 7.7.5.2 requires ≥ 90 %: increase the number of modes."); }); }
+    }],
+    ["Designing and detailing members (IS 456 / IS 800 / IS 13920)…", function () {
+      S.des = MD.design(S.m, S.res, p); S.det = null;
+      try { S.det = DT.run(S.m, S, p); } catch (e) { S.det = { err: e.message }; }
+      S.drift = MD.drift(S.m, S.res).concat(S.se && S.se.drift ? S.se.drift : []); S.po = null;
+      if (typeof BOQ !== "undefined" && S.det && !S.det.err) { try { S.boq = BOQ.run(S.m, S, p); } catch (e) { S.boq = null; } }
+    }]];
+};
+PIPE.run = function (geo, p, pd) {
+  var S = { geo: geo, p: p }; MD._pm = {};
+  S.m = MD.make(geo, p);
+  PIPE.steps(S, p, pd).forEach(function (s) { s[1](); });
+  return S;
+};
+/* one-line summary of a run, stored with the project */
+PIPE.summary = function (S) {
+  var d = S.des || {}, nf = 0, n = 0;
+  ["beams", "cols", "slabs", "walls", "steel"].forEach(function (k) { (d[k] || []).forEach(function (r) { n++; if (!r.ok) nf++; }); });
+  var dt = S.det && !S.det.err ? S.det : null, dr = (S.drift || []).filter(function (q) { return q.ok === false; }).length;
+  return { date: new Date().toISOString(), members: n, memberFails: nf, detailFails: dt ? dt.fails : null, driftFails: dr, steel_t: dt ? +(dt.total / 1000).toFixed(3) : null,
+    concrete_m3: S.boq ? +S.boq.conc.toFixed(2) : null, cost: S.boq && S.boq.amount ? Math.round(S.boq.amount) : null, method: S.p ? S.p.method : null, zone: S.p ? S.p.zone : null };
+};
+if (typeof module !== "undefined") module.exports = PIPE;
+
+/* js/boq.js */
+/* Bill of quantities (IS 1200 style measurement) and reinforcement schedules from the designed and detailed model.
+   Concrete: columns floor to floor less slab thickness (+ necks from footing to plinth), beams below the slab between column
+   faces, slabs over the panel area, walls between end columns, footings L×B×D; PCC 100 mm with 100 mm offsets; excavation with
+   300 mm working space; formwork on all cast faces; steel from the bar bending schedule. Rates are entered by the user. */
+var BOQ = {};
+BOQ.ITEMS = [
+  ["exc", "Earthwork in excavation for footings (300 mm working space, vertical sides)", "m³"],
+  ["pcc", "PCC 1:4:8 (M7.5) 100 mm below footings, 100 mm offset", "m³"],
+  ["rcf", "RCC in footings", "m³"],
+  ["rcc", "RCC in columns incl. necks to plinth", "m³"],
+  ["rcb", "RCC in beams (below slab)", "m³"],
+  ["rcs", "RCC in slabs", "m³"],
+  ["rcw", "RCC in walls", "m³"],
+  ["fwf", "Formwork — footing sides", "m²"],
+  ["fwc", "Formwork — columns", "m²"],
+  ["fwb", "Formwork — beam sides and soffits", "m²"],
+  ["fws", "Formwork — slab soffits", "m²"],
+  ["fww", "Formwork — walls (both faces)", "m²"],
+  ["stl", "Reinforcement Fe {fy} — cut, bent and placed (bar bending schedule)", "kg"],
+  ["bfl", "Backfilling around foundations in layers, compacted", "m³"],
+  ["sst", "Structural steel (rolled sections, IS 2062) fabricated and erected", "kg"]
+];
+BOQ.run = function (m, S, p) {
+  var dt = S.det, q = {}, br = {}, lv = MD.floorLevels(m), ts = (p.tSlab || 150) / 1000, Df = p.Df > 0 ? p.Df : 1.5;
+  BOQ.ITEMS.forEach(function (it) { q[it[0]] = 0; br[it[0]] = []; });
+  function add(k, v, how) { q[k] += v; if (how) br[k].push([how, v]); }
+  /* columns: element lengths, less the slab thickness at each floor they reach */
+  var colAt = {};
+  m.frames.forEach(function (e, k) {
+    if (e.type !== "column" || e.sec.kind !== "rcc") return;
+    var A = m.nodes[e.n1], B = m.nodes[e.n2], zt = Math.max(A.z, B.z), b = e.sec.b / 1000, D = e.sec.D / 1000, top = lv.some(function (l) { return l > 0 && Math.abs(l - zt) < 0.005; });
+    var L = e.L - (top ? ts : 0);
+    add("rcc", b * D * L); add("fwc", 2 * (b + D) * L);
+    colAt[A.z < B.z ? e.n1 : e.n2] = colAt[A.z < B.z ? e.n1 : e.n2] || e.sec;
+  });
+  /* structural steel members: A × L × 7850 kg/m³ */
+  m.frames.forEach(function (e) { if (e.sec.kind === "steel") add("sst", e.sec.A * e.L * 7850); });
+  /* beams: below the slab, between column faces */
+  if (dt && dt.beams) dt.beams.forEach(function (bl) {
+    var b = bl.b / 1000, hs = Math.max(bl.D / 1000 - ts, 0), L = 0;
+    bl.spans.forEach(function (sp) { L += sp.Lc / 1000; }); [bl.cantL, bl.cantR].forEach(function (c) { if (c) L += (c.fR - c.fL) / 1000; });
+    add("rcb", b * hs * L); add("fwb", (2 * hs + b) * L);
+  });
+  /* slabs */
+  if (dt && dt.slabs) dt.slabs.forEach(function (fl) { fl.panels.forEach(function (P) { var A = P.Lx * P.Ly / 1e6, t = P.t / 1000; add("rcs", A * t); add("fws", Math.max(P.Lx - P.bw, 0) * Math.max(P.Ly - P.bw, 0) / 1e6); }); });
+  /* walls */
+  if (dt && dt.walls) dt.walls.forEach(function (w) {
+    var t = w.t / 1000, Lw = w.Lw / 1000;
+    w.endCols.forEach(function (nm) { var c = dt.cols.filter(function (q) { return q.name === nm; })[0]; if (c) Lw -= (w.ax[0] ? c.st[0].D : c.st[0].b) / 2000; });   /* end columns measured with the columns */
+    w.storeys.forEach(function (st) { var h = st.h / 1000 - ts; add("rcw", Lw * t * h); add("fww", 2 * Lw * h); });
+  });
+  /* footings, PCC, excavation, necks, backfill */
+  if (dt && dt.foot) dt.foot.forEach(function (ft) {
+    var Lx = ft.Lx / 1000, Ly = ft.Ly / 1000, D = ft.D / 1000, a = ft.a / 1000, bc = ft.bc / 1000, neck = Math.max(Df - D, 0);
+    var vf = Lx * Ly * D, vp = (Lx + 0.2) * (Ly + 0.2) * 0.1, ve = (Lx + 0.2 + 0.6) * (Ly + 0.2 + 0.6) * (Df + 0.1), vn = a * bc * neck;
+    add("rcf", vf); add("fwf", 2 * (Lx + Ly) * D); add("pcc", vp); add("exc", ve); add("rcc", vn); add("fwc", 2 * (a + bc) * neck); add("bfl", ve - vf - vp - vn);
+  });
+  /* steel from the bar bending schedule, by diameter */
+  var byDia = {}, kg = 0;
+  if (dt && dt.tot) dt.tot.forEach(function (t) { byDia[t.dia] = t.all; kg += t.all; });
+  q.stl = kg;
+  var conc = q.rcf + q.rcc + q.rcb + q.rcs + q.rcw;
+  var items = BOQ.ITEMS.map(function (it) { return { id: it[0], desc: it[1].replace("{fy}", p.fy), unit: it[2], qty: q[it[0]], grade: /^rc/.test(it[0]) ? "M" + p.fck : "" }; }).filter(function (it) { return it.qty > 1e-9; });
+  return { items: items, conc: conc, steelKg: kg, byDia: byDia, ratio: conc > 0 ? kg / conc : 0, Df: Df, ts: ts, schedules: BOQ.schedules(S), amount: 0 };
+};
+/* amounts with the project's rates */
+BOQ.price = function (boq, rates) {
+  var sum = 0; boq.items.forEach(function (it) { var r = rates && +rates[it.id]; it.rate = r > 0 ? r : null; it.amt = r > 0 ? r * it.qty : null; if (it.amt) sum += it.amt; }); boq.amount = sum; return boq;
+};
+/* reinforcement schedules (rows ready for tables) */
+BOQ.schedules = function (S) {
+  var dt = S.det, o = { cols: [], beams: [], slabs: [], foot: [], walls: [] };
+  if (!dt || dt.err || !dt.gB) return o;
+  dt.gC.forEach(function (G) { G.rep.st.forEach(function (s, i) { o.cols.push([i ? "" : G.id, i ? "" : G.list.map(function (c) { return c.name; }).join(" "), "Storey " + (s.i + 1), s.b + "×" + s.D, s.ar.n + "-" + s.ar.dia + "φ", s.pct.toFixed(2) + " %", s.tie.dia + "φ" + (s.tie.lB > 2 || s.tie.lD > 2 ? " + " + (s.tie.lB - 2 + s.tie.lD - 2) + " crossties" : ""), s.tie.sc ? "@" + s.tie.sc + " over " + s.tie.lo : "—", "@" + s.tie.sm]); }); });
+  dt.gB.forEach(function (G) { var bl = G.rep; bl.spans.forEach(function (sp, j) { o.beams.push([j ? "" : G.id, j ? "" : G.list.map(function (b) { return b.name; }).join(" "), j ? "" : bl.b + "×" + bl.D, "Span " + (j + 1) + " (" + Math.round(sp.Lc) + ")", bl.sup[j].nt + "-" + bl.dia + "φ", sp.nb + "-" + bl.dia + "φ", bl.sup[j + 1].nt + "-" + bl.dia + "φ", sp.sv.ph + "φ@" + sp.sv.sh + " / @" + sp.sv.sm]); }); });
+  dt.slabs.forEach(function (fl) { fl.panels.forEach(function (P, j) { o.slabs.push([j ? "" : fl.name, "S" + (j + 1), P.Lx + "×" + P.Ly, P.t, P.bot.X.dia + "φ@" + P.bot.X.s, P.bot.Y.dia + "φ@" + P.bot.Y.s, ["W", "E", "S", "N"].map(function (k) { return P.top[k].sp.dia + "@" + P.top[k].sp.s; }).join(" / ")]); }); });
+  dt.gF.forEach(function (G) { var f = G.rep; o.foot.push([G.id, G.list.map(function (c) { return c.name; }).join(" "), f.Lx + "×" + f.Ly, f.D, f.bx.dia + "φ@" + f.bx.s, f.by.dia + "φ@" + f.by.s, G.n]); });
+  (dt.gW || []).forEach(function (G) { G.rep.storeys.forEach(function (st, i) { o.walls.push([i ? "" : G.id, i ? "" : G.list.map(function (w) { return w.line; }).join("; "), "Storey " + (i + 1), G.rep.t, st.vb.dia + "φ@" + st.vb.s + (G.rep.two ? " EF" : ""), st.hb.dia + "φ@" + st.hb.s + (G.rep.two ? " EF" : ""), st.be ? (st.beBars ? st.beL + ", " + st.beBars.n + "-" + st.beBars.dia + "φ" : "end columns") : "—"]); }); });
+  return o;
+};
+BOQ.HEAD = { cols: ["Mark", "Columns", "Storey", "Size", "Bars", "Steel", "Ties", "Confining zones", "Middle"], beams: ["Mark", "Beams", "Size", "Span (clear)", "Top left", "Bottom", "Top right", "Hoops ends / middle"],
+  slabs: ["Floor", "Panel", "Lx × Ly", "t", "Bottom X", "Bottom Y", "Top W / E / S / N"], foot: ["Mark", "Columns", "Lx × Ly", "D", "Bars X", "Bars Y", "No."], walls: ["Mark", "Walls", "Storey", "t", "Vertical", "Horizontal", "Boundary"] };
+if (typeof module !== "undefined") module.exports = BOQ;
+
+/* js/auto.js */
+/* Automatic design & detailing of RCC frames: analyse → design → detail → enlarge the members that fail
+   (column design / steel > 4 %, strong column–weak beam, joint shear, joint depth ≥ 20φ, storey drift; beam design and bar fit)
+   storey by storey → repeat until every check passes or the size limits are reached. Sizes are written as section rules
+   ("columns storey 2 = 450x450", "beams storey 2 = 300x500") so the user can see and edit them. */
+var AUTO = {};
+AUTO.STEP = 50; AUTO.MAXCOL = 900; AUTO.MAXBEAM = 900; AUTO.MAXIT = 8;
+/* current sizes per storey (largest member of each kind) */
+AUTO.sizes = function (m) {
+  var lv = MD.floorLevels(m), c = {}, b = {};
+  function st(e) { var z = Math.max(m.nodes[e.n1].z, m.nodes[e.n2].z), i = -1, best = 1e9; lv.forEach(function (l, j) { if (Math.abs(l - z) < best) { best = Math.abs(l - z); i = j; } }); return i; }
+  m.frames.forEach(function (e) {
+    if (e.sec.kind !== "rcc") return; var i = st(e), o = e.type === "column" ? c : e.type === "beam" ? b : null; if (!o) return;
+    if (!o[i] || e.sec.b * e.sec.D > o[i].b * o[i].D) o[i] = { b: e.sec.b, D: e.sec.D };
+  });
+  return { col: c, beam: b, n: lv.length - 1 };
+};
+AUTO.rules = function (sz) {
+  var out = [];
+  Object.keys(sz.col).sort(function (a, b) { return a - b; }).forEach(function (i) { out.push("columns storey " + i + " = " + sz.col[i].b + "x" + sz.col[i].D); });
+  Object.keys(sz.beam).sort(function (a, b) { return a - b; }).forEach(function (i) { out.push("beams storey " + i + " = " + sz.beam[i].b + "x" + sz.beam[i].D); });
+  return out.join("\n");
+};
+/* what failed, by storey */
+AUTO.failures = function (S) {
+  var m = S.m, lv = MD.floorLevels(m), f = { col: {}, beam: {}, why: [], walls: 0, other: 0 };
+  function lev(z) { var i = -1, best = 1e9; lv.forEach(function (l, j) { if (Math.abs(l - z) < best) { best = Math.abs(l - z); i = j; } }); return i; }
+  function st(k) { var e = m.frames[k]; return lev(Math.max(m.nodes[e.n1].z, m.nodes[e.n2].z)); }
+  function add(o, i, why) { if (i < 1) return; o[i] = o[i] || []; if (o[i].indexOf(why) < 0) o[i].push(why); }
+  S.des.cols.forEach(function (r) { if (!r.ok) add(f.col, st(r.k), "column design"); });
+  S.des.beams.forEach(function (r) { if (!r.ok) add(f.beam, st(r.k), "beam design"); });
+  var dt = S.det && !S.det.err ? S.det : null;
+  if (dt) {
+    dt.cols.forEach(function (c) { c.st.forEach(function (s) { if (s.pct > 4 + 1e-6 || s.fail) add(f.col, lev(s.z1 / 1000), "steel > 4 %"); }); c.checks.forEach(function (q) { if (!q.ok && q.st !== undefined) add(f.col, lev(c.st[q.st].z1 / 1000), q.t.split(" ").slice(0, 3).join(" ")); }); });
+    dt.beams.forEach(function (bl) { if (bl.msg.some(function (t) { return /second layer/.test(t); })) add(f.beam, lev(bl.z), "bars in two layers"); bl.checks.forEach(function (q) { if (!q.ok) add(f.beam, lev(bl.z), q.t.split(" ").slice(0, 3).join(" ")); }); });
+    dt.scwb.forEach(function (q) { if (!q.ok) { var i = lev(q.z); add(f.col, i, "strong column–weak beam"); add(f.col, i + 1, "strong column–weak beam"); } });
+    dt.joints.forEach(function (q) { var i = lev(q.z); if (!q.ok) { add(f.col, i, "joint shear"); if (i + 1 < lv.length) add(f.col, i + 1, "joint shear"); } if (!q.anch) add(f.col, i, "joint depth < 20φ"); });
+    dt.walls.forEach(function (w) { w.checks.forEach(function (q) { if (!q.ok) f.walls++; }); });
+    dt.foot.forEach(function (ft) { ft.checks.forEach(function (q) { if (!q.ok) f.other++; }); });
+  }
+  (S.drift || []).forEach(function (q) { if (q.ok === false) for (var i = 1; i < lv.length; i++) add(f.col, i, "storey drift"); });
+  f.n = Object.keys(f.col).length + Object.keys(f.beam).length;
+  return f;
+};
+/* grow the failing storeys; returns false when nothing could be enlarged */
+AUTO.grow = function (sz, fl) {
+  var any = false, s = AUTO.STEP;
+  Object.keys(fl.col).forEach(function (i) { var c = sz.col[i]; if (!c) return; if (Math.max(c.b, c.D) + s <= AUTO.MAXCOL) { c.b += s; c.D += s; any = true; } });
+  Object.keys(fl.beam).forEach(function (i) { var b = sz.beam[i]; if (!b) return; if (b.D + s <= AUTO.MAXBEAM) { b.D += s; if (b.b < 0.3 * b.D) b.b = Math.ceil(0.3 * b.D / 25) * 25; any = true; } });
+  /* keep columns at least as large going down */
+  var ks = Object.keys(sz.col).map(Number).sort(function (a, b) { return b - a; });
+  for (var j = 1; j < ks.length; j++) { var up = sz.col[ks[j - 1]], lo = sz.col[ks[j]]; if (lo.b < up.b) { lo.b = up.b; any = true; } if (lo.D < up.D) { lo.D = up.D; any = true; } }
+  return any;
+};
+/* run the loop; step(i, info) is called after every iteration; async when a scheduler is given */
+AUTO.run = function (geo, p0, opt) {
+  opt = opt || {};
+  var p = Object.assign({}, p0), m0 = MD.make(geo, p);
+  if (!m0.frames.some(function (e) { return e.sec.kind === "rcc"; })) throw new Error("Automatic design is for RCC frames");
+  var sz = AUTO.sizes(m0), log = [], S = null, it = 0, keep = MD.rules(p0.secOver || "").filter(function (r) { return !r.err && !/stor(e)?y/i.test(r.sel); }).map(function (r) { return r.sel + " = " + r.val; });
+  function once() {
+    p.secOver = AUTO.rules(sz) + (keep.length ? "\n" + keep.join("\n") : "");
+    S = PIPE.run(geo, p, opt.pdelta);
+    var fl = AUTO.failures(S);
+    log.push({ it: it + 1, rules: AUTO.rules(sz), fails: fl, steel: S.det && !S.det.err ? S.det.total : 0, conc: S.boq ? S.boq.conc : null });
+    return fl;
+  }
+  function finish(fl) { return { S: S, log: log, rules: p.secOver, ok: fl.n === 0, fails: fl, p: p, kept: keep }; }
+  if (!opt.async) {
+    var fl;
+    for (it = 0; it < AUTO.MAXIT; it++) { fl = once(); if (opt.step) opt.step(it, log[it]); if (!fl.n || !AUTO.grow(sz, fl)) break; }
+    return finish(fl);
+  }
+  return new Promise(function (res, rej) {
+    (function next() {
+      setTimeout(function () {
+        try {
+          var fl2 = once(); if (opt.step) opt.step(it, log[it]);
+          it++;
+          if (!fl2.n || it >= AUTO.MAXIT || !AUTO.grow(sz, fl2)) return res(finish(fl2));
+          next();
+        } catch (e) { rej(e); }
+      }, 30);
+    })();
+  });
+};
+if (typeof module !== "undefined") module.exports = AUTO;
+
+/* js/pdb.js */
+/* Offline project database: IndexedDB on the device (localStorage fallback, memory in tests). Every project keeps its inputs,
+   imported DXF, revisions, reviewer sign-offs, BOQ rates and the engine / code editions it was made with.
+   All records are held in memory after PDB.init(), writes go to storage in the background. */
+var PDB = (function () {
+  var DBN = "isd_projects", ST = "p", db = null, mem = {}, cur = null, ready = null, mode = "memory", timers = {};
+  function now() { return new Date().toISOString(); }
+  function uid() { return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function engine() { return typeof REG !== "undefined" ? REG.ENGINE : "?"; }
+  function codes() { return typeof REG !== "undefined" ? REG.STANDARDS.map(function (s) { return s[0]; }) : []; }
+  function blank(name) {
+    var t = now();
+    return { id: uid(), name: name || "New project", jobNo: "", client: "", site: "", engineer: "", checker: "", status: "Concept", notes: "",
+      created: t, modified: t, engine: engine(), codes: codes(), inputs: {}, dxf: null, revs: [], review: {}, rates: {}, summary: null, log: [{ t: t, a: "Created" }] };
+  }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+  function persist(p) {
+    if (mode === "idb" && db) { try { db.transaction(ST, "readwrite").objectStore(ST).put(p); } catch (e) { mode = "ls"; } }
+    if (mode === "ls") lsSet("isd_proj_" + p.id, JSON.stringify(p));
+    lsSet("isd_cur", cur || "");
+  }
+  function drop(id) {
+    if (mode === "idb" && db) { try { db.transaction(ST, "readwrite").objectStore(ST).delete(id); } catch (e) {} }
+    try { localStorage.removeItem("isd_proj_" + id); } catch (e) {}
+  }
+  function migrate() {
+    /* first run: the model that was on this device becomes project 1 */
+    if (Object.keys(mem).length) return;
+    var p = blank("Project 1"), old = lsGet("isd_model2");
+    try { p.inputs = old ? JSON.parse(old) || {} : {}; } catch (e) { p.inputs = {}; }
+    p.log.push({ t: now(), a: old ? "Imported the model saved on this device" : "Started" });
+    mem[p.id] = p; cur = p.id; persist(p);
+  }
+  function init() {
+    if (ready) return ready;
+    ready = new Promise(function (res) {
+      function done() { cur = lsGet("isd_cur") || cur; if (!mem[cur]) cur = Object.keys(mem)[0] || null; migrate(); res(); }
+      var idb = typeof indexedDB !== "undefined" ? indexedDB : null;
+      if (!idb) { loadLS(); return done(); }
+      var rq;
+      try { rq = idb.open(DBN, 1); } catch (e) { loadLS(); return done(); }
+      rq.onupgradeneeded = function () { rq.result.createObjectStore(ST, { keyPath: "id" }); };
+      rq.onerror = function () { loadLS(); done(); };
+      rq.onsuccess = function () {
+        db = rq.result; mode = "idb";
+        try {
+          var all = db.transaction(ST, "readonly").objectStore(ST).getAll();
+          all.onsuccess = function () { (all.result || []).forEach(function (p) { mem[p.id] = p; }); done(); };
+          all.onerror = function () { mode = "ls"; loadLS(); done(); };
+        } catch (e) { mode = "ls"; loadLS(); done(); }
+      };
+    });
+    return ready;
+  }
+  function loadLS() {
+    mode = typeof localStorage !== "undefined" ? "ls" : "memory";
+    if (mode !== "ls") return;
+    try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (/^isd_proj_/.test(k)) { var p = JSON.parse(localStorage.getItem(k)); if (p && p.id) mem[p.id] = p; } } } catch (e) {}
+  }
+  function touch(p, act) { p.modified = now(); if (act) { p.log = (p.log || []).concat([{ t: p.modified, a: act }]).slice(-200); } }
+  function save(p, act, debounce) {
+    touch(p, act); mem[p.id] = p;
+    if (debounce && typeof setTimeout !== "undefined") { clearTimeout(timers[p.id]); timers[p.id] = setTimeout(function () { persist(p); }, 400); } else persist(p);
+    return p;
+  }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  /* validate an imported file: a project or a backup of many */
+  function sane(p) { return p && typeof p === "object" && typeof p.name === "string" && p.inputs && typeof p.inputs === "object"; }
+  return {
+    init: init, mode: function () { return mode; },
+    list: function () { return Object.keys(mem).map(function (k) { return mem[k]; }).sort(function (a, b) { return a.modified < b.modified ? 1 : -1; }); },
+    get: function (id) { return mem[id] || null; },
+    current: function () { if (!mem[cur]) migrate(); return mem[cur]; },
+    open: function (id) { if (mem[id]) { cur = id; lsSet("isd_cur", id); lsSet("isd_model2", JSON.stringify(mem[id].inputs || {})); } return mem[id]; },
+    create: function (name, inputs) { var p = blank(name); if (inputs) p.inputs = clone(inputs); mem[p.id] = p; cur = p.id; persist(p); return p; },
+    update: function (id, fields, act) { var p = mem[id]; if (!p) return null; Object.keys(fields).forEach(function (k) { p[k] = fields[k]; }); return save(p, act || "Details edited"); },
+    setInputs: function (inputs) { var p = this.current(); p.inputs = clone(inputs); lsSet("isd_model2", JSON.stringify(inputs)); return save(p, null, true); },
+    setDxf: function (name, text) { var p = this.current(); p.dxf = text ? { name: name, text: text } : null; return save(p, text ? "DXF imported: " + name : "DXF removed"); },
+    setSummary: function (s) { var p = this.current(); p.summary = s; p.engineRun = engine(); return save(p, null, true); },
+    setReview: function (key, val) { var p = this.current(); p.review = p.review || {}; if (val) p.review[key] = val; else delete p.review[key]; return save(p, val ? "Review: " + key + " → " + val.state : "Review cleared: " + key); },
+    setRates: function (r) { var p = this.current(); p.rates = r; return save(p, "Rates edited", true); },
+    duplicate: function (id) { var s = mem[id]; if (!s) return null; var p = clone(s); p.id = uid(); p.name = s.name + " (copy)"; p.created = p.modified = now(); p.revs = []; p.review = {}; p.status = "Concept"; p.log = [{ t: p.created, a: "Duplicated from " + s.name }]; mem[p.id] = p; persist(p); return p; },
+    remove: function (id) { delete mem[id]; drop(id); if (cur === id) { cur = Object.keys(mem)[0] || null; if (!cur) migrate(); lsSet("isd_cur", cur); } },
+    issue: function (note, by) {
+      var p = this.current(), n = (p.revs || []).length, rev = { rev: "R" + n, date: now(), by: by || p.engineer || "", note: note || "", engine: engine(), codes: codes(), summary: p.summary ? clone(p.summary) : null, inputs: clone(p.inputs) };
+      p.revs = (p.revs || []).concat([rev]); return save(p, "Issued revision " + rev.rev);
+    },
+    exportOne: function (id) { var p = mem[id]; return JSON.stringify({ format: "isd-project", version: 1, engine: engine(), project: p }, null, 1); },
+    exportAll: function () { return JSON.stringify({ format: "isd-backup", version: 1, engine: engine(), date: now(), projects: this.list() }); },
+    importText: function (text) {
+      var o = JSON.parse(text), list = o && o.format === "isd-backup" ? o.projects : o && o.format === "isd-project" ? [o.project] : sane(o) ? [o] : null;
+      if (!list || !list.length) throw new Error("Not an IS StructDesign project or backup file");
+      var added = [];
+      list.forEach(function (q) {
+        if (!sane(q)) return;
+        var p = Object.assign(blank(q.name), clone(q)); if (mem[p.id]) p.id = uid();
+        p.log = (p.log || []).concat([{ t: now(), a: "Imported" + (q.engine && q.engine !== engine() ? " (made with engine " + q.engine + ")" : "") }]);
+        mem[p.id] = p; persist(p); added.push(p);
+      });
+      if (!added.length) throw new Error("No valid projects in the file");
+      return added;
+    },
+    _reset: function () { mem = {}; cur = null; ready = null; }
+  };
+})();
+if (typeof module !== "undefined") module.exports = PDB;
+
+/* js/cad.js */
+/* CAD integration: drawing set DXF (GA plans, footing layout, schedules, title blocks, reinforcement details)
+   and STAAD.Pro input for independent cross-checking. */
+var CAD = (function () {
+  var DW = DT.DW;
+  function title(p, sheet, no) {
+    var t = new DW(""), W = 6000, H = 1100;
+    t.r(0, 0, W, H, "C").l(0, 700, W, 700, "C").l(3600, 0, 3600, 700, "C").l(4800, 0, 4800, 700, "C");
+    t.tx(120, 820, (p && p.name) || "Project", 180, "l", "T").it[t.it.length - 1].b = true;
+    t.tx(W - 120, 820, sheet, 150, "r", "T");
+    t.tx(120, 470, "Client: " + ((p && p.client) || "—") + "   Site: " + ((p && p.site) || "—"), 100, "l", "T");
+    t.tx(120, 300, "Job no.: " + ((p && p.jobNo) || "—") + "   Designed: " + ((p && p.engineer) || "—") + "   Checked: " + ((p && p.checker) || "—"), 100, "l", "T");
+    t.tx(120, 120, "IS 456:2000 · IS 13920:2016 · IS 1893 (Part 1):2016 · IS 800:2007 — engine " + REG.ENGINE, 90, "l", "D");
+    t.tx(3700, 470, "Drawing no.", 90, "l", "D").tx(3700, 250, no, 140, "l", "T");
+    var rev = p && p.revs && p.revs.length ? p.revs[p.revs.length - 1].rev : "—";
+    t.tx(4900, 470, "Rev / date", 90, "l", "D").tx(4900, 250, rev + "  " + new Date().toISOString().slice(0, 10), 120, "l", "T");
+    return t;
+  }
+  function grid(dw, g, x0, x1, y0, y1) {
+    var e = 1500, r = 300;
+    g.xs.forEach(function (x, i) { var X = x * 1000; dw.l(X, y0 - e, X, y1 + e, "G").c(X, y1 + e + r, r, "G").tx(X, y1 + e + r - 60, String(i + 1), 160, "c", "T"); });
+    if (g.ys.length > 1 || y1 > y0) g.ys.forEach(function (y, i) { var Y = y * 1000; dw.l(x0 - e, Y, x1 + e, Y, "G").c(x0 - e - r, Y, r, "G").tx(x0 - e - r, Y - 60, g.gy(y) || String(i + 1), 160, "c", "T"); });
+    for (var i = 0; i + 1 < g.xs.length; i++) dw.dim(g.xs[i] * 1000, y0 - e + 300, g.xs[i + 1] * 1000, y0 - e + 300, -300, String(Math.round((g.xs[i + 1] - g.xs[i]) * 1000)), 120);
+    for (i = 0; i + 1 < g.ys.length; i++) dw.dim(x1 + e - 300, g.ys[i] * 1000, x1 + e - 300, g.ys[i + 1] * 1000, 300, String(Math.round((g.ys[i + 1] - g.ys[i]) * 1000)), 120);
+  }
+  function plan(S, lev) {
+    var dt = S.det, g = dt.g, z = g.lv[lev], dw = new DW("General arrangement — floor at +" + z.toFixed(2) + " m");
+    var x0 = Math.min.apply(null, g.xs) * 1000, x1 = Math.max.apply(null, g.xs) * 1000, y0 = Math.min.apply(null, g.ys.length ? g.ys : [0]) * 1000, y1 = Math.max.apply(null, g.ys.length ? g.ys : [0]) * 1000;
+    grid(dw, g, x0, x1, y0, y1);
+    dt.slabs.filter(function (s) { return Math.abs(s.z - z) < 0.01; }).forEach(function (sl) { sl.panels.forEach(function (P, i) { dw.tx((P.x0 + P.x1) * 500, (P.y0 + P.y1) * 500 - 300, "S" + (i + 1) + " t=" + P.t, 130, "c", "D"); }); });
+    dt.beams.filter(function (b) { return b.lev === lev; }).forEach(function (bl) {
+      var A = bl.xy[0], B = bl.xy[1], ux = bl.ux, hw = bl.b / 2;
+      bl.spans.forEach(function (sp) {
+        var a = sp.fL, b = sp.fR, P = function (s) { return ux ? [A.x * 1000 + s, A.y * 1000] : [A.x * 1000, A.y * 1000 + s]; }, p1 = P(a), p2 = P(b);
+        if (ux) { dw.l(p1[0], p1[1] - hw, p2[0], p2[1] - hw, "C").l(p1[0], p1[1] + hw, p2[0], p2[1] + hw, "C"); }
+        else { dw.l(p1[0] - hw, p1[1], p2[0] - hw, p2[1], "C").l(p1[0] + hw, p1[1], p2[0] + hw, p2[1], "C"); }
+        var m = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+        dw.tx(m[0] + (ux ? 0 : 220), m[1] + (ux ? hw + 60 : 0), bl.grp + " " + bl.b + "x" + bl.D, 120, ux ? "c" : "l", "T");
+      });
+    });
+    dt.cols.forEach(function (c) {
+      var s = c.st.filter(function (q) { return Math.abs(q.z1 / 1000 - z) < 0.01; })[0]; if (!s) return;
+      var X = c.x * 1000, Y = c.y * 1000;
+      dw.r(X - s.D / 2, Y - s.b / 2, s.D, s.b, "C").l(X - s.D / 2, Y - s.b / 2, X + s.D / 2, Y + s.b / 2, "C").l(X - s.D / 2, Y + s.b / 2, X + s.D / 2, Y - s.b / 2, "C");
+      dw.tx(X + s.D / 2 + 60, Y + s.b / 2 + 40, c.grp, 130, "l", "R");
+    });
+    (dt.walls || []).forEach(function (w) {
+      if (!w.storeys.some(function (st) { return Math.abs(st.z + st.h / 1000 - z) < 0.01; })) return;
+      var ax = w.ax, s0 = w.s0, t = w.t;
+      if (ax[0]) dw.r(s0, yOf(S, w) * 1000 - t / 2, w.Lw, t, "C"); else dw.r(xOf(S, w) * 1000 - t / 2, s0, t, w.Lw, "C");
+      if (ax[0]) dw.tx(s0 + w.Lw / 2, yOf(S, w) * 1000 - t - 260, w.grp + " wall t=" + t, 120, "c", "R");
+      else dw.tx(xOf(S, w) * 1000 + (xOf(S, w) * 1000 <= S.det.g.xs[0] * 1000 + 1 ? -t - 120 : t + 120), s0 + w.Lw * 0.3, w.grp + " wall t=" + t, 120, xOf(S, w) * 1000 <= S.det.g.xs[0] * 1000 + 1 ? "r" : "l", "R");
+    });
+    return dw;
+  }
+  function xOf(S, w) { return +(/x = ([\d.-]+)/.exec(w.line) || [0, 0])[1]; }
+  function yOf(S, w) { return +(/y = ([\d.-]+)/.exec(w.line) || [0, 0])[1]; }
+  function footPlan(S) {
+    var dt = S.det, g = dt.g, dw = new DW("Foundation layout");
+    var x0 = Math.min.apply(null, g.xs) * 1000, x1 = Math.max.apply(null, g.xs) * 1000, y0 = Math.min.apply(null, g.ys.length ? g.ys : [0]) * 1000, y1 = Math.max.apply(null, g.ys.length ? g.ys : [0]) * 1000;
+    grid(dw, g, x0, x1, y0, y1);
+    dt.foot.forEach(function (ft) { var X = ft.x * 1000, Y = ft.y * 1000; dw.r(X - ft.Lx / 2, Y - ft.Ly / 2, ft.Lx, ft.Ly, "C").r(X - ft.a / 2, Y - ft.bc / 2, ft.a, ft.bc, "C"); dw.tx(X, Y - ft.Ly / 2 - 220, ft.grp + " " + ft.Lx + "x" + ft.Ly + "x" + ft.D, 120, "c", "T"); });
+    dw.tx(x0, y0 - 2600, "Founding depth " + (S.p.Df || 1.5) + " m below plinth · SBC " + (S.p.sbc || 200) + " kN/m² (confirm by soil investigation) · PCC 1:4:8 100 mm below all footings", 130, "l", "D");
+    return dw;
+  }
+  function table(ttl, head, rows, cw) {
+    var dw = new DW(ttl), rh = 360, th = 110, W = cw.reduce(function (a, b) { return a + b; }, 0), n = rows.length + 1, y = 0;
+    dw.r(0, -n * rh, W, n * rh, "C");
+    for (var i = 1; i < n; i++) dw.l(0, -i * rh, W, -i * rh, i === 1 ? "C" : "D");
+    var x = 0; cw.forEach(function (w, j) { if (j) dw.l(x, 0, x, -n * rh, "D"); x += w; });
+    [head].concat(rows).forEach(function (r, i) { var xx = 0; r.forEach(function (c, j) { dw.tx(xx + 50, -i * rh - rh + 110, String(c === undefined ? "" : c).slice(0, Math.floor(cw[j] / (th * 0.62))), th, "l", i ? "T" : "T"); xx += cw[j]; }); });
+    return dw;
+  }
+  function drawingSet(S, p) {
+    var dt = S.det; if (!dt || dt.err) throw new Error("Run the analysis first");
+    var rows = [], no = 0, code = ((p && p.jobNo) || "ISD").replace(/\s+/g, "");
+    function sheet(t, dws) { no++; rows.push({ title: t, dws: dws.concat([title(p, t, code + "/S-" + (no < 10 ? "0" : "") + no)]) }); }
+    for (var i = 1; i < dt.g.lv.length; i++) if (dt.beams.some(function (b) { return b.lev === i; })) sheet("GA plan +" + dt.g.lv[i].toFixed(2), [plan(S, i)]);
+    if (dt.foot.length) sheet("Foundation layout", [footPlan(S)]);
+    var sc = BOQ.schedules(S);
+    if (sc.cols.length) sheet("Column schedule", [table("Column schedule", BOQ.HEAD.cols, sc.cols, [600, 2200, 900, 900, 1000, 800, 1700, 1600, 800])]);
+    if (sc.beams.length) sheet("Beam schedule", [table("Beam schedule", BOQ.HEAD.beams, sc.beams, [600, 2600, 900, 1500, 1000, 1000, 1000, 1700])]);
+    if (sc.foot.length) sheet("Footing schedule", [table("Footing schedule", BOQ.HEAD.foot, sc.foot, [600, 3000, 1200, 600, 1000, 1000, 500])]);
+    if (sc.walls.length) sheet("Wall schedule", [table("Wall schedule", BOQ.HEAD.walls, sc.walls, [600, 2600, 900, 500, 1300, 1300, 1700])]);
+    var cf = dt.cf;
+    dt.gB.forEach(function (G) { sheet("Beam " + G.id + " — " + G.list.map(function (b) { return b.name; }).join(", "), DT.drawBeam(G.rep, cf, 1)); });
+    dt.gC.forEach(function (G) { sheet("Column " + G.id + " — " + G.list.map(function (c) { return c.name; }).join(", "), DT.drawCol(G.rep, cf, 1)); });
+    dt.gF.forEach(function (G) { sheet("Footing " + G.id + " — " + G.list.map(function (c) { return c.name; }).join(", "), DT.drawFoot(G.rep, cf)); });
+    (dt.gW || []).forEach(function (G) { sheet("Wall " + G.id, DT.drawWall(G.rep, cf)); });
+    dt.slabs.forEach(function (sl) { sheet(sl.name, DT.drawSlab(sl, cf)); });
+    return DT.dxf(rows);
+  }
+
+  /* ---------- STAAD.Pro input ---------- */
+  function n6(v) { return (Math.round(v * 1e6) / 1e6).toString(); }
+  function staad(S, p) {
+    var m = S.m, L = S.L, o = [], nf = m.frames.length;
+    o.push("STAAD SPACE", "* Written by IS StructDesign engine " + REG.ENGINE + " for an independent cross-check of the linear static analysis.",
+      "* Static load cases and combinations only (response spectrum, P-Delta and pushover are not exported).",
+      "* Section properties are the cracked values used by the app (PRIS AX IX IY IZ). Check the BETA angle of rectangular columns.",
+      "START JOB INFORMATION", "JOB NAME " + ((p && p.name) || "IS StructDesign model").slice(0, 60), "JOB NO " + ((p && p.jobNo) || "-"), "ENGINEER NAME " + ((p && p.engineer) || "-"), "END JOB INFORMATION",
+      "INPUT WIDTH 79", "SET Z UP", "UNIT METER KN", "JOINT COORDINATES");
+    m.nodes.forEach(function (n, i) { o.push((i + 1) + " " + n6(n.x) + " " + n6(n.y) + " " + n6(n.z) + ";"); });
+    o.push("MEMBER INCIDENCES");
+    m.frames.forEach(function (e, k) { o.push((k + 1) + " " + (e.n1 + 1) + " " + (e.n2 + 1) + ";"); });
+    if (m.shells.length) { o.push("ELEMENT INCIDENCES SHELL"); m.shells.forEach(function (s, k) { o.push((nf + k + 1) + " " + s.n.map(function (v) { return v + 1; }).join(" ") + ";"); }); o.push("ELEMENT PROPERTY"); m.shells.forEach(function (s, k) { o.push((nf + k + 1) + " THICKNESS " + n6(s.t)); }); }
+    /* materials by modulus */
+    var mats = {}, mi = 0;
+    function mat(E, nu, dens) { var key = Math.round(E) + "|" + nu + "|" + dens; if (!mats[key]) mats[key] = { name: "MAT" + (++mi), E: E, nu: nu, d: dens }; return mats[key].name; }
+    var fm = m.frames.map(function (e) { return mat(e.sec.E, e.sec.kind === "steel" ? 0.3 : 0.2, e.sec.gamma !== undefined ? e.sec.gamma : 25); }), sm = m.shells.map(function (s) { return mat(s.mat.E, s.mat.nu, s.mat.gamma); });
+    o.push("DEFINE MATERIAL START");
+    Object.keys(mats).forEach(function (k) { var q = mats[k]; o.push("ISOTROPIC " + q.name, "E " + n6(q.E), "POISSON " + q.nu, "DENSITY " + n6(q.d), "ALPHA 1e-005"); });
+    o.push("END DEFINE MATERIAL", "MEMBER PROPERTY INDIAN");
+    m.frames.forEach(function (e, k) { var s = e.sec; o.push((k + 1) + " PRIS AX " + n6(s.A) + " IX " + n6(s.J) + " IY " + n6(s.Iy) + " IZ " + n6(s.Iz)); });
+    var rel = m.frames.map(function (e, k) { return e.pinned ? k + 1 : 0; }).filter(Boolean);
+    if (rel.length) { o.push("MEMBER RELEASE"); rel.forEach(function (k) { o.push(k + " START MY MZ"); o.push(k + " END MY MZ"); }); }
+    o.push("CONSTANTS");
+    fm.forEach(function (nm, k) { o.push("MATERIAL " + nm + " MEMB " + (k + 1)); });
+    sm.forEach(function (nm, k) { o.push("MATERIAL " + nm + " MEMB " + (nf + k + 1)); });
+    o.push("SUPPORTS");
+    Object.keys(m.sup).forEach(function (n) { var r = m.sup[n], all = r.every(Boolean), tr = r[0] && r[1] && r[2] && !r[3] && !r[4] && !r[5];
+      if (all) o.push((+n + 1) + " FIXED"); else if (tr) o.push((+n + 1) + " PINNED"); else o.push((+n + 1) + " FIXED BUT " + ["FX", "FY", "FZ", "MX", "MY", "MZ"].filter(function (d, i) { return !r[i]; }).join(" ")); });
+    var ids = {}, li = 0;
+    Object.keys(L.cases).forEach(function (cn) {
+      var c = L.cases[cn]; ids[cn] = ++li;
+      o.push("LOAD " + li + " LOADTYPE " + (cn === "DL" ? "Dead" : cn === "LL" ? "Live" : /^(EQ|T)/.test(cn) ? "Seismic" : /^WL/.test(cn) ? "Wind" : "None") + " TITLE " + cn);
+      if (c.self) o.push("SELFWEIGHT Z -1");
+      if (c.frameUDL && c.frameUDL.length) { o.push("MEMBER LOAD"); c.frameUDL.forEach(function (q) { ["GX", "GY", "GZ"].forEach(function (d, i) { if (Math.abs(q.w[i]) > 1e-12) o.push((q.e + 1) + " UNI " + d + " " + n6(q.w[i])); }); }); }
+      if (c.shellP && c.shellP.length) { o.push("ELEMENT LOAD"); c.shellP.forEach(function (q) { ["GX", "GY", "GZ"].forEach(function (d, i) { if (Math.abs(q.q[i]) > 1e-12) o.push((nf + q.e + 1) + " PR " + d + " " + n6(q.q[i])); }); }); }
+      if (c.nodal && c.nodal.length) { o.push("JOINT LOAD"); c.nodal.forEach(function (q) { var t = ["FX", "FY", "FZ", "MX", "MY", "MZ"].map(function (d, i) { return Math.abs(q.f[i]) > 1e-12 ? d + " " + n6(q.f[i]) : ""; }).filter(Boolean); if (t.length) o.push((q.n + 1) + " " + t.join(" ")); }); }
+    });
+    (S.cb || []).forEach(function (cb, i) {
+      if (cb.rs || /^__/.test(cb.name)) return;
+      o.push("LOAD COMBINATION " + (101 + i) + " " + cb.name.slice(0, 60));
+      o.push(Object.keys(cb.f).map(function (cn) { return ids[cn] + " " + n6(cb.f[cn]); }).join(" "));
+    });
+    o.push("PERFORM ANALYSIS", "PRINT SUPPORT REACTION", "FINISH");
+    return o.join("\n") + "\n";
+  }
+  return { drawingSet: drawingSet, staad: staad, plan: plan, table: table };
+})();
+if (typeof module !== "undefined") module.exports = CAD;
+
+/* js/rpt.js */
+/* Complete calculation report: one self-contained HTML document (print → PDF), signed-review ready. */
+var RPT = (function () {
+  function esc(s) { return String(s === undefined || s === null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function f(x, d) { return x === null || x === undefined || isNaN(x) ? "-" : (+x).toFixed(d === undefined ? 2 : d); }
+  function tbl(head, rows) { return '<table><thead><tr>' + head.map(function (x) { return '<th>' + x + '</th>'; }).join("") + '</tr></thead><tbody>' + rows.map(function (r) { return '<tr>' + r.map(function (x) { return '<td>' + (x === undefined ? "" : x) + '</td>'; }).join("") + '</tr>'; }).join("") + '</tbody></table>'; }
+  function day(t) { return new Date(t || Date.now()).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }); }
+  var CSS = "#rpt{font:12.5px/1.45 'Segoe UI',Roboto,Arial,sans-serif;color:#16202c;background:#fff;max-width:900px;margin:0 auto;padding:18px}" +
+    "#rpt h1{font-size:24px;margin:0 0 6px;color:#1d3557}#rpt h2{font-size:17px;color:#1d3557;border-bottom:2px solid #1d3557;padding-bottom:4px;margin:26px 0 8px;page-break-before:always}#rpt h2.nb{page-break-before:auto}" +
+    "#rpt h3{font-size:14px;color:#1d3557;margin:14px 0 6px}#rpt table{border-collapse:collapse;width:100%;margin:6px 0 10px;font-size:11.5px}#rpt th,#rpt td{border:1px solid #c9d1da;padding:3px 5px;text-align:left;vertical-align:top}" +
+    "#rpt th{background:#eef2f6}#rpt .cover{border:2px solid #1d3557;padding:26px;margin-bottom:10px}#rpt .meta td:first-child{width:32%;color:#5d6b7b}#rpt .ok{color:#1e8e4a;font-weight:600}#rpt .no{color:#c62828;font-weight:600}#rpt .w{color:#b26a00;font-weight:600}" +
+    "#rpt .vb{border-left:5px solid #b26a00;background:#fff7e8;padding:8px 10px;margin:8px 0}#rpt .vb.vok{border-color:#1e8e4a;background:#e8f6ee}#rpt .vb.vno{border-color:#c62828;background:#fdecec}" +
+    "#rpt .eq{font-family:Consolas,Menlo,monospace;background:#f3f5f8;border-left:3px solid #1d3557;padding:4px 7px;margin:3px 0;font-size:11.5px}#rpt .sig td{height:46px}#rpt .note{color:#5d6b7b;font-size:11.5px}" +
+    "#rpt .toc li{margin:1px 0}#rpt details{margin:4px 0}#rpt .calc{border:1px solid #dfe4ea;border-radius:6px;padding:6px 8px;margin:6px 0}" +
+    "@media print{#rpt{padding:0;max-width:none}.noprint{display:none!important}#rpt h2{page-break-before:always}#rpt tr{page-break-inside:avoid}}";
+  function html(S, p, opt) {
+    opt = opt || {};
+    var P = S.p || {}, m = S.m, dt = S.det && !S.det.err && S.det.gB ? S.det : null, sm = PRO.summary(S), v = PRO.verifyState(p, S), vc = PRO.vClass(v), sec = 0, toc = [], body = "";
+    function H(t, nb) { sec++; toc.push(sec + ". " + t); return '<h2 id="s' + sec + '"' + (nb ? ' class="nb"' : '') + '>' + sec + '. ' + esc(t) + '</h2>'; }
+    var rev = p && p.revs && p.revs.length ? p.revs[p.revs.length - 1] : null;
+    /* cover */
+    var cover = '<div class="cover"><h1>Structural design calculations</h1><div style="font-size:16px;font-weight:600">' + esc(p ? p.name : "Project") + '</div><table class="meta">' +
+      [["Job / file no.", p && p.jobNo], ["Client", p && p.client], ["Site", p && p.site], ["Design engineer", p && p.engineer], ["Checking engineer", p && p.checker], ["Status", p && p.status], ["Revision", rev ? rev.rev + " — " + day(rev.date) + (rev.note ? " — " + rev.note : "") : "not issued"], ["Date of this report", day()], ["Design method", P.method === "wsm" ? "Working stress (IS 456 Annex B, IS 800 cl 11)" : "Limit state (IS 456, IS 800)"], ["Software", "IS StructDesign, calculation engine " + REG.ENGINE]].map(function (r) { return "<tr><td>" + r[0] + "</td><td>" + esc(r[1] || "—") + "</td></tr>"; }).join("") + '</table>' +
+      '<div class="vb ' + vc[0] + '"><b>' + vc[1] + '</b><br>' + esc(vc[2]) + '</div><p class="note">A PASS in this report means the check that was made passed. It is not by itself a certificate of structural safety: the design must be reviewed and the drawings signed by a qualified structural engineer before construction.</p></div>';
+    /* 1 codes */
+    body += H("Codes and standards", true) + tbl(["Standard", "Status", "How it is used"], REG.STANDARDS.map(function (s) { return ["<b>" + esc(s[0]) + "</b><br><small>" + esc(s[1]) + "</small>", esc(s[2]), esc(s[3])]; }));
+    /* 2 basis */
+    var ent = P.entered || [], par = [["Concrete grade fck", P.fck, "N/mm²", "fck"], ["Reinforcement fy", P.fy, "N/mm²", "fy"], ["Structural steel fy", P.fys, "N/mm²", "fys"], ["Column section (default)", P.colSec, "", "colSec"], ["Beam section (default)", P.beamSec, "", "beamSec"], ["Slab thickness", P.tSlab, "mm", "tSlab"], ["Wall thickness", P.tWall, "mm", "tWall"],
+      ["Cracked sections (IS 1893 cl 6.4.3.1)", P.crack ? "yes" : "no", "", "crack"], ["Floor finish / roof finish", P.ff + " / " + P.ffRoof, "kN/m²", "ff"], ["Imposed load floor / roof", P.ll + " / " + P.llRoof, "kN/m²", "ll"], ["Wall load on beams / parapet", P.wall + " / " + P.parapet, "kN/m", "wall"],
+      ["Seismic zone, I, R, soil", P.eq ? P.zone + ", " + P.I + ", " + P.R + ", " + P.soil : "not considered", "", "zone"], ["Response spectrum / modes / combination", P.rsa ? "yes / " + P.nModes + " / " + String(P.rsComb).toUpperCase() : "no", "", "rsa"], ["Accidental torsion", P.accTor ? "yes (cl 7.8.2)" : "no", "", "accTor"],
+      ["Wind", P.wind ? "Vb " + P.vb + " m/s, terrain " + P.terrain + ", Cf " + P.cf : "not considered", "", "wind"], ["Safe bearing capacity / founding depth", P.sbc + " kN/m² / " + P.Df + " m", "", "sbc"]];
+    body += H("Design basis") + tbl(["Parameter", "Value", "Unit", "Source"], par.map(function (r) { return [esc(r[0]), esc(r[1]), r[2], ent.indexOf(r[3]) >= 0 ? "entered" : '<span class="w">default — confirm</span>']; }));
+    if (P.secOver) body += '<h3>Section rules</h3><div class="eq">' + esc(P.secOver).replace(/\n/g, "<br>") + '</div>';
+    body += '<p class="note">Clear covers used in detailing: beams ' + (dt ? dt.cf.cb : 30) + ' mm, columns ' + (dt ? dt.cf.cc : 40) + ' mm, slabs ' + (dt ? dt.cf.cs : 20) + ' mm, footings ' + (dt ? dt.cf.cf : 50) + ' mm (IS 456 Table 16, moderate exposure). ' + (dt && dt.cf.duct ? 'Ductile detailing to IS 13920:2016 applies (zone ' + esc(P.zone) + ').' : 'IS 13920 not mandatory (zone II / no seismic).') + '</p>';
+    /* 3 assumptions */
+    var asm = REG.CHECKS.filter(function (r) { return r[2] === "Simplified"; }).map(function (r) { return [esc(r[0]), esc(r[1]), esc(r[3])]; });
+    asm = [["Model", "Supports at the base are fixed; floors are not rigid diaphragms (slab shells give in-plane stiffness)", "Footing rotation is ignored"], ["Model", "Members are line elements between nodes; rigid end offsets at joints are not modelled", "Conservative for moments at faces"], ["Loads", "Seismic weight = DL + 25 % LL (50 % for LL > 3 kN/m²), roof LL excluded (IS 1893 Table 10)", ""]].map(function (r) { return r.map(esc); }).concat(asm);
+    body += H("Assumptions register") + tbl(["Area", "Assumption", "Effect / note"], asm);
+    /* 4 model */
+    var cnt = {}; m.frames.forEach(function (e) { var k = e.type + " " + e.sec.name; cnt[k] = (cnt[k] || 0) + 1; });
+    body += H("Structural model") + tbl(["Item", "Value"], [["Nodes / frame elements / shell elements", m.nodes.length + " / " + m.frames.length + " / " + m.shells.length], ["Supports", Object.keys(m.sup).length], ["Type", m.twoD ? "2D plane frame" : "3D space structure"], ["Floor levels (m)", MD.floorLevels(m).map(function (z) { return f(z, 2); }).join(", ")]]) +
+      '<h3>Sections in use</h3>' + tbl(["Member type and section", "Elements"], Object.keys(cnt).sort().map(function (k) { return [esc(k), cnt[k]]; }));
+    /* 5 loads */
+    var L = S.L, cr = S.res.caseReac || {};
+    body += H("Loads") + tbl(["Case", "Σ Fx (kN)", "Σ Fy (kN)", "Σ Fz (kN)"], Object.keys(L.cases).map(function (c) { var s = [0, 0, 0]; Object.keys(cr[c] || {}).forEach(function (n) { for (var i = 0; i < 3; i++) s[i] += cr[c][n][i]; }); return [c, f(s[0], 1), f(s[1], 1), f(s[2], 1)]; })) + '<p class="note">Sums of the support reactions of each load case (equilibrium check of the applied loads).</p>';
+    Object.keys(L.eq || {}).forEach(function (k) { var q = L.eq[k]; body += '<div class="eq">' + k + ': h = ' + f(q.H, 2) + ' m, d = ' + f(q.d, 1) + ' m, Ta = ' + f(q.T, 3) + ' s, Sa/g = ' + f(q.Sa, 3) + ', Ah = (Z/2)(Sa/g)/(R/I) = ' + f(q.Ah, 4) + ', W = ' + f(q.W, 0) + ' kN, VB = ' + f(q.Vb, 1) + ' kN (IS 1893 cl 7.2, 7.6)</div>'; });
+    body += '<h3>Load combinations</h3>' + tbl(["No.", "Combination"], (S.cb || []).filter(function (c) { return !/^__/.test(c.name); }).map(function (c, i) { return [i + 1, esc(c.name) + (c.rs ? " (response spectrum)" : "")]; }));
+    /* 6 analysis */
+    body += H("Analysis results");
+    if (S.se && S.se.md) {
+      body += '<h3>Modal analysis</h3>' + tbl(["Mode", "T (s)", "f (Hz)", "Mass X %", "Mass Y %", "Torsion %", "Type"], S.se.md.modes.slice(0, 12).map(function (q) { return [q.k, f(q.T, 3), f(q.f, 3), f(100 * q.pct[0], 1), f(100 * (q.pct[1] || 0), 1), f(100 * q.pctR, 1), q.kind]; }));
+      body += '<h3>Response spectrum (IS 1893 cl 7.7)</h3>' + tbl(["Direction", "Dynamic VB (kN)", "Static VB (kN)", "Scale factor", "Mass captured"], Object.keys(S.se.rs).map(function (d) { var r = S.se.rs[d]; return [+d ? "Y" : "X", f(r.Vb, 1), f(r.VbS, 1), f(r.scale, 3), f(100 * r.cum, 1) + " %"]; }));
+    }
+    if (S.drift && S.drift.length) { var dm = {}; S.drift.forEach(function (q) { if (!dm[q.c] || q.dr > dm[q.c].dr) dm[q.c] = q; }); body += '<h3>Storey drift (cl 7.11.1, limit 0.004)</h3>' + tbl(["Case", "Storey (m)", "Max drift", "Δmax/Δave", "Status"], Object.keys(dm).map(function (k) { var q = dm[k]; return [esc(k), f(q.zb, 2) + "–" + f(q.z, 2), f(q.dr, 5), m.twoD ? "—" : f(q.tr, 2), q.lim ? (q.ok ? '<span class="ok">OK</span>' : '<span class="no">EXCEEDS</span>') : ""]; })); }
+    if (S.se && S.se.irr) { var soft = S.se.irr.filter(function (r) { return r.soft; }).length, mass = S.se.irr.filter(function (r) { return r.mass; }).length, tor = (S.se.tc || []).filter(function (r) { return r.ave > 1.2; }).length; body += '<p>Irregularities (IS 1893 Tables 5, 6): soft storey ' + (soft ? '<span class="no">' + soft + ' flags</span>' : '<span class="ok">none</span>') + ', mass ' + (mass ? '<span class="no">' + mass + '</span>' : '<span class="ok">none</span>') + ', torsional (Δmax/Δave > 1.2) ' + (tor ? '<span class="no">' + tor + '</span>' : '<span class="ok">none</span>') + '.</p>'; }
+    /* 7 design summary */
+    body += H("Design summary") + tbl(["Group", "Members", "Result", "Utilisation", "Governing", "Status", "Verification"], sm.map(function (r) { return ["<b>" + r.id + "</b>", esc(r.mem), esc(r.res), '<span class="' + (r.u > 1 ? "no" : r.u > 0.9 ? "w" : "") + '">' + f(r.u, 2) + '</span>', esc(r.why), r.ok ? '<span class="ok">PASS</span>' : '<span class="no">FAIL</span>', r.v ? esc(r.v.st) : ""]; })) +
+      '<p class="note">Utilisation is the governing demand/capacity ratio; the verification state is the weakest of the checks behind the result (see "Verification status and review").</p>';
+    /* 8 calculation trace */
+    body += H("Calculation trace — governing members");
+    var d = S.des, picks = [];
+    function worst(arr, key) { var w = null; arr.forEach(function (r) { var u = key(r); if (!w || u > w.u) w = { r: r, u: u }; }); return w && w.r; }
+    if (d.beams.length) picks.push(["beam", worst(d.beams, function (r) { return (r.ok ? 0 : 10) + Math.max(r.Ab, r.At) / (r.b * r.d); })]);
+    if (d.cols.length) picks.push(["column", worst(d.cols, function (r) { return r.need ? r.need.r : 10; })]);
+    if (d.steel.length) picks.push(["steel", worst(d.steel, function (r) { return r.ratio; })]);
+    if (d.slabs.length) picks.push(["slab", worst(d.slabs, function (r) { return Math.max(r.Abx, r.Aby, r.Atx, r.Aty); })]);
+    if (d.walls.length) picks.push(["wall", worst(d.walls, function (r) { return r.ok ? 0 : 1; })]);
+    var list = opt.all ? [["beam", d.beams], ["column", d.cols], ["steel", d.steel], ["slab", d.slabs], ["wall", d.walls]].reduce(function (a, g) { return a.concat(g[1].map(function (r) { return [g[0], r]; })); }, []) : picks;
+    body += '<p class="note">' + (opt.all ? "All members." : "The most heavily loaded member of each type, step by step with the clause used; every member is in the Excel workbook and in the app.") + '</p>';
+    list.forEach(function (q) { if (!q[1]) return; body += '<div class="calc"><h3>' + esc(q[0][0].toUpperCase() + q[0].slice(1)) + ' ' + (q[0] === "slab" || q[0] === "wall" ? "S" : "F") + (q[1].k + 1) + (q[1].name ? " (" + esc(q[1].name) + ")" : "") + ' — ' + (q[1].ok ? '<span class="ok">OK</span>' : '<span class="no">FAIL</span>') + '</h3>' + CALC.html(CALC.stepsFor(q[0], q[1], m, P), esc) + '</div>'; });
+    /* 9 detailing */
+    if (dt) {
+      body += H("Detailing and ductility checks");
+      if (dt.scwb.length) { var sw = dt.scwb.slice().sort(function (a, b) { return a.r - b.r; }); body += '<h3>Strong column – weak beam (IS 13920 cl 7.2.1) — ' + sw.filter(function (q) { return !q.ok; }).length + ' of ' + sw.length + ' fail</h3>' + tbl(["Column", "Joint (m)", "Dir", "ΣMc", "ΣMb", "Ratio", ""], sw.slice(0, opt.all ? 999 : 20).map(function (q) { return [esc(q.col), f(q.z, 2), q.dir, f(q.Mc, 0), f(q.Mb, 0), f(q.r, 2), q.ok ? '<span class="ok">OK</span>' : '<span class="no">FAIL</span>']; })); }
+      if (dt.joints.length) { var jj = dt.joints.slice().sort(function (a, b) { return b.r - a.r; }); body += '<h3>Beam–column joints (IS 13920 cl 9) — ' + jj.filter(function (q) { return !q.ok || !q.anch; }).length + ' of ' + jj.length + ' fail</h3>' + tbl(["Column", "Joint (m)", "Dir", "Vj (kN)", "Capacity (kN)", "k", "hc ≥ 20φ", ""], jj.slice(0, opt.all ? 999 : 20).map(function (q) { return [esc(q.col), f(q.z, 2), q.dir, f(q.Vj, 0), f(q.cap, 0), q.k, q.anch ? "yes" : '<span class="no">no</span>', q.ok && q.anch ? '<span class="ok">OK</span>' : '<span class="no">FAIL</span>']; })); }
+      var ck = []; dt.gB.forEach(function (G) { G.rep.checks.forEach(function (q) { if (!q.ok) ck.push([G.id, q.t, q.v, q.cl]); }); }); dt.gC.forEach(function (G) { G.rep.checks.forEach(function (q) { if (!q.ok) ck.push([G.id, q.t, q.v, q.cl]); }); }); dt.gF.forEach(function (G) { G.rep.checks.forEach(function (q) { if (!q.ok) ck.push([G.id, q.t, q.v, q.cl]); }); }); (dt.gW || []).forEach(function (G) { G.rep.checks.forEach(function (q) { if (!q.ok) ck.push([G.id, q.t, q.v, q.cl]); }); });
+      body += '<h3>Detailing checks not satisfied</h3>' + (ck.length ? tbl(["Group", "Check", "Value", "Clause"], ck.map(function (r) { return r.map(esc); })) : '<p class="ok">All beam, column, wall and footing detailing checks are satisfied.</p>');
+      var sc = BOQ.schedules(S);
+      [["cols", "Column schedule"], ["beams", "Beam schedule"], ["walls", "Wall schedule"], ["slabs", "Slab schedule"], ["foot", "Footing schedule"]].forEach(function (g) { if (sc[g[0]].length) body += '<h3>' + g[1] + '</h3>' + tbl(BOQ.HEAD[g[0]], sc[g[0]].map(function (r) { return r.map(esc); })); });
+      body += '<h3>Reinforcement by diameter (kg)</h3>' + tbl(["φ", "Beams", "Columns", "Slabs", "Footings", "Walls", "Total"], dt.tot.map(function (t) { return [t.dia + " mm", f(t.beams, 0), f(t.cols, 0), f(t.slabs, 0), f(t.foot, 0), f(t.walls || 0, 0), "<b>" + f(t.all, 0) + "</b>"]; }).concat([["<b>Total</b>", "", "", "", "", "", "<b>" + f(dt.total, 0) + "</b>"]]));
+    }
+    /* 10 BOQ */
+    if (S.boq) { var b = BOQ.price(S.boq, (p && p.rates) || {}); body += H("Bill of quantities") + tbl(["Item", "Description", "Unit", "Quantity", "Rate", "Amount"], b.items.map(function (it, i) { return [i + 1, esc(it.desc) + (it.grade ? " (" + it.grade + ")" : ""), it.unit, f(it.qty, it.unit === "kg" ? 0 : 2), it.rate ? f(it.rate, 2) : "", it.amt ? Math.round(it.amt).toLocaleString("en-IN") : ""]; }).concat(b.amount ? [["", "<b>Total</b>", "", "", "", "<b>₹ " + Math.round(b.amount).toLocaleString("en-IN") + "</b>"]] : [])) + '<p class="note">Rates are the project\'s own entries. Measurement as described in the app (IS 1200 style); steel from the bar bending schedule without wastage.</p>'; }
+    /* 11 verification */
+    var rv = (p && p.review) || {};
+    body += H("Verification status and review") + '<div class="vb ' + vc[0] + '"><b>' + vc[1] + '</b><br>' + esc(vc[2]) + '</div>' +
+      tbl(["Area", "Check", "State", "Why it needs review", "Review"], v.items.map(function (i) { var r = rv[i.key]; return [esc(i.area), esc(i.t), i.st === "FAIL" ? '<span class="no">FAIL</span>' : esc(i.st), esc(i.why), r ? ({ ok: "Accepted", query: '<span class="no">Query</span>', na: "N/A" }[r.state]) + " — " + esc(r.by) + ", " + day(r.date) + (r.note ? " — " + esc(r.note) : "") : '<span class="w">open</span>']; })) +
+      '<h3>Independently verified checks</h3>' + tbl(["Area", "Check", "Evidence"], REG.CHECKS.filter(function (r) { return r[2] === "Verified"; }).map(function (r) { return [esc(r[0]), esc(r[1]), esc(r[3])]; }));
+    body += '<h3>Signatures</h3><table class="sig"><tr><th>Role</th><th>Name</th><th>Signature</th><th>Date</th></tr><tr><td>Designed by</td><td>' + esc(p && p.engineer) + '</td><td></td><td></td></tr><tr><td>Checked by</td><td>' + esc(p && p.checker) + '</td><td></td><td></td></tr><tr><td>Approved by</td><td></td><td></td><td></td></tr></table>';
+    if (p && p.revs && p.revs.length) body += '<h3>Revision history</h3>' + tbl(["Rev", "Date", "By", "Note", "Engine"], p.revs.map(function (r) { return [esc(r.rev), day(r.date), esc(r.by), esc(r.note), esc(r.engine)]; }));
+    /* 12 limits */
+    body += H("Limitations") + '<ul>' + REG.CHECKS.filter(function (r) { return r[2] === "Not implemented"; }).map(function (r) { return '<li>' + esc(r[1]) + (r[3] ? ' — ' + esc(r[3]) : '') + '</li>'; }).join("") + '<li>The results depend on the inputs listed in the design basis; defaults marked "confirm" must be checked against site data.</li></ul>';
+    return '<div id="rpt">' + cover + '<h2 class="nb">Contents</h2><ol class="toc">' + toc.map(function (t) { return '<li>' + esc(t.replace(/^\d+\.\s*/, "")) + '</li>'; }).join("") + '</ol>' + body + '</div>';
+  }
+  function doc(S, p, opt) { return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc((p ? p.name : "Project") + " — calculations") + '</title><style>body{margin:0;background:#fff}' + CSS + '</style></head><body>' + html(S, p, opt) + '</body></html>'; }
+  function view(app, title, back, ctx) {
+    title.textContent = "Calculation report"; back.hidden = false;
+    var S = ctx.S();
+    if (!S || !S.des) { app.innerHTML = '<div class="rep"><p>Run the analysis first (Frame & FE analysis ▸ Linear static).</p><a class="btnl pri" href="#model">Open the model ›</a></div>'; return; }
+    var p = PDB.current(), all = !!view.all;
+    app.innerHTML = '<style>' + CSS + '</style><div class="btns noprint" style="margin-bottom:8px"><button class="pri" id="rPrint" type="button">Print / Save PDF</button><button id="rDl" type="button">Download HTML</button><button id="rAll" type="button">' + (all ? "Governing members only" : "Include every member") + '</button><a class="btnl" href="#model">‹ Model</a></div>' + html(S, p, { all: all });
+    document.getElementById("rPrint").onclick = function () { if (window.AndroidBridge && AndroidBridge.print) AndroidBridge.print((p.name || "Report") + " calculations"); else window.print(); };
+    document.getElementById("rDl").onclick = function () { ctx.download(((p.name || "project").replace(/[^\w\- ]+/g, "_").replace(/\s+/g, "-")) + "-calculations.html", doc(S, p, { all: all })); };
+    document.getElementById("rAll").onclick = function () { view.all = !all; view(app, title, back, ctx); };
+  }
+  return { html: html, doc: doc, view: view };
+})();
+if (typeof module !== "undefined") module.exports = RPT;
+
+/* js/pro.js */
+/* Professional platform: projects, automatic design, engineering verification mode, BOQ & schedules,
+   calculation report, CAD drawing set & STAAD export, engineering assistant. */
+var PRO = (function () {
+  function esc(s) { return String(s === undefined || s === null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function f(x, d) { return x === null || x === undefined || isNaN(x) ? "-" : (+x).toFixed(d === undefined ? 2 : d); }
+  function tbl(head, rows, cls) { return '<div class="tw"><table' + (cls ? ' class="' + cls + '"' : '') + '><tr>' + head.map(function (x) { return '<th>' + x + '</th>'; }).join("") + '</tr>' + rows.map(function (r) { return '<tr>' + r.map(function (x) { return '<td>' + (x === undefined ? "" : x) + '</td>'; }).join("") + '</tr>'; }).join("") + '</table></div>'; }
+  function tblL(head, rows) { return tbl(head, rows, "tl"); }
+  function $(id) { return document.getElementById(id); }
+  function proj() { return typeof PDB !== "undefined" ? PDB.current() : null; }
+  function dstr(t) { return t ? new Date(t).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""; }
+  function day(t) { return t ? new Date(t).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : ""; }
+  var STATUS = ["Concept", "Design", "For check", "Checked", "Issued", "On hold"];
+  var VCOL = { Verified: "vchip v3", Calculated: "vchip v2", Simplified: "vchip v1", "Not implemented": "vchip v0" };
+  function chip(st, txt) { return '<span class="' + (VCOL[st] || "vchip") + '">' + esc(txt || st) + '</span>'; }
+  function tcmax(fck) { var t = [[15, 2.5], [20, 2.8], [25, 3.1], [30, 3.5], [35, 3.7], [40, 4.0]], v = 2.5; t.forEach(function (q) { if (fck >= q[0]) v = q[1]; }); return v; }
+
+  /* ================================================================ PROJECTS */
+  function projectsView(app, title, back, ctx) {
+    title.textContent = "Projects"; back.hidden = false;
+    var cur = PDB.current(), list = PDB.list(), q = (projectsView.q || "").toLowerCase();
+    var h = '<div class="rep"><div class="rh"><div><h3>' + esc(cur.name) + '</h3><small>Current project · ' + esc(cur.status) + ' · engine ' + esc(cur.engine) + (cur.engine !== REG.ENGINE ? ' (now ' + REG.ENGINE + ' — re-run the analysis)' : '') + '</small></div><span class="badge ' + (cur.summary && !cur.summary.memberFails && !cur.summary.detailFails ? "pass" : "fail") + '">' + (cur.summary ? (cur.summary.memberFails + (cur.summary.detailFails || 0) ? (cur.summary.memberFails + (cur.summary.detailFails || 0)) + " FAIL" : "ALL OK") : "NOT RUN") + '</span></div>';
+    h += '<div class="form" id="pform">' + [["name", "Project name"], ["jobNo", "Job / file no."], ["client", "Client"], ["site", "Site / location"], ["engineer", "Design engineer"], ["checker", "Checking engineer"]].map(function (k) { return '<label class="fld"><span>' + k[1] + '</span><input data-pk="' + k[0] + '" value="' + esc(cur[k[0]]) + '"></label>'; }).join("") +
+      '<label class="fld"><span>Status</span><select data-pk="status">' + STATUS.map(function (s) { return '<option' + (s === cur.status ? " selected" : "") + '>' + s + '</option>'; }).join("") + '</select></label>' +
+      '<label class="fld full"><span>Notes</span><textarea data-pk="notes" rows="2">' + esc(cur.notes) + '</textarea></label>' +
+      '<div class="btns full"><button class="pri" id="pSave" type="button">Save details</button><a class="btnl" href="#model">Open model ›</a></div></div>';
+    if (cur.summary) { var s = cur.summary; h += '<div class="sum"><div><span>Last analysis</span><b>' + dstr(s.date) + '</b></div><div><span>Members / failing</span><b>' + s.members + ' / ' + s.memberFails + (s.detailFails !== null ? ' · detailing ' + s.detailFails : '') + '</b></div><div><span>Concrete · steel</span><b>' + f(s.concrete_m3, 1) + ' m³ · ' + f(s.steel_t, 2) + ' t</b></div>' + (s.cost ? '<div><span>Cost from your rates</span><b>₹ ' + s.cost.toLocaleString("en-IN") + '</b></div>' : '') + '</div>'; }
+    h += '<h4>Revisions</h4>' + ((cur.revs || []).length ? tbl(["Rev", "Date", "By", "Note", "Engine", "Result"], cur.revs.slice().reverse().map(function (r) { return ["<b>" + esc(r.rev) + "</b>", day(r.date), esc(r.by), esc(r.note), esc(r.engine), r.summary ? (r.summary.memberFails + (r.summary.detailFails || 0) ? '<span class="not">' + (r.summary.memberFails + (r.summary.detailFails || 0)) + ' fail</span>' : '<span class="okt">all OK</span>') + ' · ' + f(r.summary.steel_t, 2) + ' t' : "not run"]; })) : '<div class="note">No revision issued yet. Issuing a revision freezes the inputs, the result summary, the engine and the code editions.</div>');
+    h += '<div class="btns"><input id="revNote" placeholder="Revision note (e.g. issued for checking)" style="flex:2"><button id="pIssue" type="button">Issue revision</button></div>';
+    h += '<details><summary>Activity log (' + (cur.log || []).length + ')</summary>' + tbl(["When", "What"], (cur.log || []).slice(-30).reverse().map(function (l) { return [dstr(l.t), esc(l.a)]; })) + '</details></div>';
+    h += '<div class="rep"><div class="rh"><div><h3>All projects</h3><small>Stored on this device (' + (PDB.mode() === "idb" ? "IndexedDB" : PDB.mode() === "ls" ? "local storage" : "memory") + ') — export or back up to keep a copy elsewhere</small></div></div>';
+    h += '<div class="btns"><button class="pri" id="pNew" type="button">New project</button><button id="pImp" type="button">Import / restore…</button><button id="pBak" type="button">Back up all</button></div><input type="file" id="pFile" accept=".isdp,.json,application/json" hidden>';
+    h += '<input id="pQ" placeholder="Search name, job no., client, site…" value="' + esc(projectsView.q || "") + '" style="margin:6px 0">';
+    list.filter(function (p) { return !q || [p.name, p.jobNo, p.client, p.site, p.engineer].join(" ").toLowerCase().indexOf(q) >= 0; }).forEach(function (p) {
+      var s = p.summary;
+      h += '<div class="prow' + (p.id === cur.id ? " cur" : "") + '"><div><b>' + esc(p.name) + '</b> <span class="stchip st' + STATUS.indexOf(p.status) + '">' + esc(p.status) + '</span><br><small>' + esc([p.jobNo, p.client, p.site].filter(Boolean).join(" · ")) + (p.jobNo || p.client || p.site ? " · " : "") + 'modified ' + dstr(p.modified) + (s ? ' · ' + (s.memberFails + (s.detailFails || 0) ? (s.memberFails + (s.detailFails || 0)) + ' fail' : 'all OK') + ' · ' + f(s.steel_t, 2) + ' t steel' : '') + ((p.revs || []).length ? ' · ' + p.revs[p.revs.length - 1].rev : '') + '</small></div>' +
+        '<div class="pbtn">' + (p.id === cur.id ? '<span class="okt">open</span>' : '<button data-po="' + p.id + '">Open</button>') + '<button data-pd="' + p.id + '">Copy</button><button data-pe="' + p.id + '">Export</button><button data-px="' + p.id + '" class="del">Delete</button></div></div>';
+    });
+    h += '</div>';
+    app.innerHTML = h;
+    function rerender() { projectsView(app, title, back, ctx); }
+    $("pSave").onclick = function () { var o = {}; app.querySelectorAll("[data-pk]").forEach(function (el) { o[el.getAttribute("data-pk")] = el.value.trim(); });
+      if (o.status === "Checked" || o.status === "Issued") { var v = verifyState(cur); if (v.open) ctx.toast("Note: " + v.open + " verification item(s) still open"); }
+      PDB.update(cur.id, o); ctx.toast("Project saved"); rerender(); };
+    $("pIssue").onclick = function () { PDB.issue($("revNote").value.trim(), cur.engineer); ctx.toast("Revision issued"); rerender(); };
+    $("pNew").onclick = function () { var p = PDB.create("Project " + (PDB.list().length + 1)); ctx.opened(p); rerender(); };
+    $("pBak").onclick = function () { ctx.download("isd-backup-" + new Date().toISOString().slice(0, 10) + ".json", PDB.exportAll()); };
+    $("pImp").onclick = function () { $("pFile").click(); };
+    $("pFile").onchange = function () { var fl = this.files[0]; if (!fl) return; var rd = new FileReader(); rd.onload = function () { try { var a = PDB.importText(rd.result); ctx.toast("Imported " + a.length + " project(s)"); rerender(); } catch (e) { ctx.toast(e.message); } }; rd.readAsText(fl); };
+    $("pQ").oninput = function () { projectsView.q = this.value; var pos = this.selectionStart; rerender(); var el = $("pQ"); el.focus(); el.setSelectionRange(pos, pos); };
+    app.querySelectorAll("[data-po]").forEach(function (b) { b.onclick = function () { var p = PDB.open(b.getAttribute("data-po")); ctx.opened(p); location.hash = "#model"; }; });
+    app.querySelectorAll("[data-pd]").forEach(function (b) { b.onclick = function () { PDB.duplicate(b.getAttribute("data-pd")); ctx.toast("Copied"); rerender(); }; });
+    app.querySelectorAll("[data-pe]").forEach(function (b) { b.onclick = function () { var p = PDB.get(b.getAttribute("data-pe")); ctx.download((p.name || "project").replace(/[^\w\- ]+/g, "_") + ".isdp", PDB.exportOne(p.id)); }; });
+    app.querySelectorAll("[data-px]").forEach(function (b) { b.onclick = function () {
+      if (b.getAttribute("data-arm") !== "1") { b.setAttribute("data-arm", "1"); b.textContent = "Tap again to delete"; setTimeout(function () { b.removeAttribute("data-arm"); b.textContent = "Delete"; }, 3000); return; }
+      var id = b.getAttribute("data-px"), wasCur = id === PDB.current().id; PDB.remove(id); if (wasCur) ctx.opened(PDB.current()); ctx.toast("Deleted"); rerender(); }; });
+  }
+
+  /* ================================================================ DESIGN SUMMARY (member groups, utilisation) */
+  function summary(S) {
+    var d = S.des, dt = S.det && !S.det.err && S.det.gB ? S.det : null, rows = [], byK = {};
+    if (!d) return rows;
+    d.beams.forEach(function (r) { byK["b" + r.k] = r; }); d.cols.forEach(function (r) { byK["c" + r.k] = r; });
+    var duct = dt ? dt.cf.duct : false;
+    if (dt) {
+      dt.gB.forEach(function (G) {
+        var u = 0, ok = true, why = "";
+        G.list.forEach(function (bl) { bl.seq.forEach(function (it) { var r = byK["b" + it.k]; if (!r) return; if (!r.ok) ok = false; var pmax = (duct ? 0.025 : 0.04) * r.b * r.d, uu = Math.max(Math.max(r.Ab, r.At) / pmax, r.tv / tcmax(r.fck)); if (uu > u) { u = uu; why = Math.max(r.Ab, r.At) / pmax > r.tv / tcmax(r.fck) ? "steel / ρmax" : "τv / τc,max"; } }); if (bl.checks.some(function (q) { return !q.ok; })) ok = false; });
+        rows.push({ kind: "beam", id: G.id, mem: G.list.map(function (b) { return b.name; }).join(", "), res: G.rep.b + "×" + G.rep.D + " · top " + Math.max.apply(null, G.rep.sup.map(function (s) { return s.nt; })) + "-" + G.rep.dia + "φ, bottom " + Math.max.apply(null, G.rep.spans.map(function (s) { return s.nb; })) + "-" + G.rep.dia + "φ", u: u, why: why, ok: ok && u <= 1 + 1e-9 });
+      });
+      dt.gC.forEach(function (G) {
+        var u = 0, ok = true, why = "";
+        G.list.forEach(function (c) {
+          c.st.forEach(function (s) { s.els.forEach(function (k) { var r = byK["c" + k]; if (!r) return; if (!r.ok) { ok = false; u = Math.max(u, 9.99); why = "design"; } else if (r.need && r.need.r > u) { u = r.need.r; why = "P–M interaction"; } }); });
+          dt.scwb.filter(function (q) { return q.colRef === c; }).forEach(function (q) { if (1.4 / q.r > u) { u = 1.4 / q.r; why = "strong column–weak beam"; } if (!q.ok) ok = false; });
+          dt.joints.filter(function (q) { return q.colRef === c; }).forEach(function (q) { if (q.r > u) { u = q.r; why = "joint shear"; } if (!q.ok || !q.anch) ok = false; });
+          if (c.checks.some(function (q) { return !q.ok; })) ok = false;
+        });
+        var s0 = G.rep.st[0];
+        rows.push({ kind: "column", id: G.id, mem: G.list.map(function (c) { return c.name; }).join(", "), res: s0.b + "×" + s0.D + " · " + G.rep.st.map(function (s) { return s.ar.n + "-" + s.ar.dia + "φ"; }).join(" / "), u: u, why: why, ok: ok && u <= 1 + 1e-9 });
+      });
+      (dt.gW || []).forEach(function (G) {
+        var w = G.rep, u = 0, why = "";
+        w.storeys.forEach(function (st) { if (st.worst > u) { u = st.worst; why = "P–M"; } if (st.tv / st.tcm > u) { u = st.tv / st.tcm; why = "τv / τc,max"; } if (st.be && st.Pbe / st.beCap > u) { u = st.Pbe / st.beCap; why = "boundary element"; } });
+        rows.push({ kind: "wall", id: G.id, mem: G.list.map(function (x) { return x.name; }).join(", "), res: w.t + " × " + Math.round(w.Lw) + " · " + w.storeys[0].vb.dia + "φ@" + w.storeys[0].vb.s + " / " + w.storeys[0].hb.dia + "φ@" + w.storeys[0].hb.s, u: u, why: why, ok: !w.checks.some(function (q) { return !q.ok; }) && u <= 1 + 1e-9 });
+      });
+      dt.slabs.forEach(function (fl, i) {
+        var u = 0; fl.panels.forEach(function (P) { u = Math.max(u, Math.max(P.req.bX, P.amin) / P.bot.X.As, Math.max(P.req.bY, P.amin) / P.bot.Y.As); });
+        rows.push({ kind: "slab", id: "S" + (i + 1), mem: fl.name, res: "t " + fl.t + " · " + fl.panels.length + " panels", u: u, why: "Ast req / prov", ok: u <= 1 + 1e-9 && !fl.panels.some(function (P) { return P.msg.length; }) });
+      });
+      dt.gF.forEach(function (G) {
+        var ft = G.rep, u = Math.max(ft.gov.u, ft.tv[0] / ft.tc[0], ft.tv[1] / ft.tc[1], ft.tp / ft.kp, ft.fact / ft.fbr), why = u === ft.gov.u ? "soil pressure" : u === ft.tp / ft.kp ? "punching" : "shear / bearing";
+        rows.push({ kind: "footing", id: G.id, mem: G.list.map(function (c) { return c.name; }).join(", "), res: ft.Lx + "×" + ft.Ly + "×" + ft.D + " · " + ft.bx.dia + "φ@" + ft.bx.s + " / " + ft.by.dia + "φ@" + ft.by.s, u: u, why: why, ok: !ft.checks.some(function (q) { return !q.ok; }) });
+      });
+    }
+    if (d.steel.length) { var ws = d.steel.slice().sort(function (a, b) { return b.ratio - a.ratio; }); rows.push({ kind: "steel", id: "ST", mem: d.steel.length + " steel members", res: "worst " + ws[0].name, u: ws[0].ratio, why: "IS 800 interaction", ok: d.steel.every(function (r) { return r.ok; }) }); }
+    rows.forEach(function (r) { r.v = REG.state(REG.KIND[r.kind] || []); });
+    return rows;
+  }
+
+  /* ================================================================ VERIFICATION MODE */
+  /* items the checking engineer must close: every applicable check that is not independently verified, and every failure */
+  function vItems(S) {
+    var m = S.m, items = [], has = { wall: m.shells.some(function (s) { return s.kind === "wall"; }), slab: m.shells.some(function (s) { return s.kind === "slab"; }), steel: m.frames.some(function (e) { return e.sec.kind === "steel"; }), rcc: m.frames.some(function (e) { return e.sec.kind === "rcc"; }), eq: !!(S.p && S.p.eq), wsm: S.p && S.p.method === "wsm", wind: !!(S.p && S.p.wind) };
+    var app = { pdelta: !!(S.res && S.res.pd), pushover: !!S.po, rcwall: has.wall, rcwallel: has.wall, rcslab: has.slab, dtslab: has.slab, stfcd: has.steel, stltb: has.steel, stklen: has.steel, rcbeam: has.rcc, rccol: has.rcc, dtbeam: has.rcc, dtcol: has.rcc, scwb: has.rcc && has.eq, joint: has.rcc && has.eq,
+      spectrum: has.eq, statbase: has.eq, modal: has.eq && S.p.rsa, rsa: has.eq && S.p.rsa, torsion: has.eq, irreg: has.eq, timehist: has.eq, wind: has.wind, wsmwall: has.wsm && has.wall, foot: has.rcc, footpress: has.rcc, foundmore: has.rcc, servic: has.rcc, bbs: has.rcc, boq: !!S.boq, auto: !!S.autoRes };
+    REG.IDS.forEach(function (id) {
+      var r = REG.byId(id); if (!r) return;
+      if (app[id] === false || (app[id] === undefined && ["frame", "shell", "modelchk"].indexOf(id) < 0)) return;
+      if (id === "shell" && !m.shells.length) return;
+      if (r.st === "Verified") return;
+      items.push({ key: "chk:" + id, area: r.area, t: r.t, st: r.st, why: r.st === "Not implemented" ? "Not done by the app — check by hand or other software" : r.st === "Simplified" ? "Approximation — confirm it is acceptable for this project: " + r.ev : "Not independently benchmarked — spot-check by hand: " + r.ev });
+    });
+    summary(S).filter(function (r) { return !r.ok; }).forEach(function (r) { items.push({ key: "fail:" + r.kind + ":" + r.id, area: "Failing result", t: r.kind + " " + r.id + " (" + r.mem.slice(0, 60) + ")", st: "FAIL", why: "Governing: " + r.why + ", utilisation " + f(r.u, 2) + " — redesign, or record why it is acceptable" }); });
+    if (S.det && !S.det.err) {
+      var sw = S.det.scwb.filter(function (q) { return !q.ok; }).length, jj = S.det.joints.filter(function (q) { return !q.ok || !q.anch; }).length;
+      if (sw) items.push({ key: "fail:scwb", area: "Failing result", t: sw + " strong column–weak beam joint checks", st: "FAIL", why: "IS 13920 cl 7.2.1 — enlarge columns (Automatic design does this)" });
+      if (jj) items.push({ key: "fail:joint", area: "Failing result", t: jj + " beam–column joint checks", st: "FAIL", why: "IS 13920 cl 9 — enlarge columns or use higher concrete grade" });
+      var ov = S.det.foot.filter(function (ft) { return ft.warn && ft.warn.length; }).length;
+      if (ov) items.push({ key: "fail:overlap", area: "Failing result", t: ov + " overlapping isolated footings", st: "FAIL", why: "Design a combined footing or raft separately" });
+    }
+    (S.drift || []).filter(function (q) { return q.ok === false; }).slice(0, 1).forEach(function () { items.push({ key: "fail:drift", area: "Failing result", t: "Storey drift > 0.004h", st: "FAIL", why: "IS 1893 cl 7.11.1 — stiffen the structure" }); });
+    var dfl = S.p && S.p.entered ? ["sbc", "fck", "fy", "zone", "soil", "ll", "I", "R"].filter(function (k) { return S.p.entered.indexOf(k) < 0; }) : [];
+    if (dfl.length) items.push({ key: "inp:defaults", area: "Inputs", t: "Values taken as defaults: " + dfl.join(", "), st: "Calculated", why: "Confirm each against the soil report, architectural drawings and the client brief" });
+    return items;
+  }
+  function verifyState(p, S) {
+    var it = S ? vItems(S) : [], rv = (p && p.review) || {}, open = 0, query = 0, fails = 0;
+    it.forEach(function (i) { var r = rv[i.key]; if (i.st === "FAIL") { if (!r || r.state !== "ok") fails++; } if (!r) open++; else if (r.state === "query") query++; });
+    return { items: it, open: open, query: query, fails: fails, total: it.length };
+  }
+  function vClass(v) {
+    if (v.fails) return ["vno", "Not acceptable", v.fails + " failing result(s) not resolved"];
+    if (v.open || v.query) return ["vmid", "Calculated result", (v.open + v.query) + " of " + v.total + " verification item(s) open — not yet a verified engineering result"];
+    return ["vok", "Verified engineering result", "All checks pass and every non-benchmarked, simplified or missing check has been reviewed and signed off"];
+  }
+  function vBlock(S) {
+    var p = proj(), v = verifyState(p, S), c = vClass(v), rv = (p && p.review) || {}, h = '<div class="vbox ' + c[0] + '"><b>' + c[1] + '</b><br><small>' + esc(c[2]) + '</small></div>';
+    var sm = summary(S);
+    if (sm.length) h += '<h4>Design summary — result, utilisation and verification state</h4>' + tblL(["Group", "Members", "Result", "Utilisation", "Governing", "Status", "Verification"], sm.map(function (r) { return ["<b>" + r.id + "</b>", esc(r.mem.length > 46 ? r.mem.slice(0, 44) + "…" : r.mem), esc(r.res), '<span class="' + (r.u > 1 ? "not" : r.u > 0.9 ? "warnt" : "") + '">' + f(r.u, 2) + '</span>', esc(r.why), r.ok ? '<span class="okt">PASS</span>' : '<span class="not">FAIL</span>', r.v ? chip(r.v.st, r.v.st + (r.v.st !== "Verified" ? ": " + r.v.t.split(" (")[0].slice(0, 34) : "")) : ""]; })) +
+      '<div class="note">Utilisation = governing ratio of demand to capacity (beams: max(steel/ρmax·bd, τv/τc,max); columns: P–M ratio, 1.4/(ΣMc/ΣMb), joint Vj/capacity; footings: pressure/SBC, shear, punching; walls: M/Mcap, τv/τc,max, boundary element; slabs: Ast required/provided). The verification state is the weakest of the checks behind the result.</div>';
+    h += '<h4>Checking engineer\'s list — ' + (v.total - v.open) + ' of ' + v.total + ' reviewed</h4><div class="vprog"><i style="width:' + (v.total ? 100 * (v.total - v.open) / v.total : 100).toFixed(0) + '%"></i></div>';
+    h += '<div class="btns"><input id="vBy" placeholder="Reviewer name" value="' + esc((p && (p.checker || p.engineer)) || "") + '" style="flex:1"></div>';
+    h += v.items.map(function (i) {
+      var r = rv[i.key];
+      return '<div class="vitem' + (r ? " r-" + r.state : "") + '"><div><span class="' + (i.st === "FAIL" ? "vchip vf" : VCOL[i.st] || "vchip") + '">' + esc(i.st) + '</span> <b>' + esc(i.t) + '</b><br><small>' + esc(i.area) + ' · ' + esc(i.why) + '</small>' + (r ? '<br><small class="vsign">' + { ok: "✔ Accepted", query: "? Query", na: "– Not applicable" }[r.state] + ' by ' + esc(r.by || "—") + ', ' + day(r.date) + (r.note ? ' — ' + esc(r.note) : '') + '</small>' : '') + '</div>' +
+        '<div class="vbtn"><button data-vk="' + esc(i.key) + '" data-vs="ok">Accept</button><button data-vk="' + esc(i.key) + '" data-vs="query">Query</button><button data-vk="' + esc(i.key) + '" data-vs="na">N/A</button>' + (r ? '<button data-vk="' + esc(i.key) + '" data-vs="">Clear</button>' : '') + '</div></div>';
+    }).join("");
+    return h;
+  }
+  /* small verification chips next to the result headings */
+  function chips(h) {
+    var map = [[/<h4>RCC beams/, "beam"], [/<h4>RCC columns/, "column"], [/<h4>Steel members/, "steel"], [/<h4>Slabs/, "slab"], [/<h4>Walls/, "wall"]];
+    map.forEach(function (q) { var st = REG.state(REG.KIND[q[1]]); if (st) h = h.replace(q[0], function (s0) { return s0.replace("<h4>", "<h4>" + chip(st.st) + " "); }); });
+    return h;
+  }
+
+  /* ================================================================ BOQ & SCHEDULES */
+  function boqBlock(S) {
+    var b = S.boq; if (!b) return "";
+    var p = proj(), rates = (p && p.rates) || {}; BOQ.price(b, rates);
+    var h = '<div class="sum"><div><span>Concrete</span><b>' + f(b.conc, 2) + ' m³</b></div><div><span>Reinforcement</span><b>' + f(b.steelKg / 1000, 3) + ' t · ' + f(b.ratio, 0) + ' kg/m³</b></div>' + (b.amount ? '<div><span>Amount at your rates</span><b>₹ ' + Math.round(b.amount).toLocaleString("en-IN") + '</b></div>' : '') + '</div>';
+    h += tblL(["Item", "Description", "Unit", "Quantity", "Rate (₹)", "Amount (₹)"], b.items.map(function (it, i) { return [i + 1, esc(it.desc) + (it.grade ? " (" + it.grade + ")" : ""), it.unit, f(it.qty, it.unit === "kg" ? 0 : 2), '<input class="rate" data-ri="' + it.id + '" type="number" step="any" inputmode="decimal" value="' + (rates[it.id] || "") + '" placeholder="rate">', it.amt ? Math.round(it.amt).toLocaleString("en-IN") : ""]; }));
+    h += '<div class="note">Enter rates from your schedule of rates (they are saved with the project and used in the report and Excel). Measurement: columns floor-to-floor less the slab, with necks from the footing to the plinth (founding depth ' + f(b.Df, 2) + ' m); beams below the slab between column faces; slabs over the panels; walls between end columns; PCC 100 mm with 100 mm offset; excavation with 300 mm working space; steel from the bar bending schedule (no wastage).</div>';
+    h += tbl(["Bar φ", "kg"], Object.keys(b.byDia).map(Number).sort(function (a, c) { return a - c; }).map(function (k) { return [k + " mm", f(b.byDia[k], 0)]; }));
+    var sc = b.schedules;
+    [["cols", "Column schedule"], ["beams", "Beam schedule"], ["slabs", "Slab schedule"], ["walls", "Wall schedule"], ["foot", "Footing schedule"]].forEach(function (g) { if (sc[g[0]].length) h += '<h4>' + g[1] + '</h4>' + tblL(BOQ.HEAD[g[0]], sc[g[0]].map(function (r) { return r.map(esc); })); });
+    return h;
+  }
+
+  /* ================================================================ ENGINEERING ASSISTANT */
+  var KB = [
+    [["scwb", "strong column", "weak beam", "7.2.1"], "Strong column – weak beam (IS 13920:2016 cl 7.2.1)", "At every joint the sum of the column moment capacities (at the least favourable axial load) must be at least 1.4 × the sum of the beam capacities in the same plane, so that plastic hinges form in beams and not in columns. Fix by enlarging the columns, raising the concrete grade or column steel, or reducing beam top steel that is not needed. Automatic design enlarges the columns storey by storey."],
+    [["joint", "vj", "cl 9", "joint shear"], "Beam–column joint shear (IS 13920 cl 9)", "Vj = 1.25fy(Ast,top + Ast,bot) − Vcol must not exceed k√fck·Aej with k = 1.5 (beams ≥ ¾ column width on all four faces), 1.2 (three faces or two opposite) or 1.0. Aej = bj·hc. Larger columns, wider beams and higher fck all help. The column depth must also be ≥ 20 × the largest beam bar."],
+    [["confin", "lo ", "special confining", "ash", "hoop"], "Column confinement (IS 13920 cl 8)", "Over lo = max(D, Lc/6, 450 mm) at each end and through the joint, hoops at s ≤ min(B/4, 6φ, 100) with Ash ≥ max(0.18 s h fck/fy (Ag/Ak − 1), 0.05 s h fck/fy); parallel hoop legs ≤ 300 mm apart (crossties)."],
+    [["lap", "splice"], "Lap splices", "Beams: max(Ld, 30φ), not within joints or 2d from the faces, hoops at ≤ 150 mm over the lap (IS 13920 cl 6.2.6). Columns: only in the central half of the clear height (cl 7.2.1). The app staggers stock-length splices accordingly."],
+    [["develop", "ld", "anchorage"], "Development length", "Ld = φ·σs/(4τbd) with τbd from IS 456 cl 26.2.1.1, +60 % for deformed bars. In ductile frames beam bars anchor Ld + 10φ beyond the inner column face with a 90° bend (IS 13920 cl 6.2.5)."],
+    [["drift", "0.004"], "Storey drift (IS 1893 cl 7.11.1)", "Relative storey displacement under unfactored lateral load ≤ 0.004h. Increase column/wall stiffness if it is exceeded; drift is checked at vertically stacked nodes."],
+    [["torsional", "irregular", "dmax", "Δmax"], "Torsional irregularity (Table 5)", "Δmax/Δave > 1.2 → torsionally irregular; > 1.4 → not permitted (Amendment 2). The 2016 text used Δmax/Δmin 1.5/2.0. Balance the stiffness in plan (walls on both sides)."],
+    [["soft storey", "stiffness irregular"], "Soft storey (Table 6)", "Storey stiffness less than that of the storey above (2016 definition) — typical of open ground storeys. Stiffen the storey or design to cl 7.10."],
+    [["cqc", "srss", "modal combin"], "Modal combination (cl 7.7.5.4)", "CQC with 5 % damping is used unless SRSS is chosen; closely spaced modes need CQC."],
+    [["scal", "base shear", "7.7.3"], "Scaling of response spectrum results (cl 7.7.3)", "If the dynamic base shear is less than the static VB from the empirical period, forces are scaled up by VB/Vdyn. Amendment 2 does not require scaling of displacements; the app scales forces only unless you choose otherwise."],
+    [["accidental", "eccentric", "7.8.2"], "Accidental torsion (cl 7.8.2)", "Design eccentricity edi = 1.5esi ± 0.05bi; the app adds torque cases TXa/TXb/TYa/TYb at the floors and combines them with EQX/EQY."],
+    [["participat", "modes", "90"], "Modal mass participation (cl 7.7.5.2)", "Enough modes to capture ≥ 90 % of the seismic mass in each direction; increase the number of modes if a warning appears."],
+    [["boundary", "wall"], "Shear walls (IS 13920 cl 10)", "Walls are designed as piers per storey: P–M by strain compatibility, shear with horizontal steel ≥ 0.25 %, two curtains when tw ≥ 200 or τv > 0.25√fck, boundary elements where Pu/A + 6Mu/(tLw²) > 0.2fck."],
+    [["footing", "sbc", "bearing", "punch"], "Isolated footings (IS 456 cl 34)", "Sized for service loads (DL+LL ≤ SBC; with EQ ≤ 1.5/1.25/1.0 × SBC for soil I/II/III, IS 1893 Table 1); depth by bending, one-way shear at d and punching at d/2 (ks·0.25√fck). Confirm SBC from a soil investigation."],
+    [["bbs", "cutting length", "bend", "2502"], "Bar bending schedule (IS 2502 / SP 34)", "Cutting length = straight + legs − 2φ per 90° bend; hoops 2(A+B) + 2 hooks − 12φ with hook allowance max(10φ, 75 mm); weight φ²/162 kg/m."],
+    [["verif", "verified", "calculated", "simplified"], "Engineering verification mode", "Every check is Verified (independent benchmark), Calculated, Simplified or Not implemented; a result is a verified engineering result only when it passes and the checking engineer has accepted every non-verified item."],
+    [["auto", "optimi", "resize"], "Automatic design", "Runs analysis → design → detailing repeatedly, enlarging columns (+50 mm) and beams (+50 mm depth) in the storeys that fail until every check passes; the sizes are written as section rules you can edit."],
+    [["boq", "quantit", "estimate", "rate"], "Bill of quantities", "Quantities follow IS 1200 style measurement from the designed model; enter rates from your schedule of rates to get amounts."],
+    [["1893", "2025", "zone vi", "new code"], "Seismic code edition", "IS 1893 (Part 1):2025 was published in Nov 2025 and withdrawn by BIS on 3 March 2026; IS 1893 (Part 1):2016 with Amendments 1 and 2 applies and is used by the app."],
+    [["crack", "pc", "stiffness modifier", "cracked"], "Cracked-section stiffness", "Column and beam stiffness modifiers (IS 1893 cl 6.4.3.1: 0.7 Ig columns, 0.35 Ig beams) and slab/wall shell factors are applied when 'cracked sections' is on."],
+    [["deflect", "span/d", "crack width", "servic"], "Serviceability", "Deflection (IS 456 cl 23.2) and crack width are not checked by the frame design — use the beam and slab modules (span/effective depth with modification factors) for the critical members."],
+    [["pdelta", "p-delta", "second order"], "P-Delta", "Geometric stiffness iterations per combination; convergence is reported and non-convergence rejected. Use 'Linear + P-Delta' for slender or heavily loaded frames (stability coefficient > 0.1)."],
+    [["pushover", "hinge", "nonlinear"], "Pushover", "Event-to-event plastic hinges from P–M interaction; gravity first, then the lateral pattern. Useful to see the collapse mechanism and reserve strength."]
+  ];
+  function kbFind(q) {
+    var s = q.toLowerCase(), out = [];
+    KB.forEach(function (k) { var sc = 0; k[0].forEach(function (w) { if (s.indexOf(w) >= 0) sc += w.length; }); if (sc) out.push([sc, k]); });
+    return out.sort(function (a, b) { return b[0] - a[0]; }).slice(0, 3).map(function (x) { return x[1]; });
+  }
+  /* findings from the results: what is wrong, why, what to do */
+  function advise(S) {
+    var o = [], dt = S.det && !S.det.err && S.det.gB ? S.det : null, p = S.p || {};
+    function add(sev, t, d, fix, cl) { o.push({ sev: sev, t: t, d: d, fix: fix, cl: cl }); }
+    if (!S.des) return o;
+    var bf = S.des.beams.filter(function (r) { return !r.ok; }), cf = S.des.cols.filter(function (r) { return !r.ok; });
+    if (bf.length) add(3, bf.length + " beam elements fail design", "e.g. " + bf[0].name + ": " + (bf[0].msg || []).slice(0, 2).join("; "), "Increase beam depth (most effective) or width; check spans and loads.", "IS 456 cl 38–41");
+    if (cf.length) add(3, cf.length + " column elements fail design", "e.g. " + cf[0].name + " with Pu " + f(cf[0].Pu, 0) + " kN", "Enlarge the columns or raise fck; check slenderness.", "IS 456 cl 39");
+    if (dt) {
+      var sw = dt.scwb.filter(function (q) { return !q.ok; });
+      if (sw.length) { var w = sw.slice().sort(function (a, b) { return a.r - b.r; })[0], need = 1.4 * w.Mb - w.Mc;
+        add(3, sw.length + " joints fail strong column–weak beam", "Worst " + w.col + " at +" + f(w.z, 2) + " m (" + w.dir + "): ΣMc/ΣMb = " + f(w.r, 2) + " < 1.4 — the columns need " + f(need, 0) + " kNm more capacity there.", "Run automatic design, or enlarge those columns (moment capacity grows roughly with D²) / add column steel; avoid excess beam top steel.", "IS 13920 cl 7.2.1"); }
+      var jj = dt.joints.filter(function (q) { return !q.ok; });
+      if (jj.length) { var j = jj.slice().sort(function (a, b) { return b.r - a.r; })[0], Aneed = j.Vj * 1000 / (j.k * Math.sqrt(j.fck)), side = Math.ceil(Math.sqrt(Aneed) / 25) * 25;
+        add(3, jj.length + " beam–column joints overstressed in shear", "Worst " + j.col + " at +" + f(j.z, 2) + " m: Vj = " + f(j.Vj, 0) + " kN vs " + f(j.cap, 0) + " kN (k = " + j.k + ").", "A square column of about " + side + " mm would carry it at k = " + j.k + "; wider beams (≥ ¾ column width on all faces) raise k to 1.5.", "IS 13920 cl 9.1"); }
+      var ja = dt.joints.filter(function (q) { return !q.anch; });
+      if (ja.length) add(2, ja.length + " joints: column depth < 20 × beam bar φ", "e.g. " + ja[0].col + ": " + ja[0].hc + " mm < " + 20 * ja[0].dia + " mm", "Use smaller beam bars (φ ≤ hc/20) or deeper columns.", "IS 13920 cl 7.1.1");
+      dt.cols.forEach(function (c) { c.st.forEach(function (s) { if (s.pct > 2.5 && s.pct <= 4) add(1, c.name + " storey " + (s.i + 1) + ": " + f(s.pct, 2) + " % steel", "High steel makes laps congested (laps double it).", "Consider a larger section to bring steel near 1–2.5 %.", "IS 456 cl 26.5.3.1"); }); });
+      dt.beams.forEach(function (bl) { if (bl.msg.some(function (t) { return /second layer/.test(t); })) add(2, "Beam " + bl.name + " needs two layers of bars", "The effective depth is smaller than assumed.", "Deepen the beam or use larger bars.", "IS 456 cl 26.3"); });
+      dt.foot.forEach(function (ft) { if (ft.warn && ft.warn.length) add(2, "Footing " + ft.name + " overlaps a neighbour", ft.warn[0], "Design a combined footing or raft.", "IS 456 cl 34"); });
+      (dt.walls || []).forEach(function (w) { w.storeys.forEach(function (st) { if (st.be) add(1, w.name + " storey " + (st.i + 1) + " needs boundary elements", "σ = " + f(st.sMax, 2) + " N/mm² > 0.2fck. " + st.beText, "Detail the end zones as confined boundary elements.", "IS 13920 cl 10.4"); }); });
+    }
+    var dr = (S.drift || []).filter(function (q) { return q.ok === false; });
+    if (dr.length) { var dm = dr.slice().sort(function (a, b) { return b.dr - a.dr; })[0]; add(3, "Storey drift exceeds 0.004h", dm.c + " storey " + f(dm.zb, 1) + "–" + f(dm.z, 1) + " m: " + f(dm.dr, 5), "Stiffen: larger columns, shear walls or bracing.", "IS 1893 cl 7.11.1"); }
+    if (S.se && S.se.rs) [0, 1].forEach(function (d) { var r = S.se.rs[d]; if (r && r.cum < 0.9) add(2, "Mass participation " + f(100 * r.cum, 1) + " % in " + (d ? "Y" : "X"), "Fewer than 90 % of the mass is captured.", "Increase the number of modes.", "IS 1893 cl 7.7.5.2"); });
+    if (S.se && S.se.tc) { var t2 = S.se.tc.filter(function (r) { return r.ave > 1.2; }); if (t2.length) add(2, "Torsional irregularity (Δmax/Δave up to " + f(Math.max.apply(null, t2.map(function (r) { return r.ave; })), 2) + ")", "Plan stiffness is unbalanced.", "Add stiffness on the flexible side or redistribute walls.", "IS 1893 Table 5 (i)"); }
+    if (S.se && S.se.irr) { var sf = S.se.irr.filter(function (r) { return r.soft; }); if (sf.length) add(2, "Soft storey at storey " + (sf[0].i + 1), "Stiffness less than the storey above.", "Stiffen that storey or design to cl 7.10.", "IS 1893 Table 6"); }
+    var dfl = p.entered ? ["sbc", "zone", "soil", "ll", "fck"].filter(function (k) { return p.entered.indexOf(k) < 0; }) : [];
+    if (dfl.length) add(1, "Defaults used for " + dfl.join(", "), "These were not entered.", "Confirm them from the soil report, site seismic zone and architectural use.", "");
+    add(0, "Serviceability not checked in the frame design", "Deflection and crack width of frame beams and slabs.", "Check the critical members in the beam / slab modules (span/d with modification factors).", "IS 456 cl 23.2, 35.3.2");
+    return o.sort(function (a, b) { return b.sev - a.sev; });
+  }
+  function memberInfo(S, name) {
+    var dt = S.det, n = String(name || "").trim().toUpperCase(), out = null;
+    if (!dt || dt.err) return null;
+    dt.cols.forEach(function (c) { if (c.name.toUpperCase() === n || (c.grp && c.grp.toUpperCase() === n)) out = { type: "column", name: c.name, group: c.grp, storeys: c.st.map(function (s) { return { storey: s.i + 1, size: s.b + "x" + s.D, bars: s.ar.n + "-" + s.ar.dia, steel_pct: +s.pct.toFixed(2), ties: s.tie.dia + "@" + s.tie.sc + "/" + s.tie.sm }; }), failing: c.checks.filter(function (q) { return !q.ok; }).map(function (q) { return q.t + ": " + q.v; }), scwb: dt.scwb.filter(function (q) { return q.colRef === c; }).map(function (q) { return { z: q.z, dir: q.dir, ratio: +q.r.toFixed(2), ok: q.ok }; }), joints: dt.joints.filter(function (q) { return q.colRef === c; }).map(function (q) { return { z: q.z, dir: q.dir, Vj: +q.Vj.toFixed(0), cap: +q.cap.toFixed(0), ok: q.ok, depth20phi: q.anch }; }) }; });
+    dt.beams.forEach(function (b) { if (!out && (b.name.toUpperCase() === n || (b.grp && b.grp.toUpperCase() === n))) out = { type: "beam line", name: b.name, group: b.grp, size: b.b + "x" + b.D, bar: b.dia, spans: b.spans.map(function (sp, j) { return { span: j + 1, clear: Math.round(sp.Lc), top_left: b.sup[j].nt, bottom: sp.nb, top_right: b.sup[j + 1].nt, hoops: sp.sv.ph + "@" + sp.sv.sh + "/" + sp.sv.sm }; }), failing: b.checks.filter(function (q) { return !q.ok; }).map(function (q) { return q.t + ": " + q.v; }), notes: b.msg }; });
+    dt.foot.forEach(function (ft) { if (!out && (ft.name.toUpperCase() === n)) out = { type: "footing", name: ft.name, size: ft.Lx + "x" + ft.Ly + "x" + ft.D, bars: ft.bx.dia + "@" + ft.bx.s + " / " + ft.by.dia + "@" + ft.by.s, governing: ft.gov.set.name, qmax: +ft.gov.pr.max.toFixed(1), failing: ft.checks.filter(function (q) { return !q.ok; }).map(function (q) { return q.t + ": " + q.v; }) }; });
+    (dt.walls || []).forEach(function (w) { if (!out && (w.name.toUpperCase().indexOf(n) === 0)) out = { type: "wall", name: w.name, t: w.t, Lw: Math.round(w.Lw), storeys: w.storeys.map(function (st) { return { storey: st.i + 1, vertical: st.vb.dia + "@" + st.vb.s, horizontal: st.hb.dia + "@" + st.hb.s, boundary: st.be }; }), failing: w.checks.filter(function (q) { return !q.ok; }).map(function (q) { return q.t + ": " + q.v; }) }; });
+    return out;
+  }
+  function context(S) {
+    var p = S.p || {}, sm = summary(S), v = verifyState(proj(), S);
+    return { project: proj() ? { name: proj().name, status: proj().status } : null, method: p.method, zone: p.zone, I: p.I, R: p.R, soil: p.soil, fck: p.fck, fy: p.fy, columns: p.colSec, beams: p.beamSec, rules: p.secOver || "",
+      groups: sm.map(function (r) { return { kind: r.kind, id: r.id, members: r.mem.slice(0, 80), result: r.res, utilisation: +r.u.toFixed(2), governing: r.why, ok: r.ok, verification: r.v ? r.v.st : null }; }),
+      verification: { open: v.open, failing: v.fails, total: v.total }, findings: advise(S).slice(0, 12).map(function (a) { return a.t + " — " + a.d + " Fix: " + a.fix + (a.cl ? " (" + a.cl + ")" : ""); }) };
+  }
+  var sampleFn = null, sampleTried = false;
+  function aiInit(cb) {
+    if (sampleTried) return cb(sampleFn);
+    sampleTried = true;
+    if (!(window.claude && window.claude.use)) return cb(null);
+    Promise.resolve(window.claude.use("sample")).then(function (s) { sampleFn = s || null; cb(sampleFn); }, function () { cb(null); });
+  }
+  function offlineAnswer(S, q) {
+    var h = "", mm = q.match(/\b([A-Z]{1,2}-[A-Z]{1,2}\d+|F\d+-[A-Z0-9]+\([XY]\)|[BCFW]\d+)\b/i), info = mm ? memberInfo(S, mm[1]) : null;
+    if (info) h += '<div class="aans"><b>' + esc(info.type + " " + info.name) + '</b><pre>' + esc(JSON.stringify(info, null, 1)) + '</pre></div>';
+    var kb = kbFind(q); kb.forEach(function (k) { h += '<div class="aans"><b>' + esc(k[1]) + '</b><br>' + esc(k[2]) + '</div>'; });
+    var ad = advise(S).filter(function (a) { var s = q.toLowerCase(); return s.split(/\W+/).filter(function (w) { return w.length > 3; }).some(function (w) { return (a.t + a.d).toLowerCase().indexOf(w) >= 0; }); }).slice(0, 3);
+    ad.forEach(function (a) { h += '<div class="aans"><b>' + esc(a.t) + '</b><br>' + esc(a.d) + '<br><i>' + esc(a.fix) + '</i>' + (a.cl ? ' <small>(' + esc(a.cl) + ')</small>' : '') + '</div>'; });
+    return h || '<div class="aans">No match in the offline knowledge base. Try a member name (e.g. C-B2, B1, F-A1), or a topic such as joint shear, laps, drift, SCWB, footing, BOQ.</div>';
+  }
+  function asstBlock(S) {
+    var ad = advise(S), sev = ["Note", "Advice", "Important", "Must fix"];
+    var h = '<div class="note">Findings from this analysis, with the clause and a suggested fix. Ask about any member or topic below — works offline; in the web app it can also ask Claude, which reads the results through the app.</div>';
+    h += ad.map(function (a) { return '<div class="afind s' + a.sev + '"><span class="asev">' + sev[a.sev] + '</span> <b>' + esc(a.t) + '</b><br><small>' + esc(a.d) + '</small><br><small><i>' + esc(a.fix) + '</i>' + (a.cl ? ' · ' + esc(a.cl) : '') + '</small></div>'; }).join("");
+    h += '<div class="btns"><input id="aQ" placeholder="Ask: why does C-B2 fail? what is lo? how to fix joint shear?" style="flex:1"><button id="aGo" class="pri" type="button" style="flex:0">Ask</button></div><div id="aOut"></div>';
+    return h;
+  }
+  function ask(S, q, out) {
+    out.innerHTML = '<div class="aans">' + offlineAnswer(S, q) + '</div>';
+    aiInit(function (sample) {
+      if (!sample) return;
+      var box = document.createElement("div"); box.className = "aans ai"; box.innerHTML = "<b>Claude</b><br><span>Thinking…</span>"; out.insertBefore(box, out.firstChild);
+      var ctx = context(S), tools = [
+        { name: "get_member", description: "Detailing and checks of one member or member group by name (e.g. C-B2, C1, F1-A(X), B2, F-A1, W1)", inputSchema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] }, execute: function (a) { return memberInfo(S, a.name) || { error: "not found" }; } },
+        { name: "search_notes", description: "Look up the app's code notes (IS 13920, IS 1893, IS 456) on a topic", inputSchema: { type: "object", properties: { topic: { type: "string" } }, required: ["topic"] }, execute: function (a) { return kbFind(a.topic).map(function (k) { return { title: k[1], text: k[2] }; }); } }
+      ];
+      var prompt = "You are the engineering assistant inside IS StructDesign, an Indian-Standards structural analysis and design app. Answer the engineer's question about THIS model using the results below and the tools; cite IS clauses; be concise (≤ 180 words); if a check fails say why and give concrete fixes with numbers; never claim the design is safe — remind that a qualified engineer must verify when relevant.\n\nModel results (JSON):\n" + JSON.stringify(ctx) + "\n\nQuestion: " + q;
+      sample([{ role: "user", content: prompt }], { tools: tools, cache: false, onText: function (t) { box.querySelector("span").textContent = t.text; } }).then(function (r) { box.querySelector("span").textContent = r.text; }, function (e) { if (e && e.code === "not_granted") box.remove(); else box.querySelector("span").textContent = "Claude is not available right now (" + (e && (e.message || e.code) || "error") + ") — the offline answer is below."; });
+    });
+  }
+
+  /* ================================================================ AUTOMATIC DESIGN (results of the last run) */
+  function autoBlock(S) {
+    var a = S.autoRes; if (!a) return "";
+    var h = '<div class="vbox ' + (a.ok ? "vok" : "vmid") + '"><b>' + (a.ok ? "Automatic design converged — every check passes" : "Automatic design stopped with failures left") + '</b><br><small>' + a.log.length + ' iteration(s). Sizes below are now the section rules of this project (Materials & sections ▸ Section rules).</small></div>';
+    h += tblL(["Iteration", "Column / beam sizes", "Storeys failing", "Steel t", "Concrete m³"], a.log.map(function (l) { return [l.it, '<small>' + esc(l.rules).replace(/\n/g, "<br>") + '</small>', esc(Object.keys(l.fails.col).map(function (i) { return "col " + i + ": " + l.fails.col[i].join(", "); }).concat(Object.keys(l.fails.beam).map(function (i) { return "beam " + i + ": " + l.fails.beam[i].join(", "); })).join("; ") || "none"), f(l.steel / 1000, 2), f(l.conc, 1)]; }));
+    if (!a.ok) h += '<div class="note">Left: ' + esc(JSON.stringify(a.fails.col)) + ' ' + esc(JSON.stringify(a.fails.beam)) + (a.fails.walls ? ' · ' + a.fails.walls + ' wall checks' : '') + ' — sizes reached the limits or failures are not size-related; see the assistant below.</div>';
+    return h;
+  }
+
+  /* ================================================================ RESULTS BLOCK */
+  function block(S) {
+    if (!S.des) return "";
+    var p = proj(), vm = !!(p && p.vmode), h = '<div class="rep pro"><div class="rh"><div><h3>Professional outputs</h3><small>' + esc(p ? p.name : "") + ' · engine ' + REG.ENGINE + '</small></div></div>';
+    h += autoBlock(S);
+    h += '<div class="btns noprint"><button type="button" id="vMode" class="' + (vm ? "pri" : "") + '">Engineering verification mode: ' + (vm ? "ON" : "OFF") + '</button></div>';
+    if (vm) h += '<section class="sub">' + vBlock(S) + '</section>';
+    else { var v = verifyState(p, S), c = vClass(v); h += '<div class="vbox ' + c[0] + '"><b>' + c[1] + '</b><br><small>' + esc(c[2]) + ' — switch the mode on to review.</small></div>'; }
+    h += '<details class="sub"' + (S.boq ? '' : '') + '><summary><b>Bill of quantities & reinforcement schedules</b></summary>' + boqBlock(S) + '</details>';
+    h += '<details class="sub"><summary><b>Engineering assistant</b> (' + advise(S).filter(function (a) { return a.sev >= 2; }).length + ' important findings)</summary>' + asstBlock(S) + '</details>';
+    h += '<h4>Reports & CAD</h4><div class="btns noprint"><a class="btnl pri" href="#report">Calculation report ›</a><button type="button" id="bGA">Drawing set DXF</button></div><div class="btns noprint"><button type="button" id="bStd">STAAD.Pro input (.std)</button><button type="button" id="bProj">Projects ›</button></div>';
+    h += '<div class="note">Drawing set: general-arrangement plans with grids, column and beam marks, footing layout, column / beam / footing schedules and title blocks, plus all reinforcement details (layers for CAD). STAAD.Pro input: the same nodes, members, shells, sections, supports, load cases and combinations, for an independent cross-check.</div></div>';
+    return h;
+  }
+  function bind(S, ctx) {
+    if ($("vMode")) $("vMode").onclick = function () { var p = proj(); PDB.update(p.id, { vmode: !p.vmode }, "Verification mode " + (p.vmode ? "off" : "on")); ctx.rerender(); };
+    document.querySelectorAll("[data-vk]").forEach(function (b) { b.onclick = function () {
+      var k = b.getAttribute("data-vk"), st = b.getAttribute("data-vs"), by = ($("vBy") && $("vBy").value.trim()) || "";
+      if (st && !by) { ctx.toast("Enter the reviewer's name first"); if ($("vBy")) $("vBy").focus(); return; }
+      var note = st === "query" || st === "na" ? (window.prompt ? window.prompt(st === "query" ? "Query (what needs answering?)" : "Why is it not applicable?", "") || "" : "") : "";
+      PDB.setReview(k, st ? { state: st, by: by, date: new Date().toISOString(), note: note } : null); ctx.rerender(); }; });
+    document.querySelectorAll("input.rate").forEach(function (inp) { inp.onchange = function () { var p = proj(), r = Object.assign({}, p.rates || {}); var v = parseFloat(this.value); if (v > 0) r[this.getAttribute("data-ri")] = v; else delete r[this.getAttribute("data-ri")]; PDB.setRates(r); setTimeout(ctx.rerender, 0); }; });
+    if ($("aGo")) { var go = function () { var q = $("aQ").value.trim(); if (q) ask(S, q, $("aOut")); }; $("aGo").onclick = go; $("aQ").onkeydown = function (e) { if (e.key === "Enter") go(); }; }
+    if ($("bGA")) $("bGA").onclick = function () { try { ctx.download(fname("drawings") + ".dxf", CAD.drawingSet(S, proj())); } catch (e) { ctx.toast(e.message); } };
+    if ($("bStd")) $("bStd").onclick = function () { ctx.download(fname("model") + ".std", CAD.staad(S, proj())); };
+    if ($("bProj")) $("bProj").onclick = function () { location.hash = "#projects"; };
+  }
+  function fname(k) { var p = proj(); return ((p && p.name) || "project").replace(/[^\w\- ]+/g, "_").replace(/\s+/g, "-") + "-" + k; }
+
+  return { projectsView: projectsView, summary: summary, vItems: vItems, verifyState: verifyState, vClass: vClass, chips: chips, block: block, bind: bind, advise: advise, memberInfo: memberInfo, context: context, kbFind: kbFind, offlineAnswer: offlineAnswer,
+    _set: function (k, v) { this[k] = v; } };
+})();
+if (typeof module !== "undefined") module.exports = PRO;
 
 /* js/wsm.js */
 /* Working stress method: IS 456:2000 Annex B (RCC) and IS 800:2007 Section 11 (steel).
@@ -5597,6 +6508,8 @@ var RX = (function () {
     });
 
     if (S.det && !S.det.err && (S.det.beams.length || S.det.cols.length)) detailSheets(wb, S, G);
+    if (S.boq && typeof BOQ !== "undefined") boqSheets(wb, S, G);
+    if (typeof PRO !== "undefined" && S.des) verifySheet(wb, S, G);
     if (typeof REG !== "undefined") {
       var rg0 = wb.sheet("Standards Register", { cols: [24, 46, 22, 70], color: TAB.guide });
       intro(rg0, "Standards register and verification status — engine " + REG.ENGINE, "Which edition of each code is used and how, and the verification status of every check: Verified (agrees with an independent benchmark in the test suite), Calculated (implemented from the clauses, not independently benchmarked), Simplified (stated approximation), Not implemented (check separately). A PASS elsewhere in this workbook means the check that was made passed; it is not a certificate of structural safety — independent review by a qualified engineer is required before construction.", 4);
@@ -5766,6 +6679,35 @@ var RX = (function () {
         dt.gF.map(function (G0) { var f0 = G0.rep, g = f0.gov; return { grp: G0.id, mem: G0.list.map(function (c) { return c.name; }).join(", "), a: f0.a, bc: f0.bc, Lx: f0.Lx, Ly: f0.Ly, D: f0.D, set: g.set.name, P: g.set.r[2], Mx: g.set.r[3], My: g.set.r[4], seis: g.set.lim > f0.q + 1e-9, lim: g.set.lim, qu: f0.qu, bx: f0.bx.dia + "φ@" + f0.bx.s, by: f0.by.dia + "φ@" + f0.by.s, tp: f0.tp, kp: f0.kp }; }), G, { fc: 2 });
       fs.row([{ v: "Blue cells are inputs: change a footing size or the SBC and the pressure check updates. Moments are the support reactions of the analysis (fixed bases). Overlapping footings are flagged in the app — use a combined footing or raft there.", s: "note" }]);
     }
+  }
+
+  /* ===== Bill of quantities (rates are inputs, amounts formulas), reinforcement schedules ===== */
+  function boqSheets(wb, S, G) {
+    var b = S.boq, pr = typeof PDB !== "undefined" ? PDB.current() : null, rates = (pr && pr.rates) || {};
+    var sh = wb.sheet("BOQ", { cols: [6, 62, 7, 13, 13, 16], color: TAB.design });
+    intro(sh, "Bill of quantities — measured from the designed model", "Quantities follow IS 1200 style measurement: columns floor to floor less the slab (+ necks from the footing to the plinth), beams below the slab between column faces, slabs over the panels, walls between end columns, footings L×B×D, PCC 100 mm with 100 mm offset, excavation with 300 mm working space, steel from the bar bending schedule (no wastage). Enter your schedule-of-rates prices in the blue Rate column — amounts and the total are formulas.", 6);
+    var t = table(sh, [{ k: "no", h: "Item", s: "n0" }, { k: "desc", h: "Description" }, { k: "unit", h: "Unit" }, { k: "qty", h: "Quantity", s: "n2" }, { k: "rate", h: "Rate", u: "₹", s: "in" }, { k: "amt", h: "Amount", u: "₹", f: "{qty}*{rate}", s: "f0" }],
+      b.items.map(function (it, i) { return { no: i + 1, desc: it.desc + (it.grade ? " (" + it.grade + ")" : ""), unit: it.unit, qty: it.qty, rate: rates[it.id] || 0 }; }), G, { fc: 2 });
+    var L = t.L, tr = sh.next();
+    sh.row(["", "Total", "", "", "", { f: "=SUM(" + L.amt + t.first + ":" + L.amt + t.last + ")", s: "f0" }], "b");
+    sh.row(["", "Concrete total (m³)", "", { f: "=SUMIFS(" + L.qty + t.first + ":" + L.qty + t.last + "," + L.desc + t.first + ":" + L.desc + t.last + ',"RCC*")', v: b.conc, s: "f2" }]);
+    sh.row(["", "Steel per m³ of concrete (kg/m³)", "", { f: "=" + b.steelKg.toFixed(3) + "/D" + (tr + 1), v: b.ratio, s: "f1" }]);
+    var sc = b.schedules, s2 = wb.sheet("Schedules", { cols: [8, 30, 14, 14, 14, 14, 22, 18, 14], color: TAB.design });
+    intro(s2, "Reinforcement schedules", "Column, beam, wall, slab and footing schedules of the member groups (identical members grouped; the marks match the drawings, the BBS and the app).", 9);
+    [["cols", "Column schedule"], ["beams", "Beam schedule"], ["walls", "Wall schedule"], ["slabs", "Slab schedule"], ["foot", "Footing schedule"]].forEach(function (g) {
+      if (!sc[g[0]].length) return; s2.row([]); s2.row([g[1]], "tb"); s2.row(BOQ.HEAD[g[0]], "h"); sc[g[0]].forEach(function (r) { s2.row(r); });
+    });
+  }
+  /* ===== Engineering verification: design summary and the checking engineer's list ===== */
+  function verifySheet(wb, S, G) {
+    var pr = typeof PDB !== "undefined" ? PDB.current() : null, v = PRO.verifyState(pr, S), c = PRO.vClass(v), rv = (pr && pr.review) || {};
+    var sh = wb.sheet("Verification", { cols: [8, 34, 34, 11, 22, 9, 16, 40], color: TAB.guide });
+    intro(sh, "Engineering verification — " + c[1], c[2] + ". Utilisation is the governing demand/capacity ratio; a group also fails when any of its detailing checks fails. The verification state is the weakest of the checks behind each result (Verified / Calculated / Simplified / Not implemented, see Standards Register). A result is a verified engineering result only when it passes and the checking engineer has accepted every open item below.", 8);
+    table(sh, [{ k: "id", h: "Group" }, { k: "mem", h: "Members" }, { k: "res", h: "Result" }, { k: "u", h: "Utilisation", s: "n3" }, { k: "why", h: "Governing" }, { k: "st", h: "Status" }, { k: "v", h: "Verification" }, { k: "vt", h: "Weakest check" }],
+      PRO.summary(S).map(function (r) { return { id: r.id, mem: r.mem, res: r.res, u: r.u, why: r.why, st: r.ok ? "PASS" : "FAIL", v: r.v ? r.v.st : "", vt: r.v ? r.v.t : "" }; }), G, { fc: 1 });
+    sh.row([]); sh.row(["Checking engineer's list"], "tb");
+    sh.row(["Area", "Item", "Why it needs review", "State", "Review", "By", "Date", "Note"], "h");
+    v.items.forEach(function (i) { var r = rv[i.key]; sh.row([i.area, i.t, i.why, { v: i.st, s: i.st === "FAIL" ? "no" : "" }, r ? { ok: "Accepted", query: "Query", na: "N/A" }[r.state] : { v: "open", s: "no" }, r ? r.by : "", r ? r.date.slice(0, 10) : "", r ? r.note : ""]); });
   }
   function seismicSheet(wb, S, G) {
     var se = S.se, m = S.m, p = S.p, sh = wb.sheet("Seismic", { cols: [11, 11, 11, 12, 12, 12, 12, 12, 13, 13, 12, 12], color: TAB.load });
@@ -5975,7 +6917,7 @@ var RX = (function () {
     }
     return 1;
   }
-  var SHEETDESC = { "Standards Register": "Code editions used (IS 1893:2025 withdrawn — 2016 applies) and Verified / Calculated / Simplified / Not implemented status of every check", BBS: "Bar bending schedule of every member group (incl. walls), cutting lengths and weights (formulas), totals by diameter", "Detailing Checks": "IS 13920 / IS 456 detailing rules for beams, columns, joints (strong column–weak beam) and footings", Footings: "Isolated footing sizes, soil pressure (formulas), reinforcement and shear checks", Seismic: "Modal analysis, response spectrum, centres of mass/rigidity, accidental torsion, irregularity checks (formulas)", Summary: "Key results and pass/fail counts for each member group", Notation: "Meaning and units of every symbol", Inputs: "Design parameters you can change (named cells p_fck, p_fy, p_Zz …)", Nodes: "Node coordinates and restraints", Members: "Frame members, lengths and section properties (formulas)", Shells: "Shell (slab / wall) elements",
+  var SHEETDESC = { BOQ: "Bill of quantities with your rates (amounts as formulas)", Schedules: "Column, beam, wall, slab and footing reinforcement schedules", Verification: "Design summary with utilisation, verification state and the checking engineer's list", "Standards Register": "Code editions used (IS 1893:2025 withdrawn — 2016 applies) and Verified / Calculated / Simplified / Not implemented status of every check", BBS: "Bar bending schedule of every member group (incl. walls), cutting lengths and weights (formulas), totals by diameter", "Detailing Checks": "IS 13920 / IS 456 detailing rules for beams, columns, joints (strong column–weak beam) and footings", Footings: "Isolated footing sizes, soil pressure (formulas), reinforcement and shear checks", Seismic: "Modal analysis, response spectrum, centres of mass/rigidity, accidental torsion, irregularity checks (formulas)", Summary: "Key results and pass/fail counts for each member group", Notation: "Meaning and units of every symbol", Inputs: "Design parameters you can change (named cells p_fck, p_fy, p_Zz …)", Nodes: "Node coordinates and restraints", Members: "Frame members, lengths and section properties (formulas)", Shells: "Shell (slab / wall) elements",
     Loads: "Load-case totals, IS 1893 base shear & vertical distribution, IS 875-3 wind (formulas)", Combinations: "Load factors (IS 456 Table 18)", Disp_Cases: "Nodal displacements per load case", Disp_Combos: "Nodal displacements per combination",
     Forces_Cases: "Member end forces per load case", Forces_Combos: "Member end forces per combination", Reactions: "Support reactions with equilibrium check", Drift: "Storey drift check (formulas)", Pushover: "Capacity curve (chart), hinge sequence, ductility", "Design Basis": "Equations and IS code limits used, with clause numbers", "Worked Calcs": "Step-by-step calculation of every member: equation, substituted values, limit, clause, status", "Method & Formulas": "Element formulations, solver, design equations and clauses" };
   var METHOD = [
@@ -6083,8 +7025,17 @@ var SU = (function () {
   function dflt(k) { var md = MATDEF[UV.mat === "steel" ? "steel" : "rcc"]; return md[k] !== undefined ? md[k] : DEF[k]; }
   function given(k) { var v = UV[k]; return v !== undefined && v !== null && v !== "" && !(typeof v === "number" && isNaN(v)); }
   function eff() { var o = {}; Object.keys(DEF).forEach(function (k) { o[k] = given(k) ? UV[k] : dflt(k); }); o.roles = UV.roles || (UV.roles = {}); return o; }
-  function load() { try { UV = JSON.parse(localStorage.getItem("isd_model2") || "{}") || {}; } catch (e) { UV = {}; } P = eff(); }
-  function save() { P = eff(); try { localStorage.setItem("isd_model2", JSON.stringify(UV)); } catch (e) {} }
+  function load() {
+    if (typeof PDB !== "undefined") { var pr = PDB.current(); UV = JSON.parse(JSON.stringify(pr.inputs || {})); if (S.pid !== pr.id) { resetFor(pr); } }
+    else { try { UV = JSON.parse(localStorage.getItem("isd_model2") || "{}") || {}; } catch (e) { UV = {}; } }
+    P = eff();
+  }
+  function save() { P = eff(); if (typeof PDB !== "undefined") PDB.setInputs(UV); else try { localStorage.setItem("isd_model2", JSON.stringify(UV)); } catch (e) {} }
+  /* switching project: forget the previous model and results, restore the project's DXF */
+  function resetFor(pr) {
+    S.pid = pr.id; S.geo = S.m = S.res = S.des = S.po = S.det = S.se = S.boq = S.autoRes = null; S.dx = null; S.dxName = null; S.sel = null; S.state = null;
+    if (pr.dxf && pr.dxf.text) { try { S.dx = DXF.parse(pr.dxf.text); S.dxName = pr.dxf.name; } catch (e) { S.dx = null; } }
+  }
   function set(k, v) { UV[k] = v; save(); }
   function dtxt(k) { var d = dflt(k); return typeof d === "boolean" ? (d ? "on" : "off") : String(d); }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
@@ -6131,7 +7082,8 @@ var SU = (function () {
   function view(app, title, back) {
     load();
     title.textContent = "Frame & FE Analysis"; back.hidden = false;
-    var h = '<div class="code-note">Stiffness matrix (displacement) method for frames · 4-node flat-shell FEA for slabs, plates & walls · Linear static, P-Delta and pushover · DXF input</div>';
+    var pr = typeof PDB !== "undefined" ? PDB.current() : null;
+    var h = (pr ? '<div class="projbar"><a href="#projects">▤ ' + esc(pr.name) + '</a><span class="stchip st' + ["Concept", "Design", "For check", "Checked", "Issued", "On hold"].indexOf(pr.status) + '">' + esc(pr.status) + '</span></div>' : '') + '<div class="code-note">Stiffness matrix (displacement) method for frames · 4-node flat-shell FEA for slabs, plates & walls · Linear static, P-Delta and pushover · DXF input</div>';
     h += panel("p1", "1 · Geometry", srcForm(), true);
     h += panel("p2", "2 · Materials & sections", propForm());
     h += panel("p3", "3 · Loads (IS 875, IS 1893)", loadForm());
@@ -6150,8 +7102,9 @@ var SU = (function () {
     $("bAna").onclick = function () { runLinear(false); };
     $("bPD").onclick = function () { runLinear(true); };
     $("bPO").onclick = runPushover;
+    $("bAuto").onclick = runAuto;
     if (S.m) { status(); drawViewer(); if (S.res || S.po) renderResults(); }
-    else { try { buildGen(true); } catch (e) {} }
+    else { try { if (P.src === "dxf" && S.dx) buildDxf(); else if (P.src !== "dxf") buildGen(true); } catch (e) {} }
   }
   function panel(id, t, body, open) { return '<section class="pnl' + (open ? " open" : "") + '" id="' + id + '"><h3>' + t + '</h3><div class="pb">' + body + '</div></section>'; }
   function srcForm() { return '<div class="form">' + sel("src", "Model source", [["gen", "Parametric frame generator"], ["dxf", "Import DXF drawing"]]) + '<div id="srcbox" class="full">' + srcInner() + '</div></div>'; }
@@ -6180,7 +7133,7 @@ var SU = (function () {
     if ($("dxfFile")) $("dxfFile").onchange = function (ev) {
       var fl = ev.target.files[0]; if (!fl) return;
       var rd = new FileReader();
-      rd.onload = function () { try { S.dx = DXF.parse(String(rd.result)); S.dxName = fl.name; UV.roles = {}; save(); $("srcbox").innerHTML = srcInner(); bindSrc(); toast(S.dx.ents.length + " entities on " + Object.keys(S.dx.layers).length + " layers"); } catch (e) { err(e); } };
+      rd.onload = function () { try { S.dx = DXF.parse(String(rd.result)); S.dxName = fl.name; UV.roles = {}; save(); if (typeof PDB !== "undefined") PDB.setDxf(fl.name, String(rd.result)); $("srcbox").innerHTML = srcInner(); bindSrc(); toast(S.dx.ents.length + " entities on " + Object.keys(S.dx.layers).length + " layers"); } catch (e) { err(e); } };
       rd.readAsText(fl);
     };
     document.querySelectorAll("[data-layer]").forEach(function (s) { s.onchange = function () { UV.roles = UV.roles || {}; UV.roles[s.getAttribute("data-layer")] = s.value; save(); }; });
@@ -6225,6 +7178,7 @@ var SU = (function () {
   }
   function anaForm() {
     return '<div class="form">' + '<div class="btns full"><button class="pri" id="bAna" type="button">Linear static</button><button id="bPD" type="button">Linear + P-Delta</button></div>' +
+      '<div class="btns full"><button id="bAuto" type="button">Automatic design & detailing</button></div><div class="note full">Automatic design runs analysis → design → detailing repeatedly and enlarges the columns and beams of the storeys that fail (design, steel > 4 %, strong column–weak beam, joint shear, drift) by 50 mm until every check passes; the sizes become editable section rules.</div>' +
       sel("pdir", "Pushover direction", [[0, "+X"], [1, "+Y"]]) + sel("ppat", "Lateral pattern", [["parabolic", "IS 1893 (W·h²)"], ["uniform", "Uniform (mass)"]]) +
       num("pdrift", "Target roof drift", "% of height") + num("pev", "Max hinge events") + chk("ppd", "Include P-Delta (geometric non-linearity)") +
       '<div class="btns full"><button class="pri" id="bPO" type="button">Run pushover (non-linear static)</button></div>' +
@@ -6266,7 +7220,7 @@ var SU = (function () {
   }
   function download(name, text) {
     if (window.AndroidBridge && AndroidBridge.saveFile) { AndroidBridge.saveFile(name, text); return; }
-    var blob = new Blob([text], { type: name.slice(-4) === ".csv" ? "text/csv" : "application/dxf" });
+    var ext = name.split(".").pop().toLowerCase(), blob = new Blob([text], { type: { csv: "text/csv", html: "text/html", json: "application/json", isdp: "application/json", std: "text/plain", txt: "text/plain" }[ext] || "application/dxf" });
     if (window.claude && window.claude.use && window.self !== window.top) { Promise.resolve(window.claude.use("downloads")).then(function (dl) { if (!dl) throw 0; return dl.save({ filename: name, data: blob }); }).then(function () { toast("Saved " + name); }, function () { toast("Download not available here"); }); return; }
     try { var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); toast("Saved " + name); }
     catch (e) { toast("Download not available here"); }
@@ -6281,31 +7235,34 @@ var SU = (function () {
     var p = params(); S.p = p; MD._pm = {};
     S.m = MD.make(S.geo, p);
     busy("Assembling stiffness matrix and solving…");
-    var t0 = Date.now(), steps = [
-      ["Solving load cases and combinations…", function () {
-        S.L = MD.cases(S.m, p); S.cb = MD.combos(S.L.cases, p.method);
-        S.res = FE.linear(S.m, S.L.cases, S.cb, { pdelta: pd, caseReac: true }); S.res.pd = pd; S.res.incMap = {}; S.cb.forEach(function (c) { S.res.incMap[c.name] = c.inc || 1; });
-        S.se = null;
-      }],
-      [p.rsa ? "Modal analysis and response spectrum…" : "Seismic checks…", function () {
-        if (!p.eq) return;
-        S.se = SE.run(S.m, S, p);
-        S.se.irr = SE.irregular(S.m, S, S.se); S.se.tc = SE.torsionCheck(S.m, S, S.se);
-        if (S.se.md) { var low = S.se.md.modes.length; ["X", "Y"].forEach(function (D0, d) { var rs = S.se.rs[d]; if (rs && rs.cum < 0.9) S.res.warn.push("Modal mass participation in " + D0 + " is " + (rs.cum * 100).toFixed(1) + " % with " + low + " modes — IS 1893 cl 7.7.5.2 requires ≥ 90 %: increase the number of modes."); }); }
-      }],
-      ["Designing members (" + "IS 456 / IS 800)…", function () {
-        S.res.ms = Date.now() - t0;
-        S.des = MD.design(S.m, S.res, p); S.det = null;
-        try { S.det = DT.run(S.m, S, p); } catch (e) { S.det = { err: e.message }; }
-        S.drift = MD.drift(S.m, S.res).concat(S.se && S.se.drift ? S.se.drift : []); S.po = null;
-        S.state = S.cb[0].name; S.disp = "def"; S.sel = null;
-        drawViewer(); renderResults(); status(); $("viewer").scrollIntoView({ behavior: "smooth" });
-      }]];
+    var t0 = Date.now(), steps = PIPE.steps(S, p, pd);
+    S.autoRes = null;
+    steps[2][1] = (function (f0) { return function () {
+      S.res.ms = Date.now() - t0; f0();
+      if (typeof PDB !== "undefined") PDB.setSummary(PIPE.summary(S));
+      S.state = S.cb[0].name; S.disp = "def"; S.sel = null;
+      drawViewer(); renderResults(); status(); $("viewer").scrollIntoView({ behavior: "smooth" });
+    }; })(steps[2][1]);
     (function next(i) {
       if (i >= steps.length) return;
       busy(steps[i][0]);
       setTimeout(function () { try { steps[i][1](); next(i + 1); } catch (e) { err(e); $("results").innerHTML = ""; } }, 30);
     })(0);
+  }
+  function runAuto() {
+    grab(document.getElementById("app"));
+    try { if (P.src === "gen" && !S.geo) buildGen(true); } catch (e) { return err(e); }
+    if (!S.m) return err("Build a model first");
+    var p = params(); MD._pm = {};
+    busy("Automatic design: iteration 1…");
+    AUTO.run(S.geo, p, { async: true, step: function (i, l) { busy("Automatic design: iteration " + (i + 2) + " — " + (Object.keys(l.fails.col).length + Object.keys(l.fails.beam).length) + " storey group(s) enlarged after iteration " + (i + 1) + "…"); } }).then(function (r) {
+      Object.keys(r.S).forEach(function (k) { if (k !== "geo") S[k] = r.S[k]; });
+      S.p = r.p; S.autoRes = r; set("secOver", r.rules);
+      var box = document.querySelector("#p2 .pb"); if (box) box.innerHTML = propForm();
+      if (typeof PDB !== "undefined") { PDB.setSummary(PIPE.summary(S)); PDB.update(PDB.current().id, {}, "Automatic design: " + r.log.length + " iterations, " + (r.ok ? "all checks pass" : "failures left")); }
+      S.state = S.cb[0].name; S.disp = "def"; S.sel = null;
+      drawViewer(); renderResults(); status(); toast(r.ok ? "Automatic design: all checks pass" : "Automatic design finished with failures left");
+    }, function (e) { err(e); $("results").innerHTML = ""; });
   }
   function runPushover() {
     grab(document.getElementById("app"));
@@ -6586,7 +7543,8 @@ var SU = (function () {
       if (S.se) h += seismicBlock();
       if (S.drift.length) h += '<h4>Storey drift at corresponding locations (unfactored lateral load, IS 1893 cl 7.11.1, limit 0.004h)</h4>' + tbl(["Case", "Storey (z, m)", "Governing nodes (top/bottom)", "Δu (mm)", "Drift Δu/h", "Δmax/Δave floor", ""], S.drift.map(function (d) { return [d.c, f(d.zb, 2) + "–" + f(d.z, 2), (d.top + 1) + " / " + (d.bot + 1) + (d.stacked ? "" : " (nearest)"), f(Math.abs(d.ut - d.ub) * 1000, 2), f(d.dr, 5), m.twoD ? "—" : f(d.tr, 2), d.lim ? (d.ok ? '<span class="okt">OK</span>' : '<span class="not">EXCEEDS</span>') : '']; })) +
         '<div class="note">Drift = relative lateral displacement of the node at the top of a storey and the node directly below it, ÷ storey height; the largest value on each storey is shown. ' + (m.twoD ? '' : 'Δmax/Δave = largest ÷ average of the extreme floor displacements — an indicator for torsional irregularity (IS 1893 (Part 1):2016 Table 5 (i); Amendment 2 (2020) uses Δmax/Δave with 1.2 and 1.4 thresholds) computed without accidental eccentricity; values above 1.2 need review.') + '</div>';
-      h += designTables() + detailBlock() + basisBlock();
+      var vm = typeof PDB !== "undefined" && PDB.current().vmode;
+      h += (vm ? PRO.chips(designTables()) : designTables()) + detailBlock() + (typeof PRO !== "undefined" ? PRO.block(S) : "") + basisBlock();
       h += '<h4>Support reactions — ' + esc(cb0.name) + '</h4>' + tbl(["Node", "Fx", "Fy", "Fz (kN)", "Mx", "My", "Mz (kNm)"], Object.keys(cb0.reac).slice(0, 60).map(function (k) { var q = cb0.reac[k]; return [+k + 1].concat(q.map(function (v) { return f(v, 1); })); }));
       h += '<div class="btns noprint"><button type="button" class="pri bXls">Excel: full analysis & design</button></div><div class="btns noprint"><button type="button" id="bCSV">Forces CSV</button><button type="button" id="bPrint">Print / Save PDF</button></div>';
       h += '<div class="disc">Analysis: 3D frame elements (Euler–Bernoulli, 6 DOF/node) by the direct stiffness method; slabs, plates & walls by 4-node flat shell FEA (QM6 incompatible-mode membrane + MITC4 Mindlin plate). Verified against closed-form beam, frame, plate and wall solutions. Results must be reviewed by a qualified structural engineer.</div></div>';
@@ -6597,6 +7555,7 @@ var SU = (function () {
     if ($("bPrint")) { if (!window.AndroidBridge && window.self !== window.top) $("bPrint").hidden = true; $("bPrint").onclick = function () { document.querySelectorAll("details").forEach(function (x) { x.open = true; }); if (window.AndroidBridge && AndroidBridge.print) AndroidBridge.print("Frame analysis"); else window.print(); }; }
     if ($("bCSV")) $("bCSV").onclick = csv;
     bindDetail();
+    if (typeof PRO !== "undefined") PRO.bind(S, ctx());
     if ($("bAllCalc")) $("bAllCalc").onclick = function () { this.disabled = true; this.textContent = "Preparing…"; var b = this; setTimeout(function () { allCalcs(); b.textContent = "All member calculations shown below"; }, 20); };
     document.querySelectorAll("[data-fk]").forEach(function (td) { td.onclick = function () { S.sel = { t: td.getAttribute("data-t"), k: +td.getAttribute("data-fk") }; render(); showSel(); $("viewer").scrollIntoView({ behavior: "smooth" }); }; });
   }
@@ -6788,10 +7747,11 @@ var SU = (function () {
     download("member-forces.csv", rows.join("\n"));
   }
   function openText(name, text) {
-    try { load(); UV.src = "dxf"; UV.roles = {}; save(); S.dx = DXF.parse(text); S.dxName = name; var a = document.getElementById("app");
+    try { load(); UV.src = "dxf"; UV.roles = {}; save(); S.dx = DXF.parse(text); S.dxName = name; if (typeof PDB !== "undefined") PDB.setDxf(name, text); var a = document.getElementById("app");
       if (!$("srcbox")) return; a.querySelector("[data-k=src]").value = "dxf"; $("srcbox").innerHTML = srcInner(); bindSrc(); $("p1").classList.add("open"); toast("DXF loaded: " + S.dx.ents.length + " entities"); } catch (e) { err(e); }
   }
-  return { view: view, S: S, openText: openText };
+  function ctx() { return { download: download, toast: toast, rerender: renderResults, S: function () { return S; }, opened: function (p) { load(); } }; }
+  return { view: view, S: S, openText: openText, ctx: ctx, download: function (n, t) { download(n, t); }, toast: function (t) { toast(t); } };
 })();
 
 /* js/app.js */
@@ -6887,6 +7847,8 @@ var SU = (function () {
   function home() {
     title.textContent = "IS StructDesign"; back.hidden = true;
     var h = '<p class="intro">Structural design to Indian Standards — RCC (IS 456), steel (IS 800), loads (IS 875, IS 1893). Works offline.</p>';
+    if (window.PDB) { var pr = PDB.current(), sm = pr.summary;
+      h += '<a class="card wide proj" href="#projects"><span class="ic">▤</span><b>' + esc(pr.name) + ' <small class="stchip">' + esc(pr.status) + '</small></b><small>Current project · ' + PDB.list().length + ' project(s) on this device' + (sm ? ' · last run ' + new Date(sm.date).toLocaleDateString() + ' · ' + (sm.memberFails + (sm.detailFails || 0) ? (sm.memberFails + (sm.detailFails || 0)) + ' failing checks' : 'all checks OK') + ' · ' + (sm.steel_t || 0).toFixed(2) + ' t steel' : ' · not analysed yet') + '</small><em>Projects · revisions · verification · report</em></a>'; }
     ["RCC", "Steel", "Loads"].forEach(function (g) {
       h += '<h2 class="grp">' + { RCC: "RCC design — IS 456:2000", Steel: "Steel design — IS 800:2007", Loads: "Loads — IS 875 & IS 1893" }[g] + '</h2><div class="grid">';
       M.filter(function (m) { return m.grp === g; }).forEach(function (m) {
@@ -6894,9 +7856,9 @@ var SU = (function () {
       });
       h += '</div>';
     });
-    h += '<h2 class="grp">Analysis — stiffness matrix & FEA</h2><div class="grid"><a class="card wide" href="#model"><span class="ic">⌗</span><b>Frame & FE analysis</b><small>3D/2D frames by the direct stiffness method, slabs & walls by shell FEA. Linear static, P-Delta, pushover. Generator or DXF import, IS 456/800 design.</small><em>IS 456 · IS 800 · IS 875 · IS 1893</em></a></div>';
+    h += '<h2 class="grp">Analysis — stiffness matrix & FEA</h2><div class="grid"><a class="card wide" href="#model"><span class="ic">⌗</span><b>Frame & FE analysis</b><small>3D/2D frames by the direct stiffness method, slabs & walls by shell FEA. Linear static, P-Delta, response spectrum, pushover. Automatic design, IS 13920 detailing, BOQ, drawings and calculation report.</small><em>IS 456 · IS 800 · IS 875 · IS 1893</em></a></div>';
     h += '<h2 class="grp">Reference</h2><div class="grid"><a class="card" href="#tables"><span class="ic">☰</span><b>Section tables</b><small>ISA, ISMB, ISMC properties</small><em>SP 6(1)</em></a>' +
-      '<a class="card" href="#about"><span class="ic">i</span><b>About & scope</b><small>Codes, assumptions, limits</small><em>v2.0</em></a></div>';
+      '<a class="card" href="#about"><span class="ic">i</span><b>About & scope</b><small>Codes, assumptions, limits</small><em>engine ' + (window.REG ? REG.ENGINE : "") + '</em></a></div>';
     app.innerHTML = h;
   }
 
@@ -6999,27 +7961,29 @@ var SU = (function () {
 
   function about() {
     title.textContent = "About & scope"; back.hidden = false;
-    app.innerHTML = '<div class="rep"><h4>IS StructDesign v2.0</h4><p>Design and checking aid for buildings to Indian Standards, limit state method.</p>' +
-      '<h4>Codes covered</h4><ul><li>IS 456:2000 — beams, one/two-way slabs, columns (strain compatibility + Bresler biaxial), isolated & strip footings, staircases</li>' +
-      '<li>IS 800:2007 — tension & compression members, ISMB beams with lateral-torsional buckling, purlins, bolts & welds</li>' +
-      '<li>IS 875 Parts 1–4 — dead, imposed, snow and wind loads on roofs</li><li>IS 1893 (Part 1):2016 — equivalent static base shear</li>' +
-      '<li>Roof trusses — Pratt/Howe/Fink geometry, matrix stiffness analysis, 13 load combinations (IS 800 Table 4), member sizing</li>' +
-      '<li>Frame & FE analysis — 3D direct stiffness frames, 4-node shell FEA (QM6 membrane + MITC4 plate) for slabs, plates & walls, linear static with IS combinations, P-Delta, pushover with P–M hinges, DXF import/export, IS 456 / IS 800 member design</li></ul>' +
-      '<h4>Not covered</h4><ul><li>Response spectrum / time-history dynamics, ductile detailing (IS 13920) beyond notes, cracked-section non-linear slabs</li><li>Combined/raft/pile foundations, retaining walls, water tanks</li><li>Plate girders, built-up columns, base plates, gantry girders</li></ul>' +
-      '<h4>Important</h4><p>Results are for design assistance. Every design must be checked, and drawings signed, by a qualified structural engineer. Section properties are rounded table values.</p>' +
-      '<p class="note">Inputs are saved on this device only.</p></div>';
+    app.innerHTML = '<div class="rep"><h4>IS StructDesign — engine ' + (window.REG ? REG.ENGINE : "") + '</h4><p>Analysis, design, detailing and documentation of buildings to Indian Standards. Works offline; projects are stored on this device.</p>' +
+      '<h4>What it does</h4><ul><li>Frame & shell FE analysis: linear static, P-Delta, modal and response spectrum (IS 1893:2016), accidental torsion, pushover</li>' +
+      '<li>Design: IS 456 (limit state or working stress), IS 800, with worked calculations</li><li>Automatic design & detailing: storey-wise enlargement until every check passes</li>' +
+      '<li>Detailing: IS 13920 beams, columns, joints, strong column–weak beam, shear walls, slabs, isolated footings; bar bending schedule (IS 2502)</li>' +
+      '<li>Outputs: Excel with live formulas, calculation report (print/PDF), drawing set DXF, STAAD.Pro input, BOQ and reinforcement schedules</li>' +
+      '<li>Projects: offline database with revisions, backups and an engineering verification mode with reviewer sign-off; engineering assistant</li><li>Standalone modules for beams, slabs, columns, footings, stairs, steel members, connections, trusses and loads</li></ul>' +
+      '<h4>Not covered</h4><ul><li>Time-history analysis, combined / raft / pile foundations, settlement, soil–structure interaction</li><li>Deflection and crack width in the frame design (use the beam and slab modules)</li><li>Full building wind pressure-coefficient workflow</li></ul>' +
+      (window.REG ? REG.html(esc) : '') +
+      '<h4>Important</h4><p>Results are for design assistance. Every design must be checked, and drawings signed, by a qualified structural engineer.</p></div>';
   }
 
   function route() {
     var id = (location.hash || "").replace(/^#\/?/, "");
     var m = M.filter(function (x) { return x.id === id; })[0];
-    if (m) moduleView(m); else if (id === "model" && window.SU) SU.view(app, title, back); else if (id === "tables") tables(); else if (id === "about") about(); else home();
+    var ctx = window.SU ? SU.ctx() : null;
+    if (m) moduleView(m); else if (id === "model" && window.SU) SU.view(app, title, back); else if (id === "projects" && window.PRO) PRO.projectsView(app, title, back, ctx); else if (id === "report" && window.RPT) RPT.view(app, title, back, ctx);
+    else if (id === "tables") tables(); else if (id === "about") about(); else home();
     window.scrollTo(0, 0);
   }
   back.onclick = function () { if (location.hash) location.hash = ""; };
   window.addEventListener("hashchange", route);
   window.ISD = { modules: M, route: route };
-  route();
+  if (window.PDB) PDB.init().then(route, route); else route();
 })();
 
 </script>

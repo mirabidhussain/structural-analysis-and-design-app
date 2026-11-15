@@ -48,6 +48,15 @@ Home → **Frame & FE analysis**.
 - **Irregularity indicators:** torsional (Table 5 (i), both the 2016 text and Amendment 2 thresholds), soft storey and mass irregularity (Table 6, 2016 definitions), first-two-modes-translational check.
 - **Excel:** a Seismic sheet with live formulas for Sa/g, Ak, modal base shears, scale factor, eccentricities, torques and irregularity ratios.
 
+## Professional platform (v3.0)
+- **Projects** — an offline project database (IndexedDB on the device): name, job no., client, site, engineers, status (Concept → Design → For check → Checked → Issued), notes, inputs, imported DXF, rates, reviewer sign-offs, activity log. Create, open, copy, delete, search; **issue revisions** that freeze inputs, results summary, engine and code editions; export a project (`.isdp`), back up and restore everything.
+- **Automatic design & detailing** — one button runs analysis → design → detailing repeatedly and enlarges the columns and beams of the storeys that fail (design, steel > 4 %, strong column–weak beam, joint shear, joint depth, drift) by 50 mm until every check passes; the sizes are written as editable section rules.
+- **Engineering verification mode** — every result carries the weakest verification state of the checks behind it (Verified / Calculated / Simplified / Not implemented); a design summary with utilisation; a checking engineer's list (every non-benchmarked, simplified or missing check and every failure) to accept, query or mark N/A with name and date. A result becomes a *verified engineering result* only when it passes and every item is closed.
+- **Calculation report** — print / PDF / HTML: cover, codes register, design basis (entered vs default), assumptions register, model, loads with equilibrium sums, modal / RSA / drift / irregularity, design summary, step-by-step traces of the governing members (or all), detailing and ductility checks, schedules, BOQ, verification status, signatures, revisions, limitations.
+- **BOQ and reinforcement schedules** — IS 1200 style quantities from the model (excavation, PCC, RCC by element, formwork, reinforcement, structural steel, backfill), your rates, amounts; column, beam, wall, slab and footing schedules. In the app, the report, Excel (rates as inputs, amounts as formulas) and DXF.
+- **CAD** — drawing set DXF: GA plan of every floor with grids, column / beam / wall / slab marks, foundation layout, schedules, all reinforcement details, title blocks. **STAAD.Pro input** of the same model for an independent cross-check.
+- **Engineering assistant** — findings with clause references and quantified fixes (e.g. the missing column capacity at a joint), member lookup and code notes offline; in the web app it can also ask Claude, which reads the results through the app.
+
 ## Codes in use (v2.9)
 IS 456:2000, IS 13920:2016, IS 1893 (Part 1):2016 with Amendments 1–2, IS 800:2007, IS 875 Parts 2, 3, 5 (Part 1 unit weights: only concrete 25 kN/m³ is built in; the 2026 revision has not yet been reviewed), SP 16, SP 34, IS 2502. IS 1893 (Part 1):2025 and (Part 5):2025 were published in November 2025 and withdrawn by BIS on 3 March 2026, so the 2016 edition applies. The app and the Excel workbook carry a **standards register** and a **verification status** for every check (Verified / Calculated / Simplified / Not implemented).
 
@@ -71,7 +80,7 @@ Run `npm test` (Node 18+) or let GitHub Actions run it on every push:
 - `test/po_verify.js` — plastic collapse loads (portal 4Mp/h, propped cantilever 6Mp/L), P–M hinges, P-Delta equilibrium.
 - `test/model_test.js` — equilibrium of a 3D building, DXF import/export round trip.
 - `test/verify.js` — design-module checks against hand calculations.
-- `test/acceptance.js` — 119 acceptance and independent-benchmark checks:
+- `test/acceptance.js` — 141 acceptance and independent-benchmark checks:
   - design modules with **expected pass**, **expected fail** (e.g. 150 mm stair waist fails deflection, 3 bolts for 150 kN fails) and boundary cases;
   - IS code reference values: SP 16 Mu,lim factors 0.138/0.133/0.149, IS 456 Tables 19–22, IS 800 Table 9(c) fcd 107 & 183 N/mm², IS 1893 Sa/g, IS 800 cl 9.2.2 high-shear reduction by hand calculation;
   - FE benchmarks: MacNeal–Harder membrane patch test with distorted elements (exact), continuous beams wL²/8 and 0.1wL² (three-moment equation), torsion TL/GJ, Cook's skewed membrane convergence, SS plate mesh convergence;
@@ -79,6 +88,7 @@ Run `npm test` (Node 18+) or let GitHub Actions run it on every push:
   - storey drift at vertically stacked nodes and the Δmax/Δave torsion indicator;
   - seismic: 2-storey shear-frame periods vs the exact eigen-solution, single-storey RSA base shear = Ak·W and displacement Ak·g/ω², CQC correlation, scaling rules, CR = CM for a symmetric plan and CR shift towards one-sided walls, accidental-torsion torque, soft-storey and mass-irregularity detection;
   - detailing: hand-checked cutting lengths, unit weights, Ld and laps, provided ≥ required steel along beams and in columns, IS 13920 beam and column rules, capacity shear, Ash, SCWB sums, lap positions and hoops over laps, footing pressures and shear, slab panel steel, totals, DXF round trip;
+  - platform: BOQ volumes by hand, automatic design convergence, project round trips and backups, verification states, report sections, DXF drawing set, STAAD file contents, assistant findings;
   - walls and joints: wall P–M against an independent stress-block computation, squash load, wall + column shears = base reaction, shear steel, boundary-element trigger, joint shear and capacity recomputed.
 - `test/xlsx_ci.js` + `test/xlsx_check.py` — workbooks written without cached values; LibreOffice computes every formula (≈ 70 000) and the results must equal the app's values with no Excel errors (CI job).
 - `test/ui_ci.js` — browser test (Playwright): every module with blank inputs, frame analysis, Excel download, WSM switch, no JavaScript errors.

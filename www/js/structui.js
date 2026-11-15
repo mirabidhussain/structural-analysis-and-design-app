@@ -19,8 +19,17 @@ var SU = (function () {
   function dflt(k) { var md = MATDEF[UV.mat === "steel" ? "steel" : "rcc"]; return md[k] !== undefined ? md[k] : DEF[k]; }
   function given(k) { var v = UV[k]; return v !== undefined && v !== null && v !== "" && !(typeof v === "number" && isNaN(v)); }
   function eff() { var o = {}; Object.keys(DEF).forEach(function (k) { o[k] = given(k) ? UV[k] : dflt(k); }); o.roles = UV.roles || (UV.roles = {}); return o; }
-  function load() { try { UV = JSON.parse(localStorage.getItem("isd_model2") || "{}") || {}; } catch (e) { UV = {}; } P = eff(); }
-  function save() { P = eff(); try { localStorage.setItem("isd_model2", JSON.stringify(UV)); } catch (e) {} }
+  function load() {
+    if (typeof PDB !== "undefined") { var pr = PDB.current(); UV = JSON.parse(JSON.stringify(pr.inputs || {})); if (S.pid !== pr.id) { resetFor(pr); } }
+    else { try { UV = JSON.parse(localStorage.getItem("isd_model2") || "{}") || {}; } catch (e) { UV = {}; } }
+    P = eff();
+  }
+  function save() { P = eff(); if (typeof PDB !== "undefined") PDB.setInputs(UV); else try { localStorage.setItem("isd_model2", JSON.stringify(UV)); } catch (e) {} }
+  /* switching project: forget the previous model and results, restore the project's DXF */
+  function resetFor(pr) {
+    S.pid = pr.id; S.geo = S.m = S.res = S.des = S.po = S.det = S.se = S.boq = S.autoRes = null; S.dx = null; S.dxName = null; S.sel = null; S.state = null;
+    if (pr.dxf && pr.dxf.text) { try { S.dx = DXF.parse(pr.dxf.text); S.dxName = pr.dxf.name; } catch (e) { S.dx = null; } }
+  }
   function set(k, v) { UV[k] = v; save(); }
   function dtxt(k) { var d = dflt(k); return typeof d === "boolean" ? (d ? "on" : "off") : String(d); }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
@@ -67,7 +76,8 @@ var SU = (function () {
   function view(app, title, back) {
     load();
     title.textContent = "Frame & FE Analysis"; back.hidden = false;
-    var h = '<div class="code-note">Stiffness matrix (displacement) method for frames · 4-node flat-shell FEA for slabs, plates & walls · Linear static, P-Delta and pushover · DXF input</div>';
+    var pr = typeof PDB !== "undefined" ? PDB.current() : null;
+    var h = (pr ? '<div class="projbar"><a href="#projects">▤ ' + esc(pr.name) + '</a><span class="stchip st' + ["Concept", "Design", "For check", "Checked", "Issued", "On hold"].indexOf(pr.status) + '">' + esc(pr.status) + '</span></div>' : '') + '<div class="code-note">Stiffness matrix (displacement) method for frames · 4-node flat-shell FEA for slabs, plates & walls · Linear static, P-Delta and pushover · DXF input</div>';
     h += panel("p1", "1 · Geometry", srcForm(), true);
     h += panel("p2", "2 · Materials & sections", propForm());
     h += panel("p3", "3 · Loads (IS 875, IS 1893)", loadForm());
@@ -86,8 +96,9 @@ var SU = (function () {
     $("bAna").onclick = function () { runLinear(false); };
     $("bPD").onclick = function () { runLinear(true); };
     $("bPO").onclick = runPushover;
+    $("bAuto").onclick = runAuto;
     if (S.m) { status(); drawViewer(); if (S.res || S.po) renderResults(); }
-    else { try { buildGen(true); } catch (e) {} }
+    else { try { if (P.src === "dxf" && S.dx) buildDxf(); else if (P.src !== "dxf") buildGen(true); } catch (e) {} }
   }
   function panel(id, t, body, open) { return '<section class="pnl' + (open ? " open" : "") + '" id="' + id + '"><h3>' + t + '</h3><div class="pb">' + body + '</div></section>'; }
   function srcForm() { return '<div class="form">' + sel("src", "Model source", [["gen", "Parametric frame generator"], ["dxf", "Import DXF drawing"]]) + '<div id="srcbox" class="full">' + srcInner() + '</div></div>'; }
@@ -116,7 +127,7 @@ var SU = (function () {
     if ($("dxfFile")) $("dxfFile").onchange = function (ev) {
       var fl = ev.target.files[0]; if (!fl) return;
       var rd = new FileReader();
-      rd.onload = function () { try { S.dx = DXF.parse(String(rd.result)); S.dxName = fl.name; UV.roles = {}; save(); $("srcbox").innerHTML = srcInner(); bindSrc(); toast(S.dx.ents.length + " entities on " + Object.keys(S.dx.layers).length + " layers"); } catch (e) { err(e); } };
+      rd.onload = function () { try { S.dx = DXF.parse(String(rd.result)); S.dxName = fl.name; UV.roles = {}; save(); if (typeof PDB !== "undefined") PDB.setDxf(fl.name, String(rd.result)); $("srcbox").innerHTML = srcInner(); bindSrc(); toast(S.dx.ents.length + " entities on " + Object.keys(S.dx.layers).length + " layers"); } catch (e) { err(e); } };
       rd.readAsText(fl);
     };
     document.querySelectorAll("[data-layer]").forEach(function (s) { s.onchange = function () { UV.roles = UV.roles || {}; UV.roles[s.getAttribute("data-layer")] = s.value; save(); }; });
@@ -161,6 +172,7 @@ var SU = (function () {
   }
   function anaForm() {
     return '<div class="form">' + '<div class="btns full"><button class="pri" id="bAna" type="button">Linear static</button><button id="bPD" type="button">Linear + P-Delta</button></div>' +
+      '<div class="btns full"><button id="bAuto" type="button">Automatic design & detailing</button></div><div class="note full">Automatic design runs analysis → design → detailing repeatedly and enlarges the columns and beams of the storeys that fail (design, steel > 4 %, strong column–weak beam, joint shear, drift) by 50 mm until every check passes; the sizes become editable section rules.</div>' +
       sel("pdir", "Pushover direction", [[0, "+X"], [1, "+Y"]]) + sel("ppat", "Lateral pattern", [["parabolic", "IS 1893 (W·h²)"], ["uniform", "Uniform (mass)"]]) +
       num("pdrift", "Target roof drift", "% of height") + num("pev", "Max hinge events") + chk("ppd", "Include P-Delta (geometric non-linearity)") +
       '<div class="btns full"><button class="pri" id="bPO" type="button">Run pushover (non-linear static)</button></div>' +
@@ -202,7 +214,7 @@ var SU = (function () {
   }
   function download(name, text) {
     if (window.AndroidBridge && AndroidBridge.saveFile) { AndroidBridge.saveFile(name, text); return; }
-    var blob = new Blob([text], { type: name.slice(-4) === ".csv" ? "text/csv" : "application/dxf" });
+    var ext = name.split(".").pop().toLowerCase(), blob = new Blob([text], { type: { csv: "text/csv", html: "text/html", json: "application/json", isdp: "application/json", std: "text/plain", txt: "text/plain" }[ext] || "application/dxf" });
     if (window.claude && window.claude.use && window.self !== window.top) { Promise.resolve(window.claude.use("downloads")).then(function (dl) { if (!dl) throw 0; return dl.save({ filename: name, data: blob }); }).then(function () { toast("Saved " + name); }, function () { toast("Download not available here"); }); return; }
     try { var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); toast("Saved " + name); }
     catch (e) { toast("Download not available here"); }
@@ -217,31 +229,34 @@ var SU = (function () {
     var p = params(); S.p = p; MD._pm = {};
     S.m = MD.make(S.geo, p);
     busy("Assembling stiffness matrix and solving…");
-    var t0 = Date.now(), steps = [
-      ["Solving load cases and combinations…", function () {
-        S.L = MD.cases(S.m, p); S.cb = MD.combos(S.L.cases, p.method);
-        S.res = FE.linear(S.m, S.L.cases, S.cb, { pdelta: pd, caseReac: true }); S.res.pd = pd; S.res.incMap = {}; S.cb.forEach(function (c) { S.res.incMap[c.name] = c.inc || 1; });
-        S.se = null;
-      }],
-      [p.rsa ? "Modal analysis and response spectrum…" : "Seismic checks…", function () {
-        if (!p.eq) return;
-        S.se = SE.run(S.m, S, p);
-        S.se.irr = SE.irregular(S.m, S, S.se); S.se.tc = SE.torsionCheck(S.m, S, S.se);
-        if (S.se.md) { var low = S.se.md.modes.length; ["X", "Y"].forEach(function (D0, d) { var rs = S.se.rs[d]; if (rs && rs.cum < 0.9) S.res.warn.push("Modal mass participation in " + D0 + " is " + (rs.cum * 100).toFixed(1) + " % with " + low + " modes — IS 1893 cl 7.7.5.2 requires ≥ 90 %: increase the number of modes."); }); }
-      }],
-      ["Designing members (" + "IS 456 / IS 800)…", function () {
-        S.res.ms = Date.now() - t0;
-        S.des = MD.design(S.m, S.res, p); S.det = null;
-        try { S.det = DT.run(S.m, S, p); } catch (e) { S.det = { err: e.message }; }
-        S.drift = MD.drift(S.m, S.res).concat(S.se && S.se.drift ? S.se.drift : []); S.po = null;
-        S.state = S.cb[0].name; S.disp = "def"; S.sel = null;
-        drawViewer(); renderResults(); status(); $("viewer").scrollIntoView({ behavior: "smooth" });
-      }]];
+    var t0 = Date.now(), steps = PIPE.steps(S, p, pd);
+    S.autoRes = null;
+    steps[2][1] = (function (f0) { return function () {
+      S.res.ms = Date.now() - t0; f0();
+      if (typeof PDB !== "undefined") PDB.setSummary(PIPE.summary(S));
+      S.state = S.cb[0].name; S.disp = "def"; S.sel = null;
+      drawViewer(); renderResults(); status(); $("viewer").scrollIntoView({ behavior: "smooth" });
+    }; })(steps[2][1]);
     (function next(i) {
       if (i >= steps.length) return;
       busy(steps[i][0]);
       setTimeout(function () { try { steps[i][1](); next(i + 1); } catch (e) { err(e); $("results").innerHTML = ""; } }, 30);
     })(0);
+  }
+  function runAuto() {
+    grab(document.getElementById("app"));
+    try { if (P.src === "gen" && !S.geo) buildGen(true); } catch (e) { return err(e); }
+    if (!S.m) return err("Build a model first");
+    var p = params(); MD._pm = {};
+    busy("Automatic design: iteration 1…");
+    AUTO.run(S.geo, p, { async: true, step: function (i, l) { busy("Automatic design: iteration " + (i + 2) + " — " + (Object.keys(l.fails.col).length + Object.keys(l.fails.beam).length) + " storey group(s) enlarged after iteration " + (i + 1) + "…"); } }).then(function (r) {
+      Object.keys(r.S).forEach(function (k) { if (k !== "geo") S[k] = r.S[k]; });
+      S.p = r.p; S.autoRes = r; set("secOver", r.rules);
+      var box = document.querySelector("#p2 .pb"); if (box) box.innerHTML = propForm();
+      if (typeof PDB !== "undefined") { PDB.setSummary(PIPE.summary(S)); PDB.update(PDB.current().id, {}, "Automatic design: " + r.log.length + " iterations, " + (r.ok ? "all checks pass" : "failures left")); }
+      S.state = S.cb[0].name; S.disp = "def"; S.sel = null;
+      drawViewer(); renderResults(); status(); toast(r.ok ? "Automatic design: all checks pass" : "Automatic design finished with failures left");
+    }, function (e) { err(e); $("results").innerHTML = ""; });
   }
   function runPushover() {
     grab(document.getElementById("app"));
@@ -522,7 +537,8 @@ var SU = (function () {
       if (S.se) h += seismicBlock();
       if (S.drift.length) h += '<h4>Storey drift at corresponding locations (unfactored lateral load, IS 1893 cl 7.11.1, limit 0.004h)</h4>' + tbl(["Case", "Storey (z, m)", "Governing nodes (top/bottom)", "Δu (mm)", "Drift Δu/h", "Δmax/Δave floor", ""], S.drift.map(function (d) { return [d.c, f(d.zb, 2) + "–" + f(d.z, 2), (d.top + 1) + " / " + (d.bot + 1) + (d.stacked ? "" : " (nearest)"), f(Math.abs(d.ut - d.ub) * 1000, 2), f(d.dr, 5), m.twoD ? "—" : f(d.tr, 2), d.lim ? (d.ok ? '<span class="okt">OK</span>' : '<span class="not">EXCEEDS</span>') : '']; })) +
         '<div class="note">Drift = relative lateral displacement of the node at the top of a storey and the node directly below it, ÷ storey height; the largest value on each storey is shown. ' + (m.twoD ? '' : 'Δmax/Δave = largest ÷ average of the extreme floor displacements — an indicator for torsional irregularity (IS 1893 (Part 1):2016 Table 5 (i); Amendment 2 (2020) uses Δmax/Δave with 1.2 and 1.4 thresholds) computed without accidental eccentricity; values above 1.2 need review.') + '</div>';
-      h += designTables() + detailBlock() + basisBlock();
+      var vm = typeof PDB !== "undefined" && PDB.current().vmode;
+      h += (vm ? PRO.chips(designTables()) : designTables()) + detailBlock() + (typeof PRO !== "undefined" ? PRO.block(S) : "") + basisBlock();
       h += '<h4>Support reactions — ' + esc(cb0.name) + '</h4>' + tbl(["Node", "Fx", "Fy", "Fz (kN)", "Mx", "My", "Mz (kNm)"], Object.keys(cb0.reac).slice(0, 60).map(function (k) { var q = cb0.reac[k]; return [+k + 1].concat(q.map(function (v) { return f(v, 1); })); }));
       h += '<div class="btns noprint"><button type="button" class="pri bXls">Excel: full analysis & design</button></div><div class="btns noprint"><button type="button" id="bCSV">Forces CSV</button><button type="button" id="bPrint">Print / Save PDF</button></div>';
       h += '<div class="disc">Analysis: 3D frame elements (Euler–Bernoulli, 6 DOF/node) by the direct stiffness method; slabs, plates & walls by 4-node flat shell FEA (QM6 incompatible-mode membrane + MITC4 Mindlin plate). Verified against closed-form beam, frame, plate and wall solutions. Results must be reviewed by a qualified structural engineer.</div></div>';
@@ -533,6 +549,7 @@ var SU = (function () {
     if ($("bPrint")) { if (!window.AndroidBridge && window.self !== window.top) $("bPrint").hidden = true; $("bPrint").onclick = function () { document.querySelectorAll("details").forEach(function (x) { x.open = true; }); if (window.AndroidBridge && AndroidBridge.print) AndroidBridge.print("Frame analysis"); else window.print(); }; }
     if ($("bCSV")) $("bCSV").onclick = csv;
     bindDetail();
+    if (typeof PRO !== "undefined") PRO.bind(S, ctx());
     if ($("bAllCalc")) $("bAllCalc").onclick = function () { this.disabled = true; this.textContent = "Preparing…"; var b = this; setTimeout(function () { allCalcs(); b.textContent = "All member calculations shown below"; }, 20); };
     document.querySelectorAll("[data-fk]").forEach(function (td) { td.onclick = function () { S.sel = { t: td.getAttribute("data-t"), k: +td.getAttribute("data-fk") }; render(); showSel(); $("viewer").scrollIntoView({ behavior: "smooth" }); }; });
   }
@@ -724,8 +741,9 @@ var SU = (function () {
     download("member-forces.csv", rows.join("\n"));
   }
   function openText(name, text) {
-    try { load(); UV.src = "dxf"; UV.roles = {}; save(); S.dx = DXF.parse(text); S.dxName = name; var a = document.getElementById("app");
+    try { load(); UV.src = "dxf"; UV.roles = {}; save(); S.dx = DXF.parse(text); S.dxName = name; if (typeof PDB !== "undefined") PDB.setDxf(name, text); var a = document.getElementById("app");
       if (!$("srcbox")) return; a.querySelector("[data-k=src]").value = "dxf"; $("srcbox").innerHTML = srcInner(); bindSrc(); $("p1").classList.add("open"); toast("DXF loaded: " + S.dx.ents.length + " entities"); } catch (e) { err(e); }
   }
-  return { view: view, S: S, openText: openText };
+  function ctx() { return { download: download, toast: toast, rerender: renderResults, S: function () { return S; }, opened: function (p) { load(); } }; }
+  return { view: view, S: S, openText: openText, ctx: ctx, download: function (n, t) { download(n, t); }, toast: function (t) { toast(t); } };
 })();

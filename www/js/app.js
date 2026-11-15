@@ -90,6 +90,8 @@
   function home() {
     title.textContent = "IS StructDesign"; back.hidden = true;
     var h = '<p class="intro">Structural design to Indian Standards — RCC (IS 456), steel (IS 800), loads (IS 875, IS 1893). Works offline.</p>';
+    if (window.PDB) { var pr = PDB.current(), sm = pr.summary;
+      h += '<a class="card wide proj" href="#projects"><span class="ic">▤</span><b>' + esc(pr.name) + ' <small class="stchip">' + esc(pr.status) + '</small></b><small>Current project · ' + PDB.list().length + ' project(s) on this device' + (sm ? ' · last run ' + new Date(sm.date).toLocaleDateString() + ' · ' + (sm.memberFails + (sm.detailFails || 0) ? (sm.memberFails + (sm.detailFails || 0)) + ' failing checks' : 'all checks OK') + ' · ' + (sm.steel_t || 0).toFixed(2) + ' t steel' : ' · not analysed yet') + '</small><em>Projects · revisions · verification · report</em></a>'; }
     ["RCC", "Steel", "Loads"].forEach(function (g) {
       h += '<h2 class="grp">' + { RCC: "RCC design — IS 456:2000", Steel: "Steel design — IS 800:2007", Loads: "Loads — IS 875 & IS 1893" }[g] + '</h2><div class="grid">';
       M.filter(function (m) { return m.grp === g; }).forEach(function (m) {
@@ -97,9 +99,9 @@
       });
       h += '</div>';
     });
-    h += '<h2 class="grp">Analysis — stiffness matrix & FEA</h2><div class="grid"><a class="card wide" href="#model"><span class="ic">⌗</span><b>Frame & FE analysis</b><small>3D/2D frames by the direct stiffness method, slabs & walls by shell FEA. Linear static, P-Delta, pushover. Generator or DXF import, IS 456/800 design.</small><em>IS 456 · IS 800 · IS 875 · IS 1893</em></a></div>';
+    h += '<h2 class="grp">Analysis — stiffness matrix & FEA</h2><div class="grid"><a class="card wide" href="#model"><span class="ic">⌗</span><b>Frame & FE analysis</b><small>3D/2D frames by the direct stiffness method, slabs & walls by shell FEA. Linear static, P-Delta, response spectrum, pushover. Automatic design, IS 13920 detailing, BOQ, drawings and calculation report.</small><em>IS 456 · IS 800 · IS 875 · IS 1893</em></a></div>';
     h += '<h2 class="grp">Reference</h2><div class="grid"><a class="card" href="#tables"><span class="ic">☰</span><b>Section tables</b><small>ISA, ISMB, ISMC properties</small><em>SP 6(1)</em></a>' +
-      '<a class="card" href="#about"><span class="ic">i</span><b>About & scope</b><small>Codes, assumptions, limits</small><em>v2.0</em></a></div>';
+      '<a class="card" href="#about"><span class="ic">i</span><b>About & scope</b><small>Codes, assumptions, limits</small><em>engine ' + (window.REG ? REG.ENGINE : "") + '</em></a></div>';
     app.innerHTML = h;
   }
 
@@ -202,25 +204,27 @@
 
   function about() {
     title.textContent = "About & scope"; back.hidden = false;
-    app.innerHTML = '<div class="rep"><h4>IS StructDesign v2.0</h4><p>Design and checking aid for buildings to Indian Standards, limit state method.</p>' +
-      '<h4>Codes covered</h4><ul><li>IS 456:2000 — beams, one/two-way slabs, columns (strain compatibility + Bresler biaxial), isolated & strip footings, staircases</li>' +
-      '<li>IS 800:2007 — tension & compression members, ISMB beams with lateral-torsional buckling, purlins, bolts & welds</li>' +
-      '<li>IS 875 Parts 1–4 — dead, imposed, snow and wind loads on roofs</li><li>IS 1893 (Part 1):2016 — equivalent static base shear</li>' +
-      '<li>Roof trusses — Pratt/Howe/Fink geometry, matrix stiffness analysis, 13 load combinations (IS 800 Table 4), member sizing</li>' +
-      '<li>Frame & FE analysis — 3D direct stiffness frames, 4-node shell FEA (QM6 membrane + MITC4 plate) for slabs, plates & walls, linear static with IS combinations, P-Delta, pushover with P–M hinges, DXF import/export, IS 456 / IS 800 member design</li></ul>' +
-      '<h4>Not covered</h4><ul><li>Response spectrum / time-history dynamics, ductile detailing (IS 13920) beyond notes, cracked-section non-linear slabs</li><li>Combined/raft/pile foundations, retaining walls, water tanks</li><li>Plate girders, built-up columns, base plates, gantry girders</li></ul>' +
-      '<h4>Important</h4><p>Results are for design assistance. Every design must be checked, and drawings signed, by a qualified structural engineer. Section properties are rounded table values.</p>' +
-      '<p class="note">Inputs are saved on this device only.</p></div>';
+    app.innerHTML = '<div class="rep"><h4>IS StructDesign — engine ' + (window.REG ? REG.ENGINE : "") + '</h4><p>Analysis, design, detailing and documentation of buildings to Indian Standards. Works offline; projects are stored on this device.</p>' +
+      '<h4>What it does</h4><ul><li>Frame & shell FE analysis: linear static, P-Delta, modal and response spectrum (IS 1893:2016), accidental torsion, pushover</li>' +
+      '<li>Design: IS 456 (limit state or working stress), IS 800, with worked calculations</li><li>Automatic design & detailing: storey-wise enlargement until every check passes</li>' +
+      '<li>Detailing: IS 13920 beams, columns, joints, strong column–weak beam, shear walls, slabs, isolated footings; bar bending schedule (IS 2502)</li>' +
+      '<li>Outputs: Excel with live formulas, calculation report (print/PDF), drawing set DXF, STAAD.Pro input, BOQ and reinforcement schedules</li>' +
+      '<li>Projects: offline database with revisions, backups and an engineering verification mode with reviewer sign-off; engineering assistant</li><li>Standalone modules for beams, slabs, columns, footings, stairs, steel members, connections, trusses and loads</li></ul>' +
+      '<h4>Not covered</h4><ul><li>Time-history analysis, combined / raft / pile foundations, settlement, soil–structure interaction</li><li>Deflection and crack width in the frame design (use the beam and slab modules)</li><li>Full building wind pressure-coefficient workflow</li></ul>' +
+      (window.REG ? REG.html(esc) : '') +
+      '<h4>Important</h4><p>Results are for design assistance. Every design must be checked, and drawings signed, by a qualified structural engineer.</p></div>';
   }
 
   function route() {
     var id = (location.hash || "").replace(/^#\/?/, "");
     var m = M.filter(function (x) { return x.id === id; })[0];
-    if (m) moduleView(m); else if (id === "model" && window.SU) SU.view(app, title, back); else if (id === "tables") tables(); else if (id === "about") about(); else home();
+    var ctx = window.SU ? SU.ctx() : null;
+    if (m) moduleView(m); else if (id === "model" && window.SU) SU.view(app, title, back); else if (id === "projects" && window.PRO) PRO.projectsView(app, title, back, ctx); else if (id === "report" && window.RPT) RPT.view(app, title, back, ctx);
+    else if (id === "tables") tables(); else if (id === "about") about(); else home();
     window.scrollTo(0, 0);
   }
   back.onclick = function () { if (location.hash) location.hash = ""; };
   window.addEventListener("hashchange", route);
   window.ISD = { modules: M, route: route };
-  route();
+  if (window.PDB) PDB.init().then(route, route); else route();
 })();

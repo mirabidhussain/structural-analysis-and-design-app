@@ -39,6 +39,41 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   await pg.click('#p2 > h3'); await pg.selectOption('[data-k=method]', 'wsm');
   await pg.click('#bAna'); await pg.waitForSelector('#results .rh', { timeout: 60000 });
   ok('Working stress method switch', /Working stress/.test(await pg.textContent('#results .rh')));
+  /* ---- professional platform ---- */
+  await pg.evaluate(() => { location.hash = '#model'; }); await pg.waitForTimeout(400);
+  const sel0 = await pg.$('#p2 [data-k=method]'); if (sel0) { await pg.selectOption('#p2 [data-k=method]', 'lsm'); }
+  await pg.click('#bAna'); await pg.waitForSelector('#results .rep.pro', { timeout: 90000 });
+  await pg.click('#vMode'); await pg.waitForSelector('.vitem', { timeout: 10000 });
+  const vb = await pg.evaluate(() => ({ cls: document.querySelector('.vbox b').textContent, items: document.querySelectorAll('.vitem').length, chips: document.querySelectorAll('#results h4 .vchip').length }));
+  ok('Verification mode: status, design summary, checklist and chips', vb.items > 3 && vb.chips >= 2 && /Not acceptable|Calculated result/.test(vb.cls), JSON.stringify(vb));
+  await pg.fill('#vBy', 'Checker'); await pg.click('.vitem [data-vs=ok]'); await pg.waitForTimeout(300);
+  ok('Verification: an item can be accepted and is signed', /Accepted by Checker/.test(await pg.textContent('#results')));
+  await pg.evaluate(() => document.querySelectorAll('.rep.pro details').forEach(d => d.open = true));
+  await pg.fill('input.rate[data-ri=rcs]', '6500'); await pg.dispatchEvent('input.rate[data-ri=rcs]', 'change'); await pg.waitForTimeout(300);
+  ok('BOQ: rates entered give amounts', /Amount at your rates/.test(await pg.textContent('#results')));
+  await pg.evaluate(() => document.querySelectorAll('.rep.pro details').forEach(d => d.open = true));
+  await pg.fill('#aQ', 'why does C-B2 fail?'); await pg.click('#aGo'); await pg.waitForTimeout(300);
+  ok('Assistant answers offline (member lookup)', /C-B2/.test(await pg.textContent('#aOut')));
+  for (const [id, ext] of [['#bGA', '.dxf'], ['#bStd', '.std']]) { const [d2] = await Promise.all([pg.waitForEvent('download', { timeout: 60000 }), pg.click(id)]); ok('Download ' + ext, d2.suggestedFilename().endsWith(ext), d2.suggestedFilename()); }
+  await pg.evaluate(() => { location.hash = '#report'; }); await pg.waitForSelector('#rpt h2', { timeout: 30000 });
+  ok('Calculation report renders with all sections', await pg.evaluate(() => document.querySelectorAll('#rpt h2').length >= 12));
+  const [d3] = await Promise.all([pg.waitForEvent('download', { timeout: 30000 }), pg.click('#rDl')]); ok('Report downloads as HTML', /\.html$/.test(d3.suggestedFilename()), d3.suggestedFilename());
+  await pg.evaluate(() => { location.hash = '#projects'; }); await pg.waitForSelector('#pNew');
+  await pg.fill('[data-pk=name]', 'Test building A'); await pg.click('#pSave'); await pg.waitForTimeout(200);
+  await pg.click('#pNew'); await pg.waitForTimeout(300);
+  const np = await pg.evaluate(() => ({ n: document.querySelectorAll('.prow').length, cur: document.querySelector('.rh h3').textContent }));
+  ok('Projects: rename, create and switch', np.n === 2 && /Project 2/.test(np.cur), JSON.stringify(np));
+  await pg.evaluate(() => { location.hash = '#model'; }); await pg.waitForTimeout(400);
+  ok('New project starts without the previous results', await pg.evaluate(() => !document.querySelector('#results .rep') && /Project 2/.test(document.querySelector('.projbar').textContent)));
+  await pg.evaluate(() => { location.hash = '#projects'; }); await pg.waitForSelector('[data-po]');
+  await pg.click('[data-po]'); await pg.waitForTimeout(500);
+  ok('Projects: reopen the first project', await pg.evaluate(() => /Test building A/.test(document.querySelector('.projbar').textContent)));
+  await pg.reload(); await pg.waitForTimeout(800); await pg.evaluate(() => { location.hash = '#projects'; }); await pg.waitForTimeout(400);
+  ok('Projects persist after reload (IndexedDB)', await pg.evaluate(() => document.querySelectorAll('.prow').length === 2 && /Test building A/.test(document.querySelector('.rh h3').textContent)));
+  await pg.evaluate(() => { location.hash = '#model'; }); await pg.waitForTimeout(400);
+  await pg.click('#bAuto'); await pg.waitForSelector('#results .rep.pro', { timeout: 240000 });
+  const au = await pg.evaluate(() => ({ t: document.querySelector('.rep.pro .vbox b').textContent, rules: document.querySelector('[data-k=secOver]') ? document.querySelector('[data-k=secOver]').value : '' }));
+  ok('Automatic design converges in the browser and writes section rules', /converged/.test(au.t) && /columns storey 1 = 500x500/.test(au.rules), au.t);
   ok('No JavaScript errors', errs.length === 0, errs.slice(0, 3).join(' | '));
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
