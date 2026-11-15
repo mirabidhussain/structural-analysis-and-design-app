@@ -4075,7 +4075,23 @@ DT.run = function (m, S, p) {
   out.beams = DT.beams(m, S, p, cf, g);
   out.beams.forEach(function (bl) { var lv = g.lev(bl.z); bl.lev = lv; bl.name = (lv > 0 ? "F" + lv : "z" + bl.z.toFixed(2)) + "-" + (bl.ux ? (m.twoD ? "X" : g.gy(bl.xy[0].y) + "(X)") : g.gx(bl.xy[0].x) + "(Y)"); });
   try { out.foot = DT.footings(m, S, p, cf, g); } catch (e) { out.warn.push("Footings: " + e.message); }
-  out.cols = DT.columns(m, S, p, cf, g, out.beams, out.foot);
+  /* mat (raft) foundation when chosen, or automatically when isolated footings overlap / cover > 50 % of the plan */
+  var fm = p.found || "isolated", colFoot = out.foot;
+  if (typeof MAT !== "undefined" && fm !== "isolated" && !m.twoD) {
+    var nd = MAT.need(out.foot, g);
+    if (fm === "mat" || nd.need) {
+      try {
+        var mt = MAT.run(m, S, p, cf, g, out.foot);
+        if (mt.err) out.warn.push("Mat foundation: " + mt.err);
+        else {
+          mt.why = fm === "mat" ? "chosen" : nd.why; out.mat = mt; out.footIso = out.foot; out.foot = [];
+          colFoot = mt.sups.filter(function (s) { return s.col; }).map(function (s) { return { n: s.n, D: mt.T, dia: mt.mesh.bx.dia, Lx: mt.L * 1000, Ly: mt.B * 1000, name: "Mat", sig: mt.sig }; });
+          if (fm === "auto") out.warn.push("Mat foundation used: " + nd.why);
+        }
+      } catch (e) { out.warn.push("Mat foundation: " + e.message); }
+    }
+  }
+  out.cols = DT.columns(m, S, p, cf, g, out.beams, colFoot);
   if (cf.duct) { out.scwb = DT.scwb(m, out.cols, out.beams); out.joints = DT.joints(m, out.cols, out.beams); } else out.joints = [];
   try { out.slabs = DT.slabs(m, S, p, cf, g); } catch (e) { out.warn.push("Slabs: " + e.message); }
   try { out.walls = DT.walls(m, S, p, cf, g, out.cols); } catch (e) { out.warn.push("Walls: " + e.message); }
@@ -4101,6 +4117,7 @@ DT.run = function (m, S, p) {
   out.gF.forEach(function (G) { acc(G.rep.bars, G.n, "foot"); });
   out.slabs.forEach(function (s) { acc(s.bars, 1, "slabs"); });
   out.gW.forEach(function (G) { acc(G.rep.bars, G.n, "walls"); });
+  if (out.mat) acc(out.mat.bars, 1, "foot");
   out.tot = Object.keys(tot).map(Number).sort(function (a, b) { return a - b; }).map(function (k) { var t = tot[k]; t.all = t.beams + t.cols + t.slabs + t.foot + t.walls; return t; });
   out.total = 0; out.tot.forEach(function (t) { out.total += t.all; });
   out.area = 0; out.slabs.forEach(function (s) { out.area += s.area; });
@@ -4109,6 +4126,7 @@ DT.run = function (m, S, p) {
   out.cols.forEach(function (c) { c.checks.forEach(function (q) { if (!q.ok) out.fails++; }); });
   out.foot.forEach(function (f) { f.checks.forEach(function (q) { if (!q.ok) out.fails++; }); });
   out.walls.forEach(function (w) { w.checks.forEach(function (q) { if (!q.ok) out.fails++; }); });
+  if (out.mat) out.mat.checks.forEach(function (q) { if (!q.ok) out.fails++; });
   out.scwb.forEach(function (q) { if (!q.ok) out.fails++; });
   out.fails += (out.dur || []).length;
   out.joints.forEach(function (q) { if (!q.ok || !q.anch) out.fails++; });
@@ -4356,12 +4374,397 @@ DT.drawSlab = function (fl, cf) {
 };
 if (typeof module !== "undefined") module.exports = DT;
 
+/* js/mat.js */
+/* Mat (raft) foundation — IS 2950 (Part 1):1981 flexible-plate method, IS 456 design.
+   The mat is a thick (Mindlin) plate of shell elements on compression-only Winkler springs (modulus of subgrade reaction ks),
+   loaded by the column and wall base reactions of the building analysis. Springs that lift off are switched off and the plate
+   re-solved until contact is consistent. Soil pressures are net: the backfill over the mat balances the excavated soil, so the
+   mat adds (25 − γsoil)·t; factored design uses the full 25·t (it causes no bending while the whole mat is in contact). Checks: soil pressure (service), uplift, settlement and angular distortion (IS 1904),
+   punching at every column at d/2 (IS 456 cl 31.6), one-way shear, flexure from Wood–Armer moments (base mesh top and bottom +
+   extra bars where needed), sliding and overturning (IS 456 cl 20). The conventional rigid method (pressure P/A ± M/I) is
+   reported alongside as an independent check. Units: kN, m inside; mm on drawings. */
+var MAT = {};
+MAT.ks = function (p) { return p.ks > 0 ? +p.ks : 120 * (p.sbc > 0 ? +p.sbc : 200); };   /* Bowles: ks ≈ 40·FS·qa with FS = 3 */
+MAT.DIAS = [12, 16, 20, 25, 32];
+/* is a mat advisable? isolated footings overlap or cover more than half of the plan */
+MAT.need = function (iso, g) {
+  if (!iso || !iso.length) return { need: false, why: "" };
+  var ov = iso.some(function (f) { return f.warn && f.warn.length; }), A = 0, xs = g.xs, ys = g.ys;
+  iso.forEach(function (f) { A += f.Lx * f.Ly / 1e6; });
+  var plan = xs.length > 1 && ys.length > 1 ? (xs[xs.length - 1] - xs[0] + 1) * (ys[ys.length - 1] - ys[0] + 1) : 0, r = plan > 0 ? A / plan : 0;
+  return { need: ov || r > 0.5, ratio: r, overlap: ov, why: ov ? "isolated footings overlap" : r > 0.5 ? "isolated footings would cover " + Math.round(r * 100) + " % of the plan" : "" };
+};
+/* -------------------------------------------------------------------------------------------------- plate on springs */
+MAT.model = function (geo, T, E, ks) {
+  var xs = geo.xs, ys = geo.ys, nx = xs.length, ny = ys.length, mm = { nodes: [], frames: [], shells: [], sup: {}, twoD: false }, kn = [], tr = [];
+  for (var j = 0; j < ny; j++) for (var i = 0; i < nx; i++) {
+    var ax = ((i > 0 ? xs[i] - xs[i - 1] : 0) + (i < nx - 1 ? xs[i + 1] - xs[i] : 0)) / 2, ay = ((j > 0 ? ys[j] - ys[j - 1] : 0) + (j < ny - 1 ? ys[j + 1] - ys[j] : 0)) / 2;
+    mm.sup[mm.nodes.length] = [1, 1, 0, 0, 0, 1];
+    mm.nodes.push({ x: xs[i], y: ys[j], z: 0 }); tr.push(ax * ay); kn.push(ks * ax * ay);
+  }
+  for (j = 0; j < ny - 1; j++) for (i = 0; i < nx - 1; i++) { var a = j * nx + i; mm.shells.push({ n: [a, a + 1, a + nx + 1, a + nx], t: T, kind: "mat", mat: { E: E, nu: 0.2, gamma: 25 }, i: i, j: j }); }
+  FE.prepare(mm); var asm = FE.assemble(mm, null);
+  return { m: mm, K0: asm.A, kn: kn, tr: tr, nx: nx, ny: ny, T: T, ks: ks };
+};
+/* solve one load vector (Ffull, 6 per node) with compression-only springs (linear = keep tension springs, for checks) */
+MAT.solve = function (pm, Ffull, base, linear) {
+  var m = pm.m, n = m.nodes.length, act = new Uint8Array(n).fill(1), it = 0, U, A, F = new Float64Array(m._neq);
+  for (var i = 0; i < 6 * n; i++) if (m._eq[i] >= 0) F[m._eq[i]] += Ffull[i];
+  for (it = 0; it < 30; it++) {
+    var key = act.join("");
+    if (base && base.key === key) A = base.A;
+    else {
+      A = Float64Array.from(pm.K0);
+      for (var v = 0; v < n; v++) if (act[v]) A[m._maxa[m._eq[6 * v + 2]]] += pm.kn[v];
+      if (FE.factor(A, m._maxa, m._neq) >= 0) return { err: "the mat loses contact with the soil (overturning) — increase the plan size or the load is unstable" };
+      if (base && !base.key) { base.key = key; base.A = A; }
+    }
+    U = FE.expand(m, FE.backsub(A, m._maxa, m._neq, Float64Array.from(F)));
+    var ch = 0;
+    for (v = 0; v < n && !linear; v++) { var w = U[6 * v + 2]; if (act[v] && w > 1e-12) { act[v] = 0; ch++; } else if (!act[v] && w < -1e-12) { act[v] = 1; ch++; } }
+    if (!ch || linear) break;
+  }
+  var q = new Float64Array(n), R = new Float64Array(n), lift = 0;
+  for (v = 0; v < n; v++) { var w2 = U[6 * v + 2]; if (act[v]) { q[v] = -pm.ks * w2; R[v] = -pm.kn[v] * w2; } else lift += pm.tr[v]; }
+  return { U: U, q: q, R: R, act: act, it: it + 1, lift: lift };
+};
+/* -------------------------------------------------------------------------------------------------- driver */
+MAT.run = function (m, S, p, cf, g, iso) {
+  if (m.twoD) return { err: "A mat foundation needs a 3D model (a 2D frame has no plan)." };
+  var cr = S.res && S.res.caseReac || {}; if (!cr.DL) return { err: "Case reactions are not available." };
+  var fck = +p.fck, fy = +p.fy, q0 = cf.sbc, incr = { I: 1.5, II: 1.25, III: 1.0 }[String(p.soil)] || 1.25, ks = MAT.ks(p), Ec = 5000 * Math.sqrt(fck) * 1000;
+  var off = p.matOff >= 0 && p.matOff !== "" ? +p.matOff : 0.5, cov = cf.cf, red = {}, gs = p.gs > 0 ? +p.gs : 18;
+  (iso || []).forEach(function (f) { red[f.n] = f.red || 0; });
+  /* supports: columns (punching) and wall bases (loads only) */
+  var sups = Object.keys(m.sup).map(Number).map(function (n) {
+    var c = DT.colAt(m, n), nd = m.nodes[n], a = 0, b = 0;
+    if (c) { a = (c.sec.D || c.sec.b || 300) / 1000; b = (c.sec.b || c.sec.D || 300) / 1000; if (c.sec.kind !== "rcc") { a = Math.max(a, 0.3); b = Math.max(b, 0.3); } }
+    return { n: n, x: nd.x, y: nd.y, a: a, b: b, col: !!c, rcc: !!(c && c.sec.kind === "rcc"), name: c ? "C-" + g.gy(nd.y) + g.gx(nd.x) : "wall node " + n, red: red[n] || 0 };
+  });
+  if (sups.length < 2) return { err: "A mat needs at least two supports." };
+  var x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  sups.forEach(function (s) { x0 = Math.min(x0, s.x - s.a / 2); x1 = Math.max(x1, s.x + s.a / 2); y0 = Math.min(y0, s.y - s.b / 2); y1 = Math.max(y1, s.y + s.b / 2); });
+  x0 -= off; x1 += off; y0 -= off; y1 += off;
+  var L = x1 - x0, B = y1 - y0, Am = L * B;
+  /* mesh lines through every support, subdivided to ≤ h */
+  function lines(lo, hi, pts, h) {
+    var a = [lo, hi]; pts.forEach(function (v) { if (!a.some(function (q) { return Math.abs(q - v) < 0.005; })) a.push(v); });
+    a.sort(function (u, v) { return u - v; }); var o = [a[0]];
+    for (var i = 1; i < a.length; i++) { var k = Math.max(1, Math.ceil((a[i] - a[i - 1]) / h - 1e-9)); for (var j = 1; j <= k; j++) o.push(a[i - 1] + (a[i] - a[i - 1]) * j / k); }
+    return o;
+  }
+  var h = p.matMesh > 0 ? +p.matMesh : 0.5, mx, my;
+  for (var tries = 0; tries < 8; tries++) { mx = lines(x0, x1, sups.map(function (s) { return s.x; }), h); my = lines(y0, y1, sups.map(function (s) { return s.y; }), h); if (mx.length * my.length <= 2500) break; h *= 1.25; }
+  function nodeAt(x, y) { var i = 0, j = 0, bi = 1e9, bj = 1e9; mx.forEach(function (v, k) { if (Math.abs(v - x) < bi) { bi = Math.abs(v - x); i = k; } }); my.forEach(function (v, k) { if (Math.abs(v - y) < bj) { bj = Math.abs(v - y); j = k; } }); return j * mx.length + i; }
+  sups.forEach(function (s) { s.node = nodeAt(s.x, s.y); });
+  function R(cn, n) { return cr[cn] && cr[cn][n] ? cr[cn][n] : [0, 0, 0, 0, 0, 0]; }
+  /* load sets: support reactions per node (6) and a self-weight factor */
+  var lat = MD.lateralSets(S.res.cases).filter(function (Ls) { return /^EQ/.test(Ls.name); }), svc = [], fac = [];
+  function comb(f, extra) { var o = {}; sups.forEach(function (s) { var r = [0, 0, 0, 0, 0, 0], t; Object.keys(f).forEach(function (cn) { var rr = R(cn, s.n); for (var t = 0; t < 6; t++) r[t] += f[cn] * rr[t]; }); if (extra) { var e = extra(s); for (t = 0; t < 6; t++) r[t] += e[t]; } o[s.n] = r; }); return o; }
+  function llRed(fLL) { return function (s) { var l = R("LL", s.n); return l.map(function (v) { return -s.red * fLL * v; }); }; }
+  var G = comb({ DL: 1, LL: 1 }, llRed(1));
+  svc.push({ name: "DL+LL", r: G, sw: 1, lim: q0, grav: true, svc: true });
+  lat.forEach(function (Ls) { [1, -1].forEach(function (sg) { var ff = { DL: 1, LL: 1 }; Object.keys(Ls.f).forEach(function (cn) { ff[cn] = (ff[cn] || 0) + sg * Ls.f[cn]; }); svc.push({ name: "DL+LL" + (sg > 0 ? "+" : "−") + Ls.name, r: comb(ff, llRed(1)), sw: 1, lim: q0 * incr, E: { f: Ls.f, sg: sg }, svc: true }); }); });
+  /* response spectrum reactions are envelopes (no sign): signed here by the static EQ case of the same direction */
+  function rsSigned(d, k) { var E = S.se && S.se.env && S.se.env[d], st = "EQ" + (d ? "Y" : "X"); return function (s) { if (!E || !E.reac[s.n]) return [0, 0, 0, 0, 0, 0]; var rs = R(st, s.n); return E.reac[s.n].map(function (v, t) { return k * Math.abs(v) * (rs[t] < 0 ? -1 : 1); }); }; }
+  if (S.se && S.se.env) Object.keys(S.se.env).forEach(function (d) { [1, -1].forEach(function (sg) { var f1 = rsSigned(+d, sg), f2 = llRed(1); svc.push({ name: "DL+LL" + (sg > 0 ? "+" : "−") + "RS" + (+d ? "Y" : "X"), r: comb({ DL: 1, LL: 1 }, function (s) { var a = f1(s), b = f2(s); return a.map(function (v, t) { return v + b[t]; }); }), sw: 1, lim: q0 * incr, svc: true }); }); });
+  if (!cf.wsm) (S.cb || []).forEach(function (cb) {
+    var fL = (cb.f && cb.f.LL) || 0, ex = llRed(fL), rsf = cb.rs ? rsSigned(cb.rs.dir, cb.rs.sign * cb.rs.fac) : null;
+    fac.push({ name: cb.name, r: comb(cb.f || {}, function (s) { var a = ex(s); if (rsf) { var b = rsf(s); a = a.map(function (v, t) { return v + b[t]; }); } return a; }), sw: (cb.f && cb.f.DL) || 0 });
+  });
+  else svc.forEach(function (st) { var k = st.grav ? 1.5 : 1.2, r = {}; Object.keys(st.r).forEach(function (n) { r[n] = st.r[n].map(function (v) { return k * v; }); }); fac.push({ name: k + "(" + st.name + ")", r: r, sw: k }); });
+  /* totals for the rigid method and the first thickness */
+  function tot(set) { var N = 0, Sx = 0, Sy = 0, M3 = 0, M4 = 0, H = [0, 0]; sups.forEach(function (s) { var r = set.r[s.n]; N += r[2]; Sx += r[2] * s.x; Sy += r[2] * s.y; M3 += r[3]; M4 += r[4]; H[0] += r[0]; H[1] += r[1]; }); return { N: N, Sx: Sx, Sy: Sy, M3: M3, M4: M4, H: H }; }
+  var Pu = {}; fac.forEach(function (st) { sups.forEach(function (s) { Pu[s.n] = Math.max(Pu[s.n] || 0, st.r[s.n][2]); }); });
+  var quAvg = 0; fac.forEach(function (st) { quAvg = Math.max(quAvg, tot(st).N / Am); });
+  /* punching perimeter at d/2 clipped by the mat edges (IS 456 cl 31.6.1) */
+  function perim(s, d) {
+    var xa = s.x - s.a / 2 - d / 2, xb = s.x + s.a / 2 + d / 2, ya = s.y - s.b / 2 - d / 2, yb = s.y + s.b / 2 + d / 2, open = [];
+    var cxa = Math.max(xa, x0), cxb = Math.min(xb, x1), cya = Math.max(ya, y0), cyb = Math.min(yb, y1), b0 = 0;
+    if (xa > x0 + 1e-6) b0 += cyb - cya; else open.push("W"); if (xb < x1 - 1e-6) b0 += cyb - cya; else open.push("E");
+    if (ya > y0 + 1e-6) b0 += cxb - cxa; else open.push("S"); if (yb < y1 - 1e-6) b0 += cxb - cxa; else open.push("N");
+    return { b0: b0, A: (cxb - cxa) * (cyb - cya), box: [cxa, cxb, cya, cyb], open: open, type: open.length === 0 ? "interior" : open.length === 1 ? "edge" : "corner" };
+  }
+  function kpun(s) { var bc = Math.min(s.a, s.b) / Math.max(s.a, s.b); return Math.min(1, 0.5 + bc) * 0.25 * Math.sqrt(fck); }
+  var dia0 = 16, T = p.matT > 0 ? DT.r(+p.matT, 25) / 1000 : 0.3, fixedT = p.matT > 0;
+  if (!fixedT) for (var g0 = 0; g0 < 80; g0++) {   /* first estimate: uniform reaction under every column */
+    var d0 = T - cov / 1000 - dia0 / 1000, okT = sups.every(function (s) { if (!s.col) return true; var pr = perim(s, d0), Vu = Pu[s.n] - quAvg * pr.A; return Vu * 1000 / (pr.b0 * 1000 * d0 * 1000) <= kpun(s); });
+    if (okT) break; T = Math.round((T + 0.05) * 1000) / 1000;
+  }
+  var res, pass = 0;
+  for (pass = 0; pass < 12; pass++) {
+    res = analyseT(T);
+    if (res.err) return { err: res.err };
+    if (res.ok || fixedT) break;
+    T = Math.round((T + 0.05) * 1000) / 1000;
+  }
+  res.passes = pass + 1; res.fixedT = fixedT;
+  if (!res.ok && !fixedT) res.msg.push("Thickness limit of the automatic search reached — check the failing items");
+  return res;
+
+  /* ---------------------------------------------------------------- one thickness: analyse, design, check */
+  function analyseT(T) {
+    var pm = MAT.model({ xs: mx, ys: my }, T, Ec, ks), mm = pm.m, n = mm.nodes.length, base = {};
+    function vec(set) {
+      var F = new Float64Array(6 * n);
+      sups.forEach(function (s) { var r = set.r[s.n]; F[6 * s.node + 2] -= r[2]; F[6 * s.node + 3] -= r[3]; F[6 * s.node + 4] -= r[4]; });
+      if (set.sw) for (var v = 0; v < n; v++) F[6 * v + 2] -= set.sw * (set.svc ? 25 - gs : 25) * T * pm.tr[v];
+      return F;
+    }
+    var out = { T: Math.round(T * 1000), ks: ks, x0: x0, x1: x1, y0: y0, y1: y1, L: L, B: B, off: off, mx: mx, my: my, h: h, sups: sups, q: q0, incr: incr, Ec: Ec, svc: [], fac: [], el: [], checks: [], msg: [], name: "MAT", fck: fck, fy: fy };
+    /* service: soil pressure, uplift, settlement */
+    var Wm = (25 - gs) * T * Am, gov = null, wG = null;
+    for (var i = 0; i < svc.length; i++) {
+      var st = svc[i], r = MAT.solve(pm, vec(st), base); if (r.err) return { err: r.err + " (" + st.name + ")" };
+      var qmax = 0, qmin = Infinity; for (var v = 0; v < n; v++) { if (r.q[v] > qmax) qmax = r.q[v]; if (r.act[v] && r.q[v] < qmin) qmin = r.q[v]; }
+      var t0 = tot(st), N = t0.N + st.sw * Wm, xc = (x0 + x1) / 2, yc = (y0 + y1) / 2;
+      var bq = (t0.Sx - xc * t0.N - t0.M4) / (B * L * L * L / 12), cq = (t0.Sy - yc * t0.N + t0.M3) / (L * B * B * B / 12);
+      var rig = { N: N, Mx: cq * L * B * B * B / 12, My: bq * B * L * L * L / 12, max: N / Am + Math.abs(bq) * L / 2 + Math.abs(cq) * B / 2, min: N / Am - Math.abs(bq) * L / 2 - Math.abs(cq) * B / 2 };
+      var row = { name: st.name, lim: st.lim, qmax: qmax, qmin: qmin, lift: r.lift / Am, it: r.it, rig: rig, u: qmax / st.lim, H: t0.H, E: st.E };
+      out.svc.push(row); if (!gov || row.u > gov.u) gov = row;
+      if (i === 0) { wG = r; out.wmax = 0; for (v = 0; v < n; v++) out.wmax = Math.max(out.wmax, -r.U[6 * v + 2] * 1000); out.wmin = Infinity; for (v = 0; v < n; v++) out.wmin = Math.min(out.wmin, -r.U[6 * v + 2] * 1000); out.qG = r.q; }
+    }
+    out.gov = gov;
+    /* angular distortion between neighbouring columns on a grid line (DL+LL) */
+    var ang = null, cols = sups.filter(function (s) { return s.col; });
+    cols.forEach(function (a) { [["x", "y"], ["y", "x"]].forEach(function (ax) { var nb = null; cols.forEach(function (b) { if (b === a || Math.abs(b[ax[1]] - a[ax[1]]) > 0.01 || b[ax[0]] <= a[ax[0]] + 0.01) return; if (!nb || b[ax[0]] < nb[ax[0]]) nb = b; }); if (!nb) return; var dw = Math.abs(wG.U[6 * a.node + 2] - wG.U[6 * nb.node + 2]), Lr = nb[ax[0]] - a[ax[0]], rr = dw / Lr; if (!ang || rr > ang.r) ang = { r: rr, dw: dw * 1000, L: Lr, a: a.name, b: nb.name }; }); });
+    out.ang = ang || { r: 0, dw: 0, L: 0, a: "", b: "" };
+    /* factored: element moments and shears, punching */
+    var ne = mm.shells.length, env = []; for (var k = 0; k < ne; k++) env.push({ bx: 0, by: 0, tx: 0, ty: 0, Q: 0, Mx: [0, 0], My: [0, 0], cb: ["", "", "", ""] });
+    var pun = {}; cols.forEach(function (s) { pun[s.n] = { Vu: 0, cb: "" }; });
+    /* one-way shear (IS 456 cl 31.6.1 / 40.2): section at d from each column face, shear averaged over the column strip
+       (0.25 of the transverse spans each side of the column line, or to the mat edge) */
+    var strips = [], d1 = ((T * 1000 - cov - dia0 / 2) + (T * 1000 - cov - 1.5 * dia0)) / 2000;
+    function gap(a, v, sg, lo, hi) { var best = null; a.forEach(function (q) { if (sg * (q - v) > 0.01 && (best === null || Math.abs(q - v) < Math.abs(best - v))) best = q; }); return best === null ? (sg > 0 ? hi - v : v - lo) : 0.25 * Math.abs(best - v); }
+    cols.forEach(function (s) {
+      [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (dv) {
+        var ax = dv[0] ? 0 : 1, half = (ax ? s.b : s.a) / 2, at = (ax ? s.y : s.x) + (dv[0] || dv[1]) * (half + d1), lo = ax ? y0 : x0, hi = ax ? y1 : x1;
+        if (at <= lo + 1e-6 || at >= hi - 1e-6) return;
+        var tc = ax ? s.x : s.y, w1 = gap(ax ? g.xs : g.ys, tc, -1, ax ? x0 : y0, ax ? x1 : y1), w2 = gap(ax ? g.xs : g.ys, tc, 1, ax ? x0 : y0, ax ? x1 : y1), list = [];
+        mm.shells.forEach(function (sh, k) { var P0 = mm.nodes[sh.n[0]], P2 = mm.nodes[sh.n[2]], a0 = ax ? P0.y : P0.x, a1 = ax ? P2.y : P2.x, c = ax ? (P0.x + P2.x) / 2 : (P0.y + P2.y) / 2; if (at >= a0 - 1e-9 && at < a1 - 1e-9 && c >= tc - w1 - 1e-9 && c <= tc + w2 + 1e-9) list.push(k); });
+        if (list.length) strips.push({ s: s, ax: ax, at: at, w: w1 + w2, els: list, V: 0, cb: "" });
+      });
+    });
+    var dxB = T * 1000 - cov - dia0 / 2, dyB = dxB - dia0, dxT = dxB, dyT = dyB, dd0 = (dxB + dyB) / 2000;
+    var Qs = [];
+    for (i = 0; i < fac.length; i++) {
+      var sf = fac[i], rf = MAT.solve(pm, vec(sf), base); if (rf.err) return { err: rf.err + " (" + sf.name + ")" };
+      for (k = 0; k < ne; k++) {
+        var fo = FE.shellForces(mm, k, rf.U), wa = FE.woodArmer(-fo.Mx, -fo.My, fo.Mxy), e = env[k];   /* sagging (bottom tension) positive, as in slab design */
+        if (wa.bx > e.bx) { e.bx = wa.bx; e.cb[0] = sf.name; } if (wa.by > e.by) { e.by = wa.by; e.cb[1] = sf.name; }
+        if (wa.tx < e.tx) { e.tx = wa.tx; e.cb[2] = sf.name; } if (wa.ty < e.ty) { e.ty = wa.ty; e.cb[3] = sf.name; }
+        e.Q = Math.max(e.Q, Math.abs(fo.Qx), Math.abs(fo.Qy)); Qs[k] = [fo.Qx, fo.Qy];
+      }
+      strips.forEach(function (st) { var sum = 0, wsum = 0; st.els.forEach(function (k2) { var sh2 = mm.shells[k2], w0 = st.ax ? mm.nodes[sh2.n[1]].x - mm.nodes[sh2.n[0]].x : mm.nodes[sh2.n[3]].y - mm.nodes[sh2.n[0]].y; sum += Qs[k2][st.ax] * w0; wsum += w0; }); var V = Math.abs(sum / wsum); if (V > st.V) { st.V = V; st.cb = sf.name; } });
+      cols.forEach(function (s) {
+        var pr = perim(s, dd0), sup = 0;
+        for (var v2 = 0; v2 < n; v2++) { var nd = mm.nodes[v2]; if (nd.x > pr.box[0] + 1e-6 && nd.x < pr.box[1] - 1e-6 && nd.y > pr.box[2] + 1e-6 && nd.y < pr.box[3] - 1e-6) sup += rf.R[v2] - sf.sw * 25 * T * pm.tr[v2]; }
+        var Vu = sf.r[s.n][2] - Math.max(sup, 0); if (Vu > pun[s.n].Vu) pun[s.n] = { Vu: Vu, cb: sf.name };
+      });
+    }
+    /* flexure: required steel per element, base mesh (≥ 0.12 % split between faces, covering 75 % of the area), extra bars */
+    var feasible = true;
+    function ast(M, d) { var a = RCC.astFlex(Math.abs(M), 1000, d, fck, fy); if (isNaN(a)) feasible = false; return isNaN(a) ? 1e9 : a; }
+    var Amin = 0.0012 * 1000 * T * 1000 / 2, smax = Math.min(300, 3 * dyB);
+    for (k = 0; k < ne; k++) {
+      var sh = mm.shells[k], P = sh.n.map(function (v3) { return mm.nodes[v3]; }), E0 = env[k];
+      out.el.push({ k: k, i: sh.i, j: sh.j, x0: P[0].x, x1: P[1].x, y0: P[0].y, y1: P[2].y, bx: E0.bx, by: E0.by, tx: E0.tx, ty: E0.ty, Q: E0.Q, cb: E0.cb,
+        qG: P.reduce(function (a0, nd, ii) { return a0 + out.qG[sh.n[ii]] / 4; }, 0), req: { bx: ast(E0.bx, dxB), by: ast(E0.by, dyB), tx: ast(E0.tx, dxT), ty: ast(E0.ty, dyT) } });
+    }
+    function mesh(key) {
+      var a = out.el.map(function (q) { return { A: (q.x1 - q.x0) * (q.y1 - q.y0), r: q.req[key] }; }).sort(function (u, w) { return u.r - w.r; }), tA = 0, cum = 0, need = Amin;
+      a.forEach(function (q) { tA += q.A; }); for (var i2 = 0; i2 < a.length; i2++) { cum += a[i2].A; if (cum >= 0.75 * tA) { need = Math.max(need, a[i2].r); break; } }
+      var pick = null;
+      [12, 16, 20, 25].forEach(function (f) { if (pick) return; [300, 250, 200, 150, 125, 100].forEach(function (s) { if (pick || s > smax + 1e-9) return; var As = D.barArea(f) * 1000 / s; if (As >= need - 1e-9) pick = { dia: f, s: s, As: As }; }); });
+      return pick || { dia: 25, s: 100, As: D.barArea(25) * 10 };
+    }
+    out.mesh = { bx: mesh("bx"), by: mesh("by"), tx: mesh("tx"), ty: mesh("ty") };
+    out.Amin = Amin; out.smax = smax; out.d = { bx: dxB, by: dyB, tx: dxT, ty: dyT };
+    /* extra-bar zones: 4-connected groups of elements whose demand exceeds the base mesh */
+    function makeZones() {
+      out.zones = [];
+    ["bx", "by", "tx", "ty"].forEach(function (key) {
+      var M0 = out.mesh[key], nxe = mx.length - 1, seen = {}, need = {};
+      out.el.forEach(function (q) { if (q.req[key] > M0.As + 1e-6) need[q.j * nxe + q.i] = q; });
+      Object.keys(need).forEach(function (id) {
+        if (seen[id]) return; var st0 = [+id], grp = []; seen[id] = 1;
+        while (st0.length) { var c = st0.pop(), q = need[c]; grp.push(q); [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (dd) { var ii = q.i + dd[0], jj = q.j + dd[1], id2 = jj * nxe + ii; if (ii >= 0 && jj >= 0 && ii < nxe && need[id2] && !seen[id2]) { seen[id2] = 1; st0.push(id2); } }); }
+        var z = { face: key[0] === "b" ? "bottom" : "top", dir: key[1].toUpperCase(), key: key, x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity, req: 0, M: 0, n: grp.length };
+        grp.forEach(function (q) { z.x0 = Math.min(z.x0, q.x0); z.x1 = Math.max(z.x1, q.x1); z.y0 = Math.min(z.y0, q.y0); z.y1 = Math.max(z.y1, q.y1); if (q.req[key] > z.req) { z.req = q.req[key]; z.M = Math.abs(q[key]); } });
+        out.zones.push(z);
+      });
+      /* merge zones of the same layer that overlap or touch (within one element) */
+      var zs = out.zones.filter(function (z) { return z.key === key; }), others = out.zones.filter(function (z) { return z.key !== key; }), merged = true;
+      while (merged) {
+        merged = false;
+        for (var a = 0; a < zs.length && !merged; a++) for (var b = a + 1; b < zs.length && !merged; b++) {
+          var A1 = zs[a], B1 = zs[b];
+          if (A1.x0 <= B1.x1 + h + 1e-6 && B1.x0 <= A1.x1 + h + 1e-6 && A1.y0 <= B1.y1 + h + 1e-6 && B1.y0 <= A1.y1 + h + 1e-6) {
+            A1.x0 = Math.min(A1.x0, B1.x0); A1.x1 = Math.max(A1.x1, B1.x1); A1.y0 = Math.min(A1.y0, B1.y0); A1.y1 = Math.max(A1.y1, B1.y1);
+            if (B1.req > A1.req) { A1.req = B1.req; A1.M = B1.M; } A1.n += B1.n; zs.splice(b, 1); merged = true;
+          }
+        }
+      }
+      zs.forEach(function (z) {
+        /* extra bars between the mesh bars at the mesh spacing, or two between (half spacing); smallest area that suffices */
+        var add = z.req - M0.As, pk = null;
+        MAT.DIAS.forEach(function (f) { [M0.s, M0.s / 2].forEach(function (sp) { var A0 = D.barArea(f) * 1000 / sp; if (A0 >= add - 1e-9 && (f <= 25 || !pk) && (!pk || A0 < pk.A || pk.dia > 25)) pk = { dia: f, s: sp, A: A0 }; }); });
+        if (!pk) { pk = { dia: 32, s: M0.s / 2, A: D.barArea(32) * 2000 / M0.s }; feasible = false; }
+        z.dia = pk.dia; z.s = pk.s; z.As = M0.As + pk.A;
+      });
+      out.zones = others.concat(zs);
+    });
+    out.zones.forEach(function (z, i3) { z.mark = (z.face === "bottom" ? "EB" : "ET") + (i3 + 1); });
+    }
+    function shearCheck() {
+    var vmax = null;
+    strips.forEach(function (st) {
+      var dir = st.ax ? "y" : "x", As = Infinity;
+      var sb = 0, stp = 0; st.els.forEach(function (k2) { sb += out.el[k2].req["b" + dir]; stp += out.el[k2].req["t" + dir]; }); st.face = sb >= stp ? "b" : "t";
+      st.els.forEach(function (k2) { var q = out.el[k2]; As = Math.min(As, provAs(q, st.face, dir)); });   /* tension face of the strip */
+      var dm = st.ax ? dyB : dxB, pt = 100 * As / (1000 * dm), tv = st.V / dm, tc = RCC.tauc(fck, pt), u = tv / tc;
+      st.tv = tv; st.tc = tc; st.pt = pt; st.u = u;
+      if (!vmax || u > vmax.u) vmax = { u: u, tv: tv, tc: tc, pt: pt, V: st.V, d: dm, w: st.w, col: st.s.name, dir: (st.ax ? "Y" : "X"), cb: st.cb };
+    });
+    function provAs(q, face, dd) { var key = face + dd, A0 = out.mesh[key].As; out.zones.forEach(function (z) { if (z.key === key && q.x0 >= z.x0 - 1e-6 && q.x1 <= z.x1 + 1e-6 && q.y0 >= z.y0 - 1e-6 && q.y1 <= z.y1 + 1e-6) A0 = Math.max(A0, z.As); }); return A0; }
+    out.strips = strips.map(function (st) { return { col: st.s.name, dir: st.ax ? "Y" : "X", at: st.at, w: st.w, V: st.V, tv: st.tv, tc: st.tc, pt: st.pt, u: st.u, cb: st.cb, face: st.face === "b" ? "bottom" : "top", d: st.ax ? dyB : dxB }; });
+    out.shear = vmax || { u: 0, tv: 0, tc: 0, pt: 0 };
+    }
+    makeZones(); shearCheck();
+    /* one-way shear failing: raise the tension steel in the column strip (τc grows with pt) up to pt = 1 %, else thicken */
+    var bumped = false;
+    out.strips.forEach(function (st, si) {
+      if (st.u <= 1 + 1e-9) return;
+      var S0 = strips[si], dir = S0.ax ? "y" : "x", dm = S0.ax ? dyB : dxB, need = null;
+      for (var pt = 0.15; pt <= 1.0 + 1e-9; pt += 0.05) if (RCC.tauc(fck, pt) >= st.tv) { need = pt; break; }
+      if (need === null) return;
+      var As = need / 100 * 1000 * dm, face = S0.face;
+      S0.els.forEach(function (k2) { var q = out.el[k2]; q.req[face + dir] = Math.max(q.req[face + dir], As); q.shearSteel = true; });
+      bumped = true;
+    });
+    if (bumped) { makeZones(); shearCheck(); }
+    /* most stressed element of each layer (for the report and Excel) */
+    out.flex = {};
+    ["bx", "by", "tx", "ty"].forEach(function (key) {
+      var w = null; out.el.forEach(function (q) { if (!w || Math.abs(q[key]) > Math.abs(w[key])) w = q; });
+      var prov = out.mesh[key].As; out.zones.forEach(function (z) { if (z.key === key && w.x0 >= z.x0 - 1e-6 && w.x1 <= z.x1 + 1e-6 && w.y0 >= z.y0 - 1e-6 && w.y1 <= z.y1 + 1e-6) prov = Math.max(prov, z.As); });
+      out.flex[key] = { M: Math.abs(w[key]), d: out.d[key], req: RCC.astFlex(Math.abs(w[key]), 1000, out.d[key], fck, fy), prov: prov, x: (w.x0 + w.x1) / 2, y: (w.y0 + w.y1) / 2, cb: w.cb[{ bx: 0, by: 1, tx: 2, ty: 3 }[key]] };
+    });
+
+    /* punching */
+    out.pun = cols.map(function (s) {
+      var dd = (dxB + dyB) / 2, pr = perim(s, dd / 1000), Vu = pun[s.n].Vu, tv = Vu * 1000 / (pr.b0 * 1000 * dd), kc = kpun(s);
+      return { name: s.name, n: s.n, a: s.a * 1000, b: s.b * 1000, d: dd, b0: pr.b0 * 1000, type: pr.type, Vu: Vu, Pu: Pu[s.n], cb: pun[s.n].cb, tv: tv, kc: kc, u: tv / kc, ok: tv <= kc + 1e-9 };
+    });
+    /* sliding and overturning (IS 456 cl 20): 0.9 × dead load, μ = 0.5 */
+    var DLt = tot({ r: comb({ DL: 1 }) }), Wd = 0.9 * (DLt.N + 25 * T * Am), sl = null, ot = null;
+    out.svc.forEach(function (r0) {
+      if (!r0.E) return; var H = Math.hypot(r0.H[0], r0.H[1]);
+      if (H > 1e-6) { var fs = 0.5 * Wd / H; if (!sl || fs < sl.fs) sl = { fs: fs, H: H, set: r0.name }; }
+      var Et = tot({ r: comb(Object.keys(r0.E.f).reduce(function (o, cn) { o[cn] = r0.E.sg * r0.E.f[cn]; return o; }, {})) }), xc = (x0 + x1) / 2, yc = (y0 + y1) / 2;
+      var Mo = [Math.abs(Et.Sx - xc * Et.N - Et.M4), Math.abs(Et.Sy - yc * Et.N + Et.M3)];
+      [0, 1].forEach(function (ax) { if (Mo[ax] < 1e-6) return; var fs2 = Wd * (ax ? B : L) / 2 / Mo[ax]; if (!ot || fs2 < ot.fs) ot = { fs: fs2, M: Mo[ax], set: r0.name }; });
+    });
+    out.slide = sl; out.over = ot;
+    /* rigidity (IS 2950 Pt 1 cl 5.3): rigid if the column spacing < 1.75/λ, λ = (3ks/(Ec t³))^¼ */
+    var lam = Math.pow(3 * ks / (Ec * T * T * T), 0.25), sp = 0;
+    [g.xs, g.ys].forEach(function (a) { for (var i4 = 1; i4 < a.length; i4++) sp = Math.max(sp, a[i4] - a[i4 - 1]); });
+    out.rigidity = { lam: lam, lim: 1.75 / lam, sp: sp, rigid: sp < 1.75 / lam };
+    /* checks */
+    var setLim = p.setLim > 0 ? +p.setLim : 75, angLim = p.angLim > 0 ? +p.angLim : 500, C = out.checks;
+    C.push({ t: "Max net soil pressure ≤ allowable (" + gov.name + ")", ok: gov.u <= 1 + 1e-9, v: gov.qmax.toFixed(1) + " ≤ " + gov.lim.toFixed(0) + " kN/m²", cl: gov.lim > q0 ? "IS 1893 cl 6.3.5.2 (+" + Math.round((incr - 1) * 100) + " %)" : "IS 2950 Pt 1 cl 4.2", u: gov.u });
+    var up = out.svc[0];
+    C.push({ t: "Full contact under DL+LL", ok: up.lift < 1e-9, v: up.lift > 0 ? (100 * up.lift).toFixed(1) + " % of the area lifts off" : "no uplift", cl: "IS 2950 Pt 1" });
+    var lw = out.svc.reduce(function (a, r0) { return Math.max(a, r0.lift); }, 0);
+    C.push({ t: "Contact under seismic sets (lift-off ≤ 25 % of the area)", ok: lw <= 0.25 + 1e-9, v: (100 * lw).toFixed(1) + " % lifts off (springs switched off)", cl: "IS 2950 Pt 1 / IS 1893 cl 6.3.5.2" });
+    C.push({ t: "Settlement under DL+LL (Winkler, indicative)", ok: out.wmax <= setLim + 1e-9, v: out.wmax.toFixed(1) + " ≤ " + setLim + " mm", cl: "IS 1904 (raft) — confirm with a settlement analysis", u: out.wmax / setLim });
+    C.push({ t: "Angular distortion between columns", ok: out.ang.r <= 1 / angLim + 1e-12, v: "1/" + (out.ang.r > 0 ? Math.round(1 / out.ang.r) : "∞") + (out.ang.a ? " (" + out.ang.a + "–" + out.ang.b + ", Δ " + out.ang.dw.toFixed(1) + " mm)" : "") + " ≤ 1/" + angLim, cl: "IS 1904", u: out.ang.r * angLim });
+    var pw = out.pun.reduce(function (a, q) { return !a || q.u > a.u ? q : a; }, null);
+    if (pw) C.push({ t: "Punching shear at d/2 — worst " + pw.name + " (" + pw.type + ")", ok: out.pun.every(function (q) { return q.ok; }), v: pw.tv.toFixed(3) + " ≤ ks·0.25√fck " + pw.kc.toFixed(3) + " N/mm²" + (out.pun.filter(function (q) { return !q.ok; }).length ? " — fails at " + out.pun.filter(function (q) { return !q.ok; }).length + " columns" : ""), cl: "IS 456 cl 31.6", u: pw.u });
+    C.push({ t: "One-way shear at d from the column faces (column-strip average)" + (out.shear.col ? " — worst " + out.shear.col + " " + out.shear.dir : ""), ok: out.shear.u <= 1 + 1e-9, v: out.shear.tv.toFixed(3) + " ≤ τc " + out.shear.tc.toFixed(3) + " N/mm² (pt " + out.shear.pt.toFixed(2) + " %)", cl: "IS 456 cl 31.6.1, 40.2", u: out.shear.u });
+    C.push({ t: "Flexure (Wood–Armer) within the section capacity", ok: feasible, v: feasible ? "all elements designed" : "Mu > Mu,lim or more than 32φ extra bars needed — thicken the mat", cl: "IS 456 Annex G / cl 24" });
+    if (sl) C.push({ t: "Sliding (μ = 0.5, 0.9 DL)", ok: sl.fs >= 1.4 - 1e-9, v: "FS " + sl.fs.toFixed(2) + " ≥ 1.4", cl: "IS 456 cl 20.2" });
+    if (ot) C.push({ t: "Overturning (0.9 DL)", ok: ot.fs >= 1.4 - 1e-9, v: "FS " + ot.fs.toFixed(2) + " ≥ 1.4", cl: "IS 456 cl 20.1" });
+    C.push({ t: "Mat " + (out.rigidity.rigid ? "is rigid" : "is flexible") + " (spacing " + sp.toFixed(2) + " m vs 1.75/λ = " + out.rigidity.lim.toFixed(2) + " m)", ok: true, v: "flexible-plate analysis used in either case", cl: "IS 2950 Pt 1 cl 5.3" });
+    /* thickness is acceptable when punching, one-way shear and flexure pass (pressure, settlement and sliding are not cured by thickness) */
+    out.ok = out.pun.every(function (q) { return q.ok; }) && out.shear.u <= 1 + 1e-9 && feasible;
+    out.fails = C.filter(function (c) { return !c.ok; }).length;
+    MAT.bars(out, cf, p);
+    return out;
+  }
+};
+
+/* -------------------------------------------------------------------------------------------------- bars (BBS) */
+MAT.bars = function (o, cf, p) {
+  var cv = cf.cf, Lm = o.L * 1000, Bm = o.B * 1000, T = o.T, fy = o.fy, fck = o.fck, bars = [];
+  function lapd(L0, f) { var nl = Math.max(0, Math.ceil(L0 / 12000 - 1e-9) - 1); return { nl: nl, add: nl * DT.lap(f, fy, fck) }; }
+  function add(q) { var lp = lapd(DT.cut(q), q.dia); q.laps = lp.nl; q.L = DT.cut(q) + lp.add; bars.push(q); }
+  var leg = 2 * Math.round((T - 2 * cv) / 2), Lm0 = Math.round(Lm), Bm0 = Math.round(Bm);
+  [["bx", "a", "Bottom mesh, bars along X (outer layer), bent up at the edges", Lm0, Bm0], ["by", "b", "Bottom mesh, bars along Y, bent up at the edges", Bm0, Lm0],
+   ["tx", "c", "Top mesh, bars along X (outer layer), bent down at the edges", Lm0, Bm0], ["ty", "d", "Top mesh, bars along Y, bent down at the edges", Bm0, Lm0]].forEach(function (k) {
+    var M = o.mesh[k[0]], n = Math.floor((k[4] - 2 * cv) / M.s + 1e-9) + 1;
+    add({ mark: k[1], desc: k[2], pos: k[0][0] === "b" ? "B" : "T", dia: M.dia, n: n, shape: "U", A: k[3] - 2 * cv, B: leg / 2, C: leg / 2, n90: 2, s: M.s });
+  });
+  o.zones.forEach(function (z) {
+    var alongX = z.dir === "X", len = (alongX ? z.x1 - z.x0 : z.y1 - z.y0) * 1000 + 2 * DT.Ld(z.dia, fy, fck), wid = (alongX ? z.y1 - z.y0 : z.x1 - z.x0) * 1000;
+    len = Math.min(len, (alongX ? Lm : Bm) - 2 * cv);
+    add({ mark: z.mark, desc: "Extra " + z.face + " bars along " + z.dir + " between the mesh bars (" + ((z.x0 + z.x1) / 2).toFixed(2) + ", " + ((z.y0 + z.y1) / 2).toFixed(2) + ")", pos: z.face === "bottom" ? "B" : "T", dia: z.dia, n: Math.floor(wid / z.s + 1e-9) + 1, shape: "S", A: DT.r(len, 50), s: z.s });
+  });
+  if (T > 750) { var ns = Math.max(1, Math.ceil((T - 2 * cv) / 300 - 1e-9) - 1); add({ mark: "e", desc: "Side-face bars around the edge, " + ns + " per face (IS 456 cl 26.5.1.3)", pos: "S", dia: 12, n: ns, shape: "S", A: 2 * (Lm + Bm) - 8 * cv }); }
+  o.bars = bars; o.wt = 0; bars.forEach(function (q) { o.wt += q.n * q.L / 1000 * DT.wpm(q.dia); });
+  o.conc = o.L * o.B * o.T / 1000; o.sig = "mat" + o.T;
+};
+/* -------------------------------------------------------------------------------------------------- drawings */
+MAT.draw = function (o, cf) {
+  var DWc = DT.DW, th = Math.max(120, Math.min(o.L, o.B) * 18), M = o.mesh;
+  var X = function (x) { return (x - o.x0) * 1000; }, Y = function (y) { return (y - o.y0) * 1000; };
+  function plan(face) {
+    var bot = face === "bottom", p = new DWc((bot ? "Bottom" : "Top") + " reinforcement — mat " + o.L.toFixed(2) + " × " + o.B.toFixed(2) + " m × " + o.T + " mm"), ly = bot ? "S" : "R";
+    p.r(0, 0, o.L * 1000, o.B * 1000, "C");
+    o.sups.forEach(function (s) { if (s.col) p.r(X(s.x) - s.a * 500, Y(s.y) - s.b * 500, s.a * 1000, s.b * 1000, "C").tx(X(s.x) + s.a * 500 + 40, Y(s.y) + s.b * 500 + 40, s.name.replace(/^C-/, ""), th * 0.7, "l", "T"); else p.c(X(s.x), Y(s.y), 60, "C"); });
+    o.zones.forEach(function (z) {
+      if (z.face !== face) return;
+      var x0 = X(z.x0), y0 = Y(z.y0), w = (z.x1 - z.x0) * 1000, h = (z.y1 - z.y0) * 1000, alongX = z.dir === "X";
+      p.r(x0, y0, w, h, ly);
+      if (alongX) p.l(x0, y0 + h / 2, x0 + w, y0 + h / 2, ly); else p.l(x0 + w / 2, y0, x0 + w / 2, y0 + h, ly);
+      p.tx(x0 + w / 2, y0 + h / 2 + (alongX ? 40 : -th - 40), z.mark + " " + z.dia + "φ@" + z.s + " " + z.dir, th * 0.65, "c", ly);
+    });
+    var a = bot ? M.bx : M.tx, b = bot ? M.by : M.ty;
+    p.tx(0, -th * 2.2, "Base mesh " + face + ":  " + (bot ? "a" : "c") + " " + a.dia + "φ@" + a.s + " along X,  " + (bot ? "b" : "d") + " " + b.dia + "φ@" + b.s + " along Y — whole mat, bent at the edges", th, "l", ly);
+    p.tx(0, -th * 3.6, (bot ? "EB" : "ET") + " zones: extra " + face + " bars between the mesh bars (direction after the spacing), extended Ld beyond the zone", th * 0.8, "l", "T");
+    p.dim(0, o.B * 1000 + 150, o.L * 1000, o.B * 1000 + 150, 150, "L " + Math.round(o.L * 1000), th).dim(-150, 0, -150, o.B * 1000, 150, "B " + Math.round(o.B * 1000), th);
+    return p;
+  }
+  var p = plan("bottom"), pt = plan("top");
+  /* section along X through the most loaded column line */
+  var rowY = o.sups.filter(function (s) { return s.col; }).reduce(function (a, s) { return a === null || Math.abs(s.y - (o.y0 + o.y1) / 2) < Math.abs(a - (o.y0 + o.y1) / 2) ? s.y : a; }, null);
+  var sc = new DWc("Section A-A (along X at y = " + (rowY || 0).toFixed(2) + ")"), T = o.T, cv = cf.cf, Lm = o.L * 1000;
+  sc.r(0, 0, Lm, T, "C");
+  o.sups.forEach(function (s) { if (s.col && Math.abs(s.y - rowY) < 0.01) sc.l(X(s.x) - s.a * 500, T, X(s.x) - s.a * 500, T + 600, "C").l(X(s.x) + s.a * 500, T, X(s.x) + s.a * 500, T + 600, "C"); });
+  var zb = cv + M.bx.dia / 2, zt = T - cv - M.tx.dia / 2;
+  sc.pl([[cv, zt], [cv, zb], [Lm - cv, zb], [Lm - cv, zt]], "R").pl([[cv + 30, zb], [cv + 30, zt], [Lm - cv - 30, zt], [Lm - cv - 30, zb]], "R");
+  o.zones.forEach(function (z) { if (z.dir !== "X" || rowY < z.y0 - 1e-6 || rowY > z.y1 + 1e-6) return; var zz = z.face === "bottom" ? zb + z.dia + 10 : zt - z.dia - 10; sc.l(X(z.x0), zz, X(z.x1), zz, "S").tx((X(z.x0) + X(z.x1)) / 2, z.face === "bottom" ? zz + 30 : zz - th - 20, z.mark, th * 0.7, "c", "S"); });
+  sc.tx(Lm / 2, -th * 1.6, "a/b " + M.bx.dia + "/" + M.by.dia + "φ bottom · c/d " + M.tx.dia + "/" + M.ty.dia + "φ top · cover " + cv + " mm · chairs to hold the top mesh", th * 0.8, "c", "T");
+  sc.dim(Lm + 120, 0, Lm + 120, T, 0, "T " + T, th * 0.8);
+  return [p, pt, sc];
+};
+/* colour map of an element value (SVG string) — pressure or required steel */
+MAT.heat = function (o, fn, unit, W) {
+  var sc = (W || 340) / o.L, Hh = o.B * sc, vals = o.el.map(fn), mx = Math.max.apply(null, vals.concat([1e-9])), mn = Math.min.apply(null, vals.concat([0])), h = '<svg class="dwg" viewBox="-2 -2 ' + ((W || 340) + 4) + ' ' + (Hh + 26) + '" width="' + ((W || 340) + 4) + '">';
+  function col(v) { var t = (v - mn) / ((mx - mn) || 1), r = Math.round(255 * Math.min(1, 2 * t)), g = Math.round(200 * Math.min(1, 2 * (1 - t))); return "rgb(" + r + "," + g + ",60)"; }
+  o.el.forEach(function (q, k) { h += '<rect x="' + ((q.x0 - o.x0) * sc).toFixed(1) + '" y="' + ((o.y1 - q.y1) * sc).toFixed(1) + '" width="' + ((q.x1 - q.x0) * sc + 0.3).toFixed(1) + '" height="' + ((q.y1 - q.y0) * sc + 0.3).toFixed(1) + '" fill="' + col(vals[k]) + '"/>'; });
+  o.sups.forEach(function (s) { if (s.col) h += '<rect x="' + ((s.x - s.a / 2 - o.x0) * sc).toFixed(1) + '" y="' + ((o.y1 - s.y - s.b / 2) * sc).toFixed(1) + '" width="' + (s.a * sc).toFixed(1) + '" height="' + (s.b * sc).toFixed(1) + '" fill="none" stroke="#1d3557" stroke-width="1"/>'; });
+  h += '<text x="0" y="' + (Hh + 18) + '" font-size="11" fill="currentColor">' + mn.toFixed(0) + ' (green) … ' + mx.toFixed(0) + ' ' + unit + ' (red)</text></svg>';
+  return h;
+};
+if (typeof module !== "undefined") module.exports = MAT;
+
 /* js/reg.js */
 /* Standards register and verification status of every engineering check.
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "3.1";
+REG.ENGINE = "3.2";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],
@@ -4370,6 +4773,8 @@ REG.STANDARDS = [
   ["IS 875 (Part 1)", "Dead loads — unit weights", "1987 values used; 2026 revision published", "Only concrete 25 kN/m³ is built in — finishes and wall loads are user inputs. Unit weights not yet reviewed against IS 875 (Part 1):2026."],
   ["IS 875 (Part 2):1987", "Imposed loads", "In use", "Imposed loads are user inputs; pattern loading (IS 456 cl 22.4.1) and reduction for floors carried (cl 3.2.1, footings) are options; seismic weight per IS 1893 Table 10"],
   ["IS 875 (Part 3):2015", "Wind loads", "In use", "Vz = Vb·k1·k2·k3·k4, pressure on the building frontal area (no building pressure-coefficient workflow)"],
+  ["IS 2950 (Part 1):1981", "Design and construction of raft foundations — Part 1 Design", "In use", "Mat foundations: flexible-plate method on Winkler springs, rigidity criterion 1.75/λ, rigid method as a check"],
+  ["IS 1904:1986", "Design and construction of foundations in soils — general requirements", "In use", "Permissible settlement and angular distortion (raft: 75 mm sand / 100 mm clay, 1/500) — editable"],
   ["IS 875 (Part 4):2021", "Snow loads (Third Revision)", "In use", "Roof snow s = μ·s0 (flat roof μ = 0.8), designed for the more severe of snow and roof imposed load (cl 1); drift, unbalanced and the exposure/thermal effects are not modelled — enter an adjusted s0 where they matter"],
   ["IS 1200", "Method of measurement of building and civil engineering works", "In use", "Measurement rules of the bill of quantities"],
   ["JKSOR 2022", "Jammu & Kashmir Schedule of Rates 2022 (PW(R&B) Department)", "In use", "Default BOQ rates (exclusive of GST); project rates override them; apply the cost index / premium of your work"],
@@ -4408,7 +4813,9 @@ REG.CHECKS = [
   ["Detailing", "Bar bending schedule (IS 2502)", "Verified", "Cutting lengths and weights vs hand values; Excel formulas recalculate to the app values"],
   ["Foundations", "Isolated footings: pressure, shear, punching, bearing (IS 456 cl 34)", "Verified", "Pressures recomputed from reactions in acceptance.js F"],
   ["Foundations", "Footing soil pressure distribution", "Simplified", "Rigid footing, full contact (no partial-uplift redistribution), +10 % self weight"],
-  ["Foundations", "Combined footings, rafts, piles, settlement, soil–structure interaction", "Not implemented", "Overlapping isolated footings are flagged"],
+  ["Foundations", "Mat (raft): plate on compression-only Winkler springs; punching, one-way shear, Wood–Armer flexure (IS 2950 Pt 1, IS 456)", "Verified", "Hertz point load on a plate on springs and Hetényi's beam on an elastic foundation within 1 %; a stiff mat reproduces the rigid method; punching and shear recomputed (acceptance.js J)"],
+  ["Foundations", "Mat soil model and design simplifications", "Simplified", "Winkler springs (ks from the soil report, else 120 × SBC), net pressures, punching without the moment-transfer part, settlement from springs only (indicative)"],
+  ["Foundations", "Combined footings, piles, settlement analysis, soil–structure interaction", "Not implemented", "Overlapping isolated footings are flagged (choose Auto or Mat)"],
   ["Loads", "Wind on buildings (IS 875-3): pressure coefficients, internal pressure, torsion cases", "Simplified", "Frontal-area pressure with a single force coefficient"],
   ["Loads", "Working stress projects: walls designed by limit state with 1.5 × service forces", "Simplified", "Stated in the wall results"],
   ["Loads", "Snow on roofs (IS 875 Pt 4): s = μ·s0, the larger of snow and roof imposed load", "Simplified", "Uniform balanced snow only — no drift at parapets or steps; s0 is a user input (acceptance.js I)"],
@@ -4421,12 +4828,12 @@ REG.CHECKS = [
 /* stable ids of REG.CHECKS rows, used by the verification mode */
 REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "timehist",
   "rcbeam", "rccol", "rcslab", "rcwallel", "rcwall", "servic", "stfcd", "stltb", "stklen", "dtbeam", "dtcol", "scwb", "joint", "dtslab", "bbs",
-  "foot", "footpress", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto"];
+  "foot", "footpress", "mat", "matsoil", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto"];
 REG.byId = function (id) { var i = REG.IDS.indexOf(id); return i >= 0 ? { id: id, area: REG.CHECKS[i][0], t: REG.CHECKS[i][1], st: REG.CHECKS[i][2], ev: REG.CHECKS[i][3] } : null; };
 REG.RANK = { "Not implemented": 0, Simplified: 1, Calculated: 2, Verified: 3 };
 /* checks behind each kind of result; the weakest decides the result's verification state */
 REG.KIND = { beam: ["frame", "rcbeam", "dtbeam", "servic"], column: ["frame", "rccol", "dtcol", "scwb", "joint"], slab: ["shell", "rcslab", "dtslab", "servic"],
-  wall: ["shell", "rcwall", "rcwallel"], steel: ["frame", "stfcd", "stltb", "stklen"], footing: ["foot", "footpress", "foundmore"], seismic: ["spectrum", "statbase", "modal", "rsa", "torsion", "irreg"] };
+  wall: ["shell", "rcwall", "rcwallel"], steel: ["frame", "stfcd", "stltb", "stklen"], footing: ["foot", "footpress", "foundmore"], mat: ["mat", "matsoil"], seismic: ["spectrum", "statbase", "modal", "rsa", "torsion", "irreg"] };
 REG.state = function (ids) { var w = null; ids.forEach(function (id) { var r = REG.byId(id); if (r && (!w || REG.RANK[r.st] < REG.RANK[w.st])) w = r; }); return w; };
 REG.html = function (esc) {
   var col = { Verified: "okt", Calculated: "", Simplified: "warnt", "Not implemented": "not" };
@@ -4498,13 +4905,13 @@ BOQ.ITEMS = [
   ["exc", "Earthwork in excavation for footings, all kinds of soil, lift up to 1.5 m (300 mm working space, vertical sides)", "m³", "exc"],
   ["exl", "Extra for additional lift in excavation (depth beyond 1.5 m)", "m³", "exl"],
   ["pcc", "PCC 1:4:8 (40 mm aggregate) 100 mm below footings, 100 mm offset", "m³", "pcc"],
-  ["rcf", "RCC {g} in footings up to plinth (excl. steel & formwork)", "m³", "below"],
+  ["rcf", "RCC {g} in footings / raft up to plinth (excl. steel & formwork)", "m³", "below"],
   ["rcn", "RCC {g} in column necks, footing to plinth", "m³", "below"],
   ["rcc", "RCC {g} in columns above plinth", "m³", "col"],
   ["rcb", "RCC {g} in beams (below slab)", "m³", "beam"],
   ["rcs", "RCC {g} in suspended slabs", "m³", "beam"],
   ["rcw", "RCC {g} in walls", "m³", "col"],
-  ["fwf", "Centering & shuttering — footings and bases", "m²", "fwf"],
+  ["fwf", "Centering & shuttering — footings, raft edges and bases", "m²", "fwf"],
   ["fwc", "Centering & shuttering — columns", "m²", "fwc"],
   ["fwb", "Centering & shuttering — beams", "m²", "fwb"],
   ["fws", "Centering & shuttering — suspended slabs", "m²", "fws"],
@@ -4579,6 +4986,13 @@ BOQ.run = function (m, S, p) {
     br.rcf.push([nf + " footings L × B × D", q.rcf]); br.rcn.push([nf + " necks over " + Df + " m founding depth", q.rcn]); br.pcc.push([nf + " beds (L + 0.2) × (B + 0.2) × 0.1", q.pcc]);
     br.bfl.push(["Excavation − footing − PCC − neck", q.bfl]); br.fwf.push([nf + " footings, four sides 2(L + B) × D", q.fwf]);
   }
+  if (dt && dt.mat) {
+    var mt = dt.mat, Lm = mt.L, Bm = mt.B, Tm = mt.T / 1000, neckH = Math.max(Df - Tm, 0), dep = Df + 0.1, ax = (Lm + 0.6) * (Bm + 0.6), vm = Lm * Bm * Tm, vp = (Lm + 0.2) * (Bm + 0.2) * 0.1, vn = 0, fn = 0;
+    mt.sups.forEach(function (s0) { if (s0.rcc) { vn += s0.a * s0.b * neckH; fn += 2 * (s0.a + s0.b) * neckH; } });
+    add("rcf", vm, "Mat " + Lm.toFixed(2) + " × " + Bm.toFixed(2) + " × " + Tm.toFixed(2) + " m"); add("fwf", 2 * (Lm + Bm) * Tm, "Mat edges 2(L + B) × t");
+    add("pcc", vp, "Under the mat (L + 0.2)(B + 0.2) × 0.1"); add("exc", ax * Math.min(dep, 1.5), "Mat pit (L + 0.6)(B + 0.6) × min(depth, 1.5 m)"); add("exl", ax * Math.max(dep - 1.5, 0), "Mat pit, depth below 1.5 m");
+    add("rcn", vn, "Column necks from the mat to the plinth, " + neckH.toFixed(2) + " m"); add("fwc", fn, "Necks, four faces"); add("bfl", ax * dep - vm - vp - vn, "Excavation − mat − PCC − necks");
+  }
   /* masonry: storey s on the level s−1 beams (storey 1 on the plinth, layout of level 1); perimeter lines are external */
   var xs = g ? g.xs : [], ys = g ? g.ys : [], ext = 0, int = 0, aE = 0, aI = 0, L1 = 0, perim = 0, Hb = lv[lv.length - 1] - lv[0], top = lv.length - 1;
   function onEdge(bl) {
@@ -4650,17 +5064,19 @@ BOQ.price = function (boq, rates) {
 };
 /* reinforcement schedules (rows ready for tables) */
 BOQ.schedules = function (S) {
-  var dt = S.det, o = { cols: [], beams: [], slabs: [], foot: [], walls: [] };
+  var dt = S.det, o = { cols: [], beams: [], slabs: [], foot: [], walls: [], mat: [] };
   if (!dt || dt.err || !dt.gB) return o;
   dt.gC.forEach(function (G) { G.rep.st.forEach(function (s, i) { o.cols.push([i ? "" : G.id, i ? "" : G.list.map(function (c) { return c.name; }).join(" "), "Storey " + (s.i + 1), s.b + "×" + s.D, s.ar.n + "-" + s.ar.dia + "φ", s.pct.toFixed(2) + " %", s.tie.dia + "φ" + (s.tie.lB > 2 || s.tie.lD > 2 ? " + " + (s.tie.lB - 2 + s.tie.lD - 2) + " crossties" : ""), s.tie.sc ? "@" + s.tie.sc + " over " + s.tie.lo : "—", "@" + s.tie.sm]); }); });
   dt.gB.forEach(function (G) { var bl = G.rep; bl.spans.forEach(function (sp, j) { o.beams.push([j ? "" : G.id, j ? "" : G.list.map(function (b) { return b.name; }).join(" "), j ? "" : bl.b + "×" + bl.D, "Span " + (j + 1) + " (" + Math.round(sp.Lc) + ")", bl.sup[j].nt + "-" + bl.dia + "φ", sp.nb + "-" + bl.dia + "φ", bl.sup[j + 1].nt + "-" + bl.dia + "φ", sp.sv.ph + "φ@" + sp.sv.sh + " / @" + sp.sv.sm]); }); });
   dt.slabs.forEach(function (fl) { fl.panels.forEach(function (P, j) { o.slabs.push([j ? "" : fl.name, "S" + (j + 1), P.Lx + "×" + P.Ly, P.t, P.bot.X.dia + "φ@" + P.bot.X.s, P.bot.Y.dia + "φ@" + P.bot.Y.s, ["W", "E", "S", "N"].map(function (k) { return P.top[k].sp.dia + "@" + P.top[k].sp.s; }).join(" / ")]); }); });
   dt.gF.forEach(function (G) { var f = G.rep; o.foot.push([G.id, G.list.map(function (c) { return c.name; }).join(" "), f.Lx + "×" + f.Ly, f.D, f.bx.dia + "φ@" + f.bx.s, f.by.dia + "φ@" + f.by.s, G.n]); });
+  if (dt.mat) { var mt = dt.mat; [["bx", "Bottom", "X"], ["by", "Bottom", "Y"], ["tx", "Top", "X"], ["ty", "Top", "Y"]].forEach(function (k) { o.mat.push(["Mesh", k[1] + " " + k[2], mt.mesh[k[0]].dia + "φ@" + mt.mesh[k[0]].s, "whole mat", "", Math.round(mt.mesh[k[0]].As)]); });
+    mt.zones.forEach(function (z) { o.mat.push([z.mark, z.face + " " + z.dir, z.dia + "φ@" + z.s, "x " + z.x0.toFixed(2) + "–" + z.x1.toFixed(2), "y " + z.y0.toFixed(2) + "–" + z.y1.toFixed(2), Math.round(z.As)]); }); }
   (dt.gW || []).forEach(function (G) { G.rep.storeys.forEach(function (st, i) { o.walls.push([i ? "" : G.id, i ? "" : G.list.map(function (w) { return w.line; }).join("; "), "Storey " + (i + 1), G.rep.t, st.vb.dia + "φ@" + st.vb.s + (G.rep.two ? " EF" : ""), st.hb.dia + "φ@" + st.hb.s + (G.rep.two ? " EF" : ""), st.be ? (st.beBars ? st.beL + ", " + st.beBars.n + "-" + st.beBars.dia + "φ" : "end columns") : "—"]); }); });
   return o;
 };
 BOQ.HEAD = { cols: ["Mark", "Columns", "Storey", "Size", "Bars", "Steel", "Ties", "Confining zones", "Middle"], beams: ["Mark", "Beams", "Size", "Span (clear)", "Top left", "Bottom", "Top right", "Hoops ends / middle"],
-  slabs: ["Floor", "Panel", "Lx × Ly", "t", "Bottom X", "Bottom Y", "Top W / E / S / N"], foot: ["Mark", "Columns", "Lx × Ly", "D", "Bars X", "Bars Y", "No."], walls: ["Mark", "Walls", "Storey", "t", "Vertical", "Horizontal", "Boundary"] };
+  slabs: ["Floor", "Panel", "Lx × Ly", "t", "Bottom X", "Bottom Y", "Top W / E / S / N"], foot: ["Mark", "Columns", "Lx × Ly", "D", "Bars X", "Bars Y", "No."], mat: ["Mark", "Layer", "Bars", "Extent x (m)", "Extent y (m)", "As mm²/m"], walls: ["Mark", "Walls", "Storey", "t", "Vertical", "Horizontal", "Boundary"] };
 if (typeof module !== "undefined") module.exports = BOQ;
 
 /* js/auto.js */
@@ -4702,6 +5118,7 @@ AUTO.failures = function (S) {
     dt.joints.forEach(function (q) { var i = lev(q.z); if (!q.ok) { add(f.col, i, "joint shear"); if (i + 1 < lv.length) add(f.col, i + 1, "joint shear"); } if (!q.anch) add(f.col, i, "joint depth < 20φ"); });
     dt.walls.forEach(function (w) { w.checks.forEach(function (q) { if (!q.ok) f.walls++; }); });
     dt.foot.forEach(function (ft) { ft.checks.forEach(function (q) { if (!q.ok) f.other++; }); });
+    if (dt.mat) dt.mat.checks.forEach(function (q) { if (!q.ok) f.other++; });
   }
   (S.drift || []).forEach(function (q) { if (q.ok === false) for (var i = 1; i < lv.length; i++) add(f.col, i, "storey drift"); });
   f.n = Object.keys(f.col).length + Object.keys(f.beam).length;
@@ -4938,10 +5355,12 @@ var CAD = (function () {
     function sheet(t, dws) { no++; rows.push({ title: t, dws: dws.concat([title(p, t, code + "/S-" + (no < 10 ? "0" : "") + no)]) }); }
     for (var i = 1; i < dt.g.lv.length; i++) if (dt.beams.some(function (b) { return b.lev === i; })) sheet("GA plan +" + dt.g.lv[i].toFixed(2), [plan(S, i)]);
     if (dt.foot.length) sheet("Foundation layout", [footPlan(S)]);
+    if (dt.mat) sheet("Mat foundation — " + dt.mat.L.toFixed(2) + " × " + dt.mat.B.toFixed(2) + " m × " + dt.mat.T + " mm", MAT.draw(dt.mat, dt.cf));
     var sc = BOQ.schedules(S);
     if (sc.cols.length) sheet("Column schedule", [table("Column schedule", BOQ.HEAD.cols, sc.cols, [600, 2200, 900, 900, 1000, 800, 1700, 1600, 800])]);
     if (sc.beams.length) sheet("Beam schedule", [table("Beam schedule", BOQ.HEAD.beams, sc.beams, [600, 2600, 900, 1500, 1000, 1000, 1000, 1700])]);
     if (sc.foot.length) sheet("Footing schedule", [table("Footing schedule", BOQ.HEAD.foot, sc.foot, [600, 3000, 1200, 600, 1000, 1000, 500])]);
+    if (sc.mat.length) sheet("Mat reinforcement schedule", [table("Mat reinforcement schedule", BOQ.HEAD.mat, sc.mat, [700, 1400, 1300, 2000, 2000, 1200])]);
     if (sc.walls.length) sheet("Wall schedule", [table("Wall schedule", BOQ.HEAD.walls, sc.walls, [600, 2600, 900, 500, 1300, 1300, 1700])]);
     var cf = dt.cf;
     dt.gB.forEach(function (G) { sheet("Beam " + G.id + " — " + G.list.map(function (b) { return b.name; }).join(", "), DT.drawBeam(G.rep, cf, 1)); });
@@ -5080,8 +5499,18 @@ var RPT = (function () {
       var ck = []; dt.gB.forEach(function (G) { G.rep.checks.forEach(function (q) { if (!q.ok) ck.push([G.id, q.t, q.v, q.cl]); }); }); dt.gC.forEach(function (G) { G.rep.checks.forEach(function (q) { if (!q.ok) ck.push([G.id, q.t, q.v, q.cl]); }); }); dt.gF.forEach(function (G) { G.rep.checks.forEach(function (q) { if (!q.ok) ck.push([G.id, q.t, q.v, q.cl]); }); }); (dt.gW || []).forEach(function (G) { G.rep.checks.forEach(function (q) { if (!q.ok) ck.push([G.id, q.t, q.v, q.cl]); }); });
       body += '<h3>Detailing checks not satisfied</h3>' + (ck.length ? tbl(["Group", "Check", "Value", "Clause"], ck.map(function (r) { return r.map(esc); })) : '<p class="ok">All beam, column, wall and footing detailing checks are satisfied.</p>');
       var sc = BOQ.schedules(S);
-      [["cols", "Column schedule"], ["beams", "Beam schedule"], ["walls", "Wall schedule"], ["slabs", "Slab schedule"], ["foot", "Footing schedule"]].forEach(function (g) { if (sc[g[0]].length) body += '<h3>' + g[1] + '</h3>' + tbl(BOQ.HEAD[g[0]], sc[g[0]].map(function (r) { return r.map(esc); })); });
+      [["cols", "Column schedule"], ["beams", "Beam schedule"], ["walls", "Wall schedule"], ["slabs", "Slab schedule"], ["foot", "Footing schedule"], ["mat", "Mat reinforcement schedule"]].forEach(function (g) { if (sc[g[0]].length) body += '<h3>' + g[1] + '</h3>' + tbl(BOQ.HEAD[g[0]], sc[g[0]].map(function (r) { return r.map(esc); })); });
       body += '<h3>Reinforcement by diameter (kg)</h3>' + tbl(["φ", "Beams", "Columns", "Slabs", "Footings", "Walls", "Total"], dt.tot.map(function (t) { return [t.dia + " mm", f(t.beams, 0), f(t.cols, 0), f(t.slabs, 0), f(t.foot, 0), f(t.walls || 0, 0), "<b>" + f(t.all, 0) + "</b>"]; }).concat([["<b>Total</b>", "", "", "", "", "", "<b>" + f(dt.total, 0) + "</b>"]]));
+      if (dt.mat) {
+        var mt = dt.mat, M0 = mt.mesh;
+        body += H("Mat (raft) foundation") + '<p>' + esc(mt.why === "chosen" ? "Mat foundation chosen." : "Mat foundation used because " + mt.why + ".") + ' Plan ' + f(mt.L, 2) + ' × ' + f(mt.B, 2) + ' m (projection ' + f(mt.off, 2) + ' m beyond the outer column faces), thickness ' + mt.T + ' mm, M' + mt.fck + ' / Fe ' + mt.fy + '. Analysed by the flexible-plate method of IS 2950 (Part 1): thick-plate shell elements (' + mt.el.length + ', ' + f(mt.h, 2) + ' m) on compression-only Winkler springs, ks = ' + f(mt.ks, 0) + ' kN/m³' + (S.p.ks > 0 ? ' (entered)' : ' (120 × SBC, Bowles — replace with the soil report value)') + ', loaded by the base reactions of the building analysis. Soil pressures are net (backfill over the mat balances the excavated soil). Rigidity: λ = ' + f(mt.rigidity.lam, 3) + ' /m, 1.75/λ = ' + f(mt.rigidity.lim, 2) + ' m vs largest column spacing ' + f(mt.rigidity.sp, 2) + ' m (' + (mt.rigidity.rigid ? 'rigid' : 'flexible') + ').</p>';
+        body += tbl(["Check", "Value", "Clause", ""], mt.checks.map(function (q) { return [esc(q.t), esc(q.v), esc(q.cl || ""), q.ok ? '<span class="ok">OK</span>' : '<span class="no">FAIL</span>']; }));
+        body += '<h3>Soil pressure — flexible plate vs rigid method (kN/m²)</h3>' + tbl(["Set", "FE max", "Rigid max", "Rigid min", "Allowable", "Lift-off"], mt.svc.map(function (r) { return [esc(r.name), f(r.qmax, 1), f(r.rig.max, 1), f(r.rig.min, 1), f(r.lim, 0), f(100 * r.lift, 1) + " %"]; }));
+        body += '<h3>Punching shear at d/2 (IS 456 cl 31.6)</h3>' + tbl(["Column", "Type", "Pu kN", "Vu kN", "b0 mm", "d mm", "τv N/mm²", "ks·0.25√fck", "Combination"], mt.pun.slice().sort(function (a, b) { return b.u - a.u; }).slice(0, opt.all ? 999 : 8).map(function (q) { return [esc(q.name), q.type, f(q.Pu, 0), f(q.Vu, 0), f(q.b0, 0), f(q.d, 0), f(q.tv, 3), f(q.kc, 3), esc(q.cb)]; }));
+        body += '<h3>One-way shear, column strips at d from the faces</h3>' + tbl(["Column", "Section", "Strip width m", "V kN/m", "τv", "pt %", "τc", "Face"], mt.strips.slice().sort(function (a, b) { return b.u - a.u; }).slice(0, opt.all ? 999 : 6).map(function (q) { return [esc(q.col), q.dir + " at " + f(q.at, 2), f(q.w, 2), f(q.V, 1), f(q.tv, 3), f(q.pt, 2), f(q.tc, 3), q.face]; }));
+        body += '<h3>Reinforcement</h3>' + tbl(["Layer", "Base mesh", "As mm²/m", "d mm"], [["Bottom X", M0.bx.dia + "φ@" + M0.bx.s, f(M0.bx.As, 0), f(mt.d.bx, 0)], ["Bottom Y", M0.by.dia + "φ@" + M0.by.s, f(M0.by.As, 0), f(mt.d.by, 0)], ["Top X", M0.tx.dia + "φ@" + M0.tx.s, f(M0.tx.As, 0), f(mt.d.tx, 0)], ["Top Y", M0.ty.dia + "φ@" + M0.ty.s, f(M0.ty.As, 0), f(mt.d.ty, 0)]]) +
+          '<p class="note">Settlement under DL+LL ' + f(mt.wmax, 1) + ' mm (springs — indicative), angular distortion 1/' + (mt.ang.r > 0 ? Math.round(1 / mt.ang.r) : "∞") + '. ' + mt.zones.length + ' zones of extra bars (see the mat reinforcement schedule). Reinforcement ' + f(mt.wt, 0) + ' kg, concrete ' + f(mt.conc, 1) + ' m³.</p>' + '<div class="dwg">' + DT.svg(MAT.draw(mt, dt.cf)[0], { maxW: 700 }) + '</div>';
+      }
     }
     /* 10 BOQ */
     if (S.boq) {
@@ -5206,6 +5635,10 @@ var PRO = (function () {
         var u = 0; fl.panels.forEach(function (P) { u = Math.max(u, Math.max(P.req.bX, P.amin) / P.bot.X.As, Math.max(P.req.bY, P.amin) / P.bot.Y.As); });
         rows.push({ kind: "slab", id: "S" + (i + 1), mem: fl.name, res: "t " + fl.t + " · " + fl.panels.length + " panels", u: u, why: "Ast req / prov", ok: u <= 1 + 1e-9 && !fl.panels.some(function (P) { return P.msg.length; }) });
       });
+      if (dt.mat) {
+        var mt = dt.mat, mu = 0, mwhy = ""; mt.checks.forEach(function (c) { if (c.u !== undefined && c.u > mu) { mu = c.u; mwhy = c.t.replace(/ —.*| \(.*/, ""); } });
+        rows.push({ kind: "mat", id: "MAT", mem: "Mat under " + mt.sups.length + " supports", res: f(mt.L, 2) + " × " + f(mt.B, 2) + " m × " + mt.T + " · mesh B " + mt.mesh.bx.dia + "φ@" + mt.mesh.bx.s + " T " + mt.mesh.tx.dia + "φ@" + mt.mesh.tx.s + " + " + mt.zones.length + " extra zones", u: mu, why: mwhy, ok: mt.checks.every(function (c) { return c.ok; }) });
+      }
       dt.gF.forEach(function (G) {
         var ft = G.rep, u = Math.max(ft.gov.u, ft.tv[0] / ft.tc[0], ft.tv[1] / ft.tc[1], ft.tp / ft.kp, ft.fact / ft.fbr), why = u === ft.gov.u ? "soil pressure" : u === ft.tp / ft.kp ? "punching" : "shear / bearing";
         rows.push({ kind: "footing", id: G.id, mem: G.list.map(function (c) { return c.name; }).join(", "), res: ft.Lx + "×" + ft.Ly + "×" + ft.D + " · " + ft.bx.dia + "φ@" + ft.bx.s + " / " + ft.by.dia + "φ@" + ft.by.s, u: u, why: why, ok: !ft.checks.some(function (q) { return !q.ok; }) });
@@ -5221,7 +5654,7 @@ var PRO = (function () {
   function vItems(S) {
     var m = S.m, items = [], has = { wall: m.shells.some(function (s) { return s.kind === "wall"; }), slab: m.shells.some(function (s) { return s.kind === "slab"; }), steel: m.frames.some(function (e) { return e.sec.kind === "steel"; }), rcc: m.frames.some(function (e) { return e.sec.kind === "rcc"; }), eq: !!(S.p && S.p.eq), wsm: S.p && S.p.method === "wsm", wind: !!(S.p && S.p.wind) };
     var app = { pdelta: !!(S.res && S.res.pd), pushover: !!S.po, rcwall: has.wall, rcwallel: has.wall, rcslab: has.slab, dtslab: has.slab, stfcd: has.steel, stltb: has.steel, stklen: has.steel, rcbeam: has.rcc, rccol: has.rcc, dtbeam: has.rcc, dtcol: has.rcc, scwb: has.rcc && has.eq, joint: has.rcc && has.eq,
-      spectrum: has.eq, statbase: has.eq, modal: has.eq && S.p.rsa, rsa: has.eq && S.p.rsa, torsion: has.eq, irreg: has.eq, timehist: has.eq, wind: has.wind, wsmwall: has.wsm && has.wall, foot: has.rcc, footpress: has.rcc, foundmore: has.rcc, servic: has.rcc, bbs: has.rcc, snow: !!(S.p && S.p.snow), pattern: !!(S.L && S.L.cases && S.L.cases.LP1), llred: !!(S.p && S.p.llRed), cover: has.rcc, boq: !!S.boq, auto: !!S.autoRes };
+      spectrum: has.eq, statbase: has.eq, modal: has.eq && S.p.rsa, rsa: has.eq && S.p.rsa, torsion: has.eq, irreg: has.eq, timehist: has.eq, wind: has.wind, wsmwall: has.wsm && has.wall, foot: has.rcc && !(S.det && S.det.mat), footpress: has.rcc && !(S.det && S.det.mat), mat: !!(S.det && S.det.mat), matsoil: !!(S.det && S.det.mat), foundmore: has.rcc, servic: has.rcc, bbs: has.rcc, snow: !!(S.p && S.p.snow), pattern: !!(S.L && S.L.cases && S.L.cases.LP1), llred: !!(S.p && S.p.llRed), cover: has.rcc, boq: !!S.boq, auto: !!S.autoRes };
     REG.IDS.forEach(function (id) {
       var r = REG.byId(id); if (!r) return;
       if (app[id] === false || (app[id] === undefined && ["frame", "shell", "modelchk"].indexOf(id) < 0)) return;
@@ -5235,7 +5668,7 @@ var PRO = (function () {
       if (sw) items.push({ key: "fail:scwb", area: "Failing result", t: sw + " strong column–weak beam joint checks", st: "FAIL", why: "IS 13920 cl 7.2.1 — enlarge columns (Automatic design does this)" });
       if (jj) items.push({ key: "fail:joint", area: "Failing result", t: jj + " beam–column joint checks", st: "FAIL", why: "IS 13920 cl 9 — enlarge columns or use higher concrete grade" });
       var ov = S.det.foot.filter(function (ft) { return ft.warn && ft.warn.length; }).length;
-      if (ov) items.push({ key: "fail:overlap", area: "Failing result", t: ov + " overlapping isolated footings", st: "FAIL", why: "Design a combined footing or raft separately" });
+      if (ov) items.push({ key: "fail:overlap", area: "Failing result", t: ov + " overlapping isolated footings", st: "FAIL", why: "Set Foundation type to Auto or Mat — the app then designs a raft" });
     }
     (S.drift || []).filter(function (q) { return q.ok === false; }).slice(0, 1).forEach(function () { items.push({ key: "fail:drift", area: "Failing result", t: "Storey drift > 0.004h", st: "FAIL", why: "IS 1893 cl 7.11.1 — stiffen the structure" }); });
     var dfl = S.p && S.p.entered ? ["sbc", "fck", "fy", "zone", "soil", "ll", "I", "R"].filter(function (k) { return S.p.entered.indexOf(k) < 0; }) : [];
@@ -5291,7 +5724,7 @@ var PRO = (function () {
       'Measurement (IS 1200 style): columns floor-to-floor less the slab, necks from footing to plinth (founding depth ' + f(b.Df, 2) + ' m); beams below the slab between column faces; slabs over the panels; walls between end columns; PCC 100 mm with 100 mm offset; excavation with 300 mm working space, extra lift below 1.5 m; ' + I.mT + ' mm masonry under every beam line with ' + I.open + ' % openings; plinth ' + I.pH + ' m; parapet ' + I.parH + ' m; steel from the bar bending schedule + ' + I.wst + ' % wastage. Doors, windows, roofing/waterproofing, painting, services and external works are not included.</div>';
     h += tbl(["Bar φ", "kg (schedule)"], Object.keys(b.byDia).map(Number).sort(function (a, c) { return a - c; }).map(function (k) { return [k + " mm", f(b.byDia[k], 0)]; }));
     var sc = b.schedules;
-    [["cols", "Column schedule"], ["beams", "Beam schedule"], ["slabs", "Slab schedule"], ["walls", "Wall schedule"], ["foot", "Footing schedule"]].forEach(function (g) { if (sc[g[0]].length) h += '<h4>' + g[1] + '</h4>' + tblL(BOQ.HEAD[g[0]], sc[g[0]].map(function (r) { return r.map(esc); })); });
+    [["cols", "Column schedule"], ["beams", "Beam schedule"], ["slabs", "Slab schedule"], ["walls", "Wall schedule"], ["foot", "Footing schedule"], ["mat", "Mat reinforcement schedule"]].forEach(function (g) { if (sc[g[0]].length) h += '<h4>' + g[1] + '</h4>' + tblL(BOQ.HEAD[g[0]], sc[g[0]].map(function (r) { return r.map(esc); })); });
     return h;
   }
 
@@ -5345,7 +5778,8 @@ var PRO = (function () {
       if (ja.length) add(2, ja.length + " joints: column depth < 20 × beam bar φ", "e.g. " + ja[0].col + ": " + ja[0].hc + " mm < " + 20 * ja[0].dia + " mm", "Use smaller beam bars (φ ≤ hc/20) or deeper columns.", "IS 13920 cl 7.1.1");
       dt.cols.forEach(function (c) { c.st.forEach(function (s) { if (s.pct > 2.5 && s.pct <= 4) add(1, c.name + " storey " + (s.i + 1) + ": " + f(s.pct, 2) + " % steel", "High steel makes laps congested (laps double it).", "Consider a larger section to bring steel near 1–2.5 %.", "IS 456 cl 26.5.3.1"); }); });
       dt.beams.forEach(function (bl) { if (bl.msg.some(function (t) { return /second layer/.test(t); })) add(2, "Beam " + bl.name + " needs two layers of bars", "The effective depth is smaller than assumed.", "Deepen the beam or use larger bars.", "IS 456 cl 26.3"); });
-      dt.foot.forEach(function (ft) { if (ft.warn && ft.warn.length) add(2, "Footing " + ft.name + " overlaps a neighbour", ft.warn[0], "Design a combined footing or raft.", "IS 456 cl 34"); });
+      dt.foot.forEach(function (ft) { if (ft.warn && ft.warn.length) add(2, "Footing " + ft.name + " overlaps a neighbour", ft.warn[0], "Set Foundation type to Auto or Mat to design a raft.", "IS 456 cl 34"); });
+      if (dt.mat) dt.mat.checks.forEach(function (c) { if (!c.ok) add(1, "Mat: " + c.t, c.v, /pressure/.test(c.t) ? "Enlarge the mat projection, or check the SBC — the mat already spreads the load over the whole plan" : /Settlement|distortion/.test(c.t) ? "Thicker / stiffer mat, better ks from a plate load test, or piles" : /Punching|shear|Flexure/.test(c.t) ? "Thicken the mat (or leave the thickness blank to let the app pick it), or add column pedestals" : "Check the input", c.cl); });
       (dt.walls || []).forEach(function (w) { w.storeys.forEach(function (st) { if (st.be) add(1, w.name + " storey " + (st.i + 1) + " needs boundary elements", "σ = " + f(st.sMax, 2) + " N/mm² > 0.2fck. " + st.beText, "Detail the end zones as confined boundary elements.", "IS 13920 cl 10.4"); }); });
     }
     var dr = (S.drift || []).filter(function (q) { return q.ok === false; });
@@ -5363,6 +5797,7 @@ var PRO = (function () {
     if (!dt || dt.err) return null;
     dt.cols.forEach(function (c) { if (c.name.toUpperCase() === n || (c.grp && c.grp.toUpperCase() === n)) out = { type: "column", name: c.name, group: c.grp, storeys: c.st.map(function (s) { return { storey: s.i + 1, size: s.b + "x" + s.D, bars: s.ar.n + "-" + s.ar.dia, steel_pct: +s.pct.toFixed(2), ties: s.tie.dia + "@" + s.tie.sc + "/" + s.tie.sm }; }), failing: c.checks.filter(function (q) { return !q.ok; }).map(function (q) { return q.t + ": " + q.v; }), scwb: dt.scwb.filter(function (q) { return q.colRef === c; }).map(function (q) { return { z: q.z, dir: q.dir, ratio: +q.r.toFixed(2), ok: q.ok }; }), joints: dt.joints.filter(function (q) { return q.colRef === c; }).map(function (q) { return { z: q.z, dir: q.dir, Vj: +q.Vj.toFixed(0), cap: +q.cap.toFixed(0), ok: q.ok, depth20phi: q.anch }; }) }; });
     dt.beams.forEach(function (b) { if (!out && (b.name.toUpperCase() === n || (b.grp && b.grp.toUpperCase() === n))) out = { type: "beam line", name: b.name, group: b.grp, size: b.b + "x" + b.D, bar: b.dia, spans: b.spans.map(function (sp, j) { return { span: j + 1, clear: Math.round(sp.Lc), top_left: b.sup[j].nt, bottom: sp.nb, top_right: b.sup[j + 1].nt, hoops: sp.sv.ph + "@" + sp.sv.sh + "/" + sp.sv.sm }; }), failing: b.checks.filter(function (q) { return !q.ok; }).map(function (q) { return q.t + ": " + q.v; }), notes: b.msg }; });
+    if (!out && dt.mat && /^(MAT|RAFT)/.test(n)) { var mt = dt.mat; out = { type: "mat", size: mt.L.toFixed(2) + " x " + mt.B.toFixed(2) + " m x " + mt.T + " mm", mesh: mt.mesh, zones: mt.zones.length, ks: mt.ks, qmax: +mt.gov.qmax.toFixed(1), settlement_mm: +mt.wmax.toFixed(1), punching_worst: mt.pun.slice().sort(function (a, b) { return b.u - a.u; })[0], failing: mt.checks.filter(function (q) { return !q.ok; }).map(function (q) { return q.t + ": " + q.v; }) }; }
     dt.foot.forEach(function (ft) { if (!out && (ft.name.toUpperCase() === n)) out = { type: "footing", name: ft.name, size: ft.Lx + "x" + ft.Ly + "x" + ft.D, bars: ft.bx.dia + "@" + ft.bx.s + " / " + ft.by.dia + "@" + ft.by.s, governing: ft.gov.set.name, qmax: +ft.gov.pr.max.toFixed(1), failing: ft.checks.filter(function (q) { return !q.ok; }).map(function (q) { return q.t + ": " + q.v; }) }; });
     (dt.walls || []).forEach(function (w) { if (!out && (w.name.toUpperCase().indexOf(n) === 0)) out = { type: "wall", name: w.name, t: w.t, Lw: Math.round(w.Lw), storeys: w.storeys.map(function (st) { return { storey: st.i + 1, vertical: st.vb.dia + "@" + st.vb.s, horizontal: st.hb.dia + "@" + st.hb.s, boundary: st.be }; }), failing: w.checks.filter(function (q) { return !q.ok; }).map(function (q) { return q.t + ": " + q.v; }) }; });
     return out;
@@ -5381,7 +5816,7 @@ var PRO = (function () {
     Promise.resolve(window.claude.use("sample")).then(function (s) { sampleFn = s || null; cb(sampleFn); }, function () { cb(null); });
   }
   function offlineAnswer(S, q) {
-    var h = "", mm = q.match(/\b([A-Z]{1,2}-[A-Z]{1,2}\d+|F\d+-[A-Z0-9]+\([XY]\)|[BCFW]\d+)\b/i), info = mm ? memberInfo(S, mm[1]) : null;
+    var h = "", mm = q.match(/\b([A-Z]{1,2}-[A-Z]{1,2}\d+|F\d+-[A-Z0-9]+\([XY]\)|[BCFW]\d+|mat|raft)\b/i), info = mm ? memberInfo(S, mm[1]) : null;
     if (info) h += '<div class="aans"><b>' + esc(info.type + " " + info.name) + '</b><pre>' + esc(JSON.stringify(info, null, 1)) + '</pre></div>';
     var kb = kbFind(q); kb.forEach(function (k) { h += '<div class="aans"><b>' + esc(k[1]) + '</b><br>' + esc(k[2]) + '</div>'; });
     var ad = advise(S).filter(function (a) { var s = q.toLowerCase(); return s.split(/\W+/).filter(function (w) { return w.length > 3; }).some(function (w) { return (a.t + a.d).toLowerCase().indexOf(w) >= 0; }); }).slice(0, 3);
@@ -5401,7 +5836,7 @@ var PRO = (function () {
       if (!sample) return;
       var box = document.createElement("div"); box.className = "aans ai"; box.innerHTML = "<b>Claude</b><br><span>Thinking…</span>"; out.insertBefore(box, out.firstChild);
       var ctx = context(S), tools = [
-        { name: "get_member", description: "Detailing and checks of one member or member group by name (e.g. C-B2, C1, F1-A(X), B2, F-A1, W1)", inputSchema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] }, execute: function (a) { return memberInfo(S, a.name) || { error: "not found" }; } },
+        { name: "get_member", description: "Detailing and checks of one member or member group by name (e.g. C-B2, C1, F1-A(X), B2, F-A1, W1, MAT)", inputSchema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] }, execute: function (a) { return memberInfo(S, a.name) || { error: "not found" }; } },
         { name: "search_notes", description: "Look up the app's code notes (IS 13920, IS 1893, IS 456) on a topic", inputSchema: { type: "object", properties: { topic: { type: "string" } }, required: ["topic"] }, execute: function (a) { return kbFind(a.topic).map(function (k) { return { title: k[1], text: k[2] }; }); } }
       ];
       var prompt = "You are the engineering assistant inside IS StructDesign, an Indian-Standards structural analysis and design app. Answer the engineer's question about THIS model using the results below and the tools; cite IS clauses; be concise (≤ 180 words); if a check fails say why and give concrete fixes with numbers; never claim the design is safe — remind that a qualified engineer must verify when relevant.\n\nModel results (JSON):\n" + JSON.stringify(ctx) + "\n\nQuestion: " + q;
@@ -6782,18 +7217,19 @@ var RX = (function () {
   /* ===== Reinforcement detailing: bar bending schedule, ductile-detailing checks, footings ===== */
   function detailSheets(wb, S, G) {
     var dt = S.det, cf = dt.cf, rows = [];
-    function grpRows(kind, G0, bars) { bars.forEach(function (q) { rows.push({ grp: G0.id, kind: kind, mem: G0.list.map(function (o) { return o.name; }).join(", "), nm: G0.n, mark: q.mark, desc: q.desc, dia: q.dia, shape: q.shape, A: Math.round(q.A), B: Math.round(q.B || 0), C: Math.round(q.C || 0), n90: q.n90 || 0, np: q.n }); }); }
+    function grpRows(kind, G0, bars) { bars.forEach(function (q) { rows.push({ grp: G0.id, kind: kind, mem: G0.list.map(function (o) { return o.name; }).join(", "), nm: G0.n, mark: q.mark, desc: q.desc, dia: q.dia, shape: q.shape, A: Math.round(q.A), B: Math.round(q.B || 0), C: Math.round(q.C || 0), n90: q.n90 || 0, np: q.n, lap: q.laps ? Math.round(q.L - DT.cut(q)) : 0 }); }); }
     dt.gB.forEach(function (G0) { grpRows("Beam", G0, G0.rep.bars); });
     dt.gC.forEach(function (G0) { grpRows("Column", G0, G0.rep.bars); });
     dt.slabs.forEach(function (sl) { grpRows("Slab", { id: "S" + (dt.slabs.indexOf(sl) + 1), list: [{ name: sl.name }], n: 1 }, sl.bars); });
     dt.gF.forEach(function (G0) { grpRows("Footing", G0, G0.rep.bars); });
+    if (dt.mat) grpRows("Footing", { id: "MAT", list: [{ name: "Mat foundation" }], n: 1 }, dt.mat.bars);
     (dt.gW || []).forEach(function (G0) { grpRows("Wall", G0, G0.rep.bars); });
     var sh = wb.sheet("BBS", { cols: [7, 8, 26, 6, 5, 34, 6, 7, 8, 7, 7, 5, 8, 10, 9, 10, 8, 10], color: TAB.design });
     intro(sh, "Bar Bending Schedule — IS 2502 / SP 34", "One row per bar mark of each group of identical members (the Members column lists them). Shapes: S straight; L one 90° bend; U two 90° bends (A = straight length, B and C = bend legs); ST closed hoop/stirrup with two 135° hooks (A × B outer dimensions); CT crosstie with 135° hooks. Cutting length = A + B + C − 2φ per 90° bend; hoop = 2(A+B) + 2 hooks − 12φ, hook allowance = MAX(10φ, 75 mm); crosstie = A + 2 hooks − 6φ. Weight = φ²/162 kg/m. Every length, count and weight is a live formula — change a dimension or count and the totals update.", 14);
     var t = table(sh, [{ k: "grp", h: "Group" }, { k: "kind", h: "Element" }, { k: "mem", h: "Members" }, { k: "nm", h: "No. of members", s: "n0" }, { k: "mark", h: "Mark" }, { k: "desc", h: "Description" },
       { k: "dia", h: "φ", u: "mm", s: "n0" }, { k: "shape", h: "Shape" }, { k: "A", h: "A", u: "mm", s: "n0" }, { k: "B", h: "B", u: "mm", s: "n0" }, { k: "C", h: "C", u: "mm", s: "n0" }, { k: "n90", h: "90° bends", s: "n0" },
-      { k: "np", h: "Bars per member", s: "n0" },
-      { k: "L", h: "Cutting length", u: "m", f: 'IF({shape}="ST",(2*({A}+{B})+2*MAX(10*{dia},75)-12*{dia})/1000,IF({shape}="CT",({A}+2*MAX(10*{dia},75)-6*{dia})/1000,({A}+{B}+{C}-2*{dia}*{n90})/1000))', s: "f3" },
+      { k: "np", h: "Bars per member", s: "n0" }, { k: "lap", h: "Laps (stock 12 m)", u: "mm", s: "n0" },
+      { k: "L", h: "Cutting length", u: "m", f: 'IF({shape}="ST",(2*({A}+{B})+2*MAX(10*{dia},75)-12*{dia})/1000,IF({shape}="CT",({A}+2*MAX(10*{dia},75)-6*{dia})/1000,({A}+{B}+{C}-2*{dia}*{n90})/1000))+{lap}/1000', s: "f3" },
       { k: "tn", h: "Total bars", f: "{nm}*{np}", s: "f0" }, { k: "tl", h: "Total length", u: "m", f: "{tn}*{L}", s: "f2" }, { k: "w", h: "Unit weight", u: "kg/m", f: "{dia}^2/162", s: "f3" }, { k: "wt", h: "Weight", u: "kg", f: "{tl}*{w}", s: "f2" }], rows, G, { fc: 5 });
     sh.row([]);
     sh.row(["Summary by diameter and element (kg)"], "tb");
@@ -6815,6 +7251,7 @@ var RX = (function () {
     dt.gB.forEach(function (G0) { G0.rep.checks.forEach(function (q) { cr.push({ grp: G0.id, mem: G0.rep.name + (G0.n > 1 ? " ×" + G0.n : ""), at: q.sp !== undefined ? "span " + (q.sp + 1) : "", t: q.t, v: q.v, cl: q.cl, st: q.ok ? "OK" : "FAIL" }); }); });
     dt.gC.forEach(function (G0) { G0.rep.checks.forEach(function (q) { cr.push({ grp: G0.id, mem: G0.list.map(function (c) { return c.name; }).join(", "), at: q.st !== undefined ? "storey " + (q.st + 1) : "", t: q.t, v: q.v, cl: q.cl, st: q.ok ? "OK" : "FAIL" }); }); });
     dt.gF.forEach(function (G0) { G0.rep.checks.forEach(function (q) { cr.push({ grp: G0.id, mem: G0.list.map(function (c) { return c.name; }).join(", "), at: "", t: q.t, v: q.v, cl: q.cl, st: q.ok ? "OK" : "FAIL" }); }); });
+    if (dt.mat) dt.mat.checks.forEach(function (q) { cr.push({ grp: "MAT", mem: "Mat foundation", at: "", t: q.t, v: q.v, cl: q.cl, st: q.ok ? "OK" : "FAIL" }); });
     (dt.gW || []).forEach(function (G0) { G0.rep.checks.forEach(function (q) { cr.push({ grp: G0.id, mem: G0.list.map(function (w) { return w.name; }).join(", "), at: q.st !== undefined ? "storey " + (q.st + 1) : "", t: q.t, v: q.v, cl: q.cl, st: q.ok ? "OK" : "FAIL" }); }); });
     table(ck, [{ k: "grp", h: "Group" }, { k: "mem", h: "Member(s)" }, { k: "at", h: "Where" }, { k: "t", h: "Check" }, { k: "v", h: "Value" }, { k: "cl", h: "Clause" }, { k: "st", h: "Status", s: "" }], cr, G, { fc: 2 });
     var tl = ck.next() - 1; ck.status("G" + (tl - cr.length + 1) + ":G" + tl);
@@ -6850,6 +7287,37 @@ var RX = (function () {
         dt.gF.map(function (G0) { var f0 = G0.rep, g = f0.gov; return { grp: G0.id, mem: G0.list.map(function (c) { return c.name; }).join(", "), a: f0.a, bc: f0.bc, Lx: f0.Lx, Ly: f0.Ly, D: f0.D, set: g.set.name, P: g.set.r[2], Mx: g.set.r[3], My: g.set.r[4], seis: g.set.lim > f0.q + 1e-9, lim: g.set.lim, qu: f0.qu, bx: f0.bx.dia + "φ@" + f0.bx.s, by: f0.by.dia + "φ@" + f0.by.s, tp: f0.tp, kp: f0.kp }; }), G, { fc: 2 });
       fs.row([{ v: "Blue cells are inputs: change a footing size or the SBC and the pressure check updates. Moments are the support reactions of the analysis (fixed bases). Overlapping footings are flagged in the app — use a combined footing or raft there.", s: "note" }]);
     }
+    if (dt.mat) {
+      var mt = dt.mat, ms = wb.sheet("Mat Foundation", { cols: [30, 14, 12, 12, 12, 12, 12, 12, 12, 12], color: TAB.design });
+      intro(ms, "Mat (raft) foundation — IS 2950 (Part 1), IS 456, IS 1904", "Flexible plate (" + mt.el.length + " thick-plate elements) on compression-only Winkler springs ks = " + Math.round(mt.ks) + " kN/m³, loaded by the base reactions. The app's plate results (FE) are values; the rigid-method pressures, punching and flexure checks below are live formulas of the blue inputs. Net pressures: the backfill over the mat balances the excavated soil, the mat adds (25 − γs)·t.", 10);
+      var r0 = ms.next();
+      ms.row(["Mat length L (X)", { v: mt.L, s: "in" }, "m", "", "Mat width B (Y)", { v: mt.B, s: "in" }, "m"]);
+      ms.row(["Thickness t", { v: mt.T, s: "in" }, "mm", "", "Cover", { v: dt.cf.cf, s: "in" }, "mm"]);
+      ms.row(["Safe bearing capacity", { v: mt.q, s: "in" }, "kN/m²", "", "Seismic increase", { v: mt.incr, s: "in" }]);
+      ms.row(["fck", { v: mt.fck, s: "in" }, "N/mm²", "", "fy", { v: mt.fy, s: "in" }, "N/mm²"]);
+      ms.row(["Permissible settlement", { v: S.p.setLim > 0 ? +S.p.setLim : 75, s: "in" }, "mm", "", "Settlement (FE, DL+LL)", { v: mt.wmax, s: "f1" }, "mm", { f: '=IF(F' + (r0 + 4) + '<=B' + (r0 + 4) + ',"OK","FAIL")', v: mt.wmax <= (S.p.setLim > 0 ? +S.p.setLim : 75) + 1e-9 ? "OK" : "FAIL", s: "stat" }]);
+      var Lc = "$B$" + r0, Bc = "$F$" + r0, Tc = "$B$" + (r0 + 1), Cc = "$F$" + (r0 + 1), Qc = "$B$" + (r0 + 2), Ic = "$F$" + (r0 + 2), Fk = "$B$" + (r0 + 3), Fy = "$F$" + (r0 + 3);
+      ms.row([]);
+      table(ms, [{ k: "set", h: "Service set" }, { k: "N", h: "ΣV incl. mat", u: "kN", s: "n1" }, { k: "Mx", h: "Mx about centroid", u: "kNm", s: "n1" }, { k: "My", h: "My about centroid", u: "kNm", s: "n1" },
+        { k: "rq", h: "Rigid qmax = N/A + 6|My|/(BL²) + 6|Mx|/(LB²)", u: "kN/m²", f: "{N}/(" + Lc + "*" + Bc + ")+6*ABS({My})/(" + Bc + "*" + Lc + "^2)+6*ABS({Mx})/(" + Lc + "*" + Bc + "^2)", s: "f1" },
+        { k: "fe", h: "Plate qmax (FE)", u: "kN/m²", s: "n1" }, { k: "lim", h: "Allowable", u: "kN/m²", cell: function (r) { return { f: "=" + Qc + (r.seis ? "*" + Ic : ""), v: r.lim, s: "f0" }; } },
+        { k: "lift", h: "Lift-off", u: "%", s: "n1" }, { k: "st", h: "Status", f: 'IF({fe}<={lim},"OK","FAIL")', s: "stat" }],
+        mt.svc.map(function (r) { return { set: r.name, N: r.rig.N, Mx: r.rig.Mx, My: r.rig.My, fe: r.qmax, seis: r.lim > mt.q + 1e-9, lim: r.lim, lift: 100 * r.lift }; }), G, { fc: 1 });
+      ms.row([]);
+      table(ms, [{ k: "c", h: "Column (punching at d/2)" }, { k: "type", h: "Type" }, { k: "a", h: "a (X)", u: "mm", s: "n0" }, { k: "b", h: "b (Y)", u: "mm", s: "n0" },
+        { k: "d", h: "d = t − cover − 16", u: "mm", f: Tc + "-" + Cc + "-16", s: "f0" }, { k: "b0", h: "b0", u: "mm", s: "n0" }, { k: "Vu", h: "Vu", u: "kN", s: "n1" },
+        { k: "tv", h: "τv = Vu/(b0·d)", u: "N/mm²", f: "{Vu}*1000/({b0}*{d})", s: "f3" }, { k: "kc", h: "ks·0.25√fck", u: "N/mm²", f: "MIN(1,0.5+MIN({a},{b})/MAX({a},{b}))*0.25*SQRT(" + Fk + ")", s: "f3" },
+        { k: "st", h: "Status", f: 'IF({tv}<={kc},"OK","FAIL")', s: "stat" }],
+        mt.pun.map(function (q) { return { c: q.name, type: q.type, a: q.a, b: q.b, d: q.d, b0: q.b0, Vu: q.Vu, tv: q.tv, kc: q.kc }; }), G, { fc: 1 });
+      ms.row([]);
+      var lay = [["bx", "Bottom, bars along X", 0], ["by", "Bottom, bars along Y", 1], ["tx", "Top, bars along X", 0], ["ty", "Top, bars along Y", 1]];
+      table(ms, [{ k: "l", h: "Layer (most stressed element)" }, { k: "M", h: "Mu (Wood–Armer)", u: "kNm/m", s: "n1" }, { k: "d", h: "d", u: "mm", f: Tc + "-" + Cc + "-8-16*{o}", s: "f0" }, { k: "o", h: "inner layer", s: "n0" },
+        { k: "req", h: "Ast req (Annex G)", u: "mm²/m", f: "0.5*" + Fk + "/" + Fy + "*(1-SQRT(1-4.6*{M}*10^6/(" + Fk + "*1000*{d}^2)))*1000*{d}", s: "f0" },
+        { k: "amin", h: "Min 0.12 %/2", u: "mm²/m", f: "0.0012*1000*" + Tc + "/2", s: "f0" }, { k: "mesh", h: "Base mesh" }, { k: "prov", h: "Provided there (mesh + extra)", u: "mm²/m", s: "n0" },
+        { k: "st", h: "Status", f: 'IF({prov}>=MAX({req},{amin})-0.5,"OK","FAIL")', s: "stat" }],
+        lay.map(function (k) { var fx = mt.flex[k[0]], M0 = mt.mesh[k[0]]; return { l: k[1], M: fx.M, d: fx.d, o: k[2], req: fx.req, amin: mt.Amin, mesh: M0.dia + "φ@" + M0.s, prov: fx.prov }; }), G, { fc: 1 });
+      ms.row([{ v: "Extra bars (marks EB / ET) are listed in the Schedules sheet and on the mat drawing; one-way shear is checked on column strips at d from the faces with τc from the steel provided (raised by extra bars where needed).", s: "note" }]);
+    }
   }
 
   /* ===== Bill of quantities (rates are inputs, amounts formulas), reinforcement schedules ===== */
@@ -6869,7 +7337,7 @@ var RX = (function () {
     sh.row(["", "Reinforcement (schedule, before wastage) per m³ of concrete", "", "kg/m³", { f: "=IF(E" + rc + ">0," + b.steelKg.toFixed(3) + "/E" + rc + ",0)", v: b.ratio, s: "f1" }]);
     var sc = b.schedules, s2 = wb.sheet("Schedules", { cols: [8, 30, 14, 14, 14, 14, 22, 18, 14], color: TAB.design });
     intro(s2, "Reinforcement schedules", "Column, beam, wall, slab and footing schedules of the member groups (identical members grouped; the marks match the drawings, the BBS and the app).", 9);
-    [["cols", "Column schedule"], ["beams", "Beam schedule"], ["walls", "Wall schedule"], ["slabs", "Slab schedule"], ["foot", "Footing schedule"]].forEach(function (g) {
+    [["cols", "Column schedule"], ["beams", "Beam schedule"], ["walls", "Wall schedule"], ["slabs", "Slab schedule"], ["foot", "Footing schedule"], ["mat", "Mat reinforcement schedule"]].forEach(function (g) {
       if (!sc[g[0]].length) return; s2.row([]); s2.row([g[1]], "tb"); s2.row(BOQ.HEAD[g[0]], "h"); sc[g[0]].forEach(function (r) { s2.row(r); });
     });
   }
@@ -7092,7 +7560,7 @@ var RX = (function () {
     }
     return 1;
   }
-  var SHEETDESC = { BOQ: "Bill of quantities of the whole building with JKSOR 2022 / your rates, abstract with contingencies, cess and GST (formulas)", Schedules: "Column, beam, wall, slab and footing reinforcement schedules", Verification: "Design summary with utilisation, verification state and the checking engineer's list", "Standards Register": "Code editions used (IS 1893:2025 withdrawn — 2016 applies) and Verified / Calculated / Simplified / Not implemented status of every check", BBS: "Bar bending schedule of every member group (incl. walls), cutting lengths and weights (formulas), totals by diameter", "Detailing Checks": "IS 13920 / IS 456 detailing rules for beams, columns, joints (strong column–weak beam) and footings", Footings: "Isolated footing sizes, soil pressure (formulas), reinforcement and shear checks", Seismic: "Modal analysis, response spectrum, centres of mass/rigidity, accidental torsion, irregularity checks (formulas)", Summary: "Key results and pass/fail counts for each member group", Notation: "Meaning and units of every symbol", Inputs: "Design parameters you can change (named cells p_fck, p_fy, p_Zz …)", Nodes: "Node coordinates and restraints", Members: "Frame members, lengths and section properties (formulas)", Shells: "Shell (slab / wall) elements",
+  var SHEETDESC = { BOQ: "Bill of quantities of the whole building with JKSOR 2022 / your rates, abstract with contingencies, cess and GST (formulas)", Schedules: "Column, beam, wall, slab and footing reinforcement schedules", Verification: "Design summary with utilisation, verification state and the checking engineer's list", "Standards Register": "Code editions used (IS 1893:2025 withdrawn — 2016 applies) and Verified / Calculated / Simplified / Not implemented status of every check", BBS: "Bar bending schedule of every member group (incl. walls), cutting lengths and weights (formulas), totals by diameter", "Detailing Checks": "IS 13920 / IS 456 detailing rules for beams, columns, joints (strong column–weak beam) and footings", Footings: "Isolated footing sizes, soil pressure (formulas), reinforcement and shear checks", "Mat Foundation": "Raft: rigid-method pressures, punching, flexure and settlement checks (formulas) beside the plate-on-springs results", Seismic: "Modal analysis, response spectrum, centres of mass/rigidity, accidental torsion, irregularity checks (formulas)", Summary: "Key results and pass/fail counts for each member group", Notation: "Meaning and units of every symbol", Inputs: "Design parameters you can change (named cells p_fck, p_fy, p_Zz …)", Nodes: "Node coordinates and restraints", Members: "Frame members, lengths and section properties (formulas)", Shells: "Shell (slab / wall) elements",
     Loads: "Load-case totals, IS 1893 base shear & vertical distribution, IS 875-3 wind (formulas)", Combinations: "Load factors (IS 456 Table 18)", Disp_Cases: "Nodal displacements per load case", Disp_Combos: "Nodal displacements per combination",
     Forces_Cases: "Member end forces per load case", Forces_Combos: "Member end forces per combination", Reactions: "Support reactions with equilibrium check", Drift: "Storey drift check (formulas)", Pushover: "Capacity curve (chart), hinge sequence, ductility", "Design Basis": "Equations and IS code limits used, with clause numbers", "Worked Calcs": "Step-by-step calculation of every member: equation, substituted values, limit, clause, status", "Method & Formulas": "Element formulations, solver, design equations and clauses" };
   var METHOD = [
@@ -7193,6 +7661,7 @@ var SU = (function () {
     pdir: 0, ppat: "parabolic", pdrift: 4, ppd: true, pev: 80, secOver: "", loadOver: "",
     accTor: true, rsa: true, nModes: 12, rsComb: "cqc", ortho: false, rsScaleDisp: false, sbc: 200, Df: 1.5,
     snow: false, s0: 1.5, mu: 0.8, snowW: 0, pattern: "auto", llRed: false, exposure: "moderate", fire: "1",
+    found: "isolated", matT: 0, matOff: 0.5, ks: 0, gs: 18, setLim: 75, angLim: 500, matMesh: 0.5,
     mT: 230, mOpen: 15, plinthH: 0.45, parH: 1.0, wastage: 3, cont: 3, cess: 1, gst: 18, sorOn: true
   };
   /* defaults that depend on the frame material */
@@ -7358,6 +7827,10 @@ var SU = (function () {
       chk("wind", "Wind — IS 875 (Part 3):2015") + sel("vbp", "Basic wind speed", Object.keys(D.vb).filter(function (k) { return k !== "Custom"; }).map(function (k) { return [k, k + " — " + D.vb[k] + " m/s"]; })) +
       sel("terrain", "Terrain category", [[1, "1 open sea/flat"], [2, "2 open terrain"], [3, "3 suburban"], [4, "4 city centre"]]) + num("cf", "Net force coefficient Cf") + num("trib", "Frame spacing (2D only)", "m") +
       num("sbc", "Safe bearing capacity (footings)", "kN/m²", "net allowable; +50/25/0 % with seismic for soil I/II/III (IS 1893 Table 1)") + num("Df", "Founding depth", "m") +
+      sel("found", "Foundation type", [["isolated", "Isolated footings"], ["auto", "Auto — mat when footings overlap or cover > 50 % of the plan"], ["mat", "Mat (raft) foundation"]]) +
+      num("matT", "Mat thickness", "mm", "0 = smallest that passes punching, shear and flexure (steps of 50 mm)") + num("matOff", "Mat projection beyond the outer column faces", "m") +
+      num("ks", "Modulus of subgrade reaction ks", "kN/m³", "from the soil report / plate load test (IS 2950 Appendix B); 0 = 120 × SBC (Bowles)") + num("gs", "Unit weight of soil", "kN/m³") +
+      num("setLim", "Permissible settlement", "mm", "IS 1904: raft on sand 75, on clay 100") + num("angLim", "Permissible angular distortion 1 /", "", "500 for RC frames (IS 1904)") + num("matMesh", "Mat mesh size", "m") +
       '<div class="btns full"><button type="button" class="rstd" data-p="p3">Clear my entries (use defaults)</button></div><div class="note full">Combinations (IS 456 Table 18 / IS 875 Pt 5): 1.5(DL+LL), 1.2(DL+LL±EL), 1.5(DL±EL), 0.9DL±1.5EL. Seismic weight = DL + 25% LL (50% if LL>3 kN/m²), roof LL excluded. Lateral loads to nodes ∝ W·h² (cl 7.6.3).</div></div>';
   }
   function boqForm() {
@@ -7790,6 +8263,7 @@ var SU = (function () {
     dt.gC.forEach(function (G, i) { opts.push(["c" + i, "Column " + G.id + ": " + G.list.map(function (c) { return c.name; }).slice(0, 4).join(", ") + (G.n > 4 ? " … (×" + G.n + ")" : "") + (G.rep.checks.some(function (c) { return !c.ok; }) || G.rep.msg.length ? " ⚠" : "")]); });
     (dt.gW || []).forEach(function (G, i) { opts.push(["w" + i, "Wall " + G.id + ": " + G.list.map(function (w) { return w.name.replace(/^W\d+ /, "") + " " + w.line; }).slice(0, 2).join("; ") + (G.n > 1 ? " (×" + G.n + ")" : "") + (G.rep.checks.some(function (c) { return !c.ok; }) ? " ⚠" : "")]); });
     dt.slabs.forEach(function (sl, i) { opts.push(["s" + i, sl.name]); });
+    if (dt.mat) opts.push(["m0", "Mat foundation " + f(dt.mat.L, 2) + " × " + f(dt.mat.B, 2) + " m × " + dt.mat.T + " mm" + (dt.mat.checks.some(function (c) { return !c.ok; }) ? " ⚠" : "")]);
     dt.gF.forEach(function (G, i) { opts.push(["f" + i, "Footing " + G.id + ": " + G.rep.Lx + "×" + G.rep.Ly + "×" + G.rep.D + " — " + G.list.map(function (c) { return c.name; }).slice(0, 4).join(", ") + (G.n > 4 ? " …" : "") + (G.rep.checks.some(function (c) { return !c.ok; }) ? " ⚠" : "")]); });
     h += '<div class="btns noprint"><select id="dtSel" style="flex:1;min-width:0">' + opts.map(function (o) { return '<option value="' + o[0] + '">' + esc(o[1]) + '</option>'; }).join("") + '</select></div><div id="dtView"></div>';
     h += '<div class="btns noprint"><button type="button" id="bDtDxf">Detail drawings DXF (all members)</button></div>';
@@ -7806,6 +8280,7 @@ var SU = (function () {
     dt.gB.forEach(function (G) { rows.push({ title: "Beam " + G.id + " — " + G.list.map(function (b) { return b.name; }).join(", "), dws: DT.drawBeam(G.rep, cf, 1) }); });
     dt.gC.forEach(function (G) { rows.push({ title: "Column " + G.id + " — " + G.list.map(function (c) { return c.name; }).join(", "), dws: DT.drawCol(G.rep, cf, 1) }); });
     dt.gF.forEach(function (G) { rows.push({ title: "Footing " + G.id + " — " + G.list.map(function (c) { return c.name; }).join(", "), dws: DT.drawFoot(G.rep, cf) }); });
+    if (dt.mat) rows.push({ title: "Mat foundation", dws: MAT.draw(dt.mat, cf) });
     (dt.gW || []).forEach(function (G) { rows.push({ title: "Wall " + G.id + " — " + G.list.map(function (w) { return w.line; }).join("; "), dws: DT.drawWall(G.rep, cf) }); });
     dt.slabs.forEach(function (sl) { rows.push({ title: sl.name, dws: DT.drawSlab(sl, cf) }); });
     return rows;
@@ -7837,6 +8312,19 @@ var SU = (function () {
       h += svgs(dws, W) + tbl(["Panel", "Lx × Ly", "Bottom X", "Bottom Y", "Top W / E / S / N"], sl.panels.map(function (P, j) { return ["S" + (j + 1), P.Lx + "×" + P.Ly, P.bot.X.dia + "φ@" + P.bot.X.s, P.bot.Y.dia + "φ@" + P.bot.Y.s, ["W", "E", "S", "N"].map(function (k) { var T = P.top[k]; return T.sp.dia + "φ@" + T.sp.s + (T.cont ? "" : "*"); }).join(" / ")]; }));
       var pm = []; sl.panels.forEach(function (P) { pm = pm.concat(P.msg); });
       h += '<div class="note">* discontinuous edge: top bars 0.1L into the panel with a bend, ≥ 50 % of mid-span steel (IS 456 Annex D). Continuous edges: 0.3L each side. Corner torsion steel where an edge is discontinuous (D-1.8, D-1.9).</div>' + dchk([], pm) + bbs(sl.bars, 1);
+    } else if (kind === "m") {
+      var mt = dt.mat; dws = MAT.draw(mt, cf);
+      h += '<div class="note">' + esc(mt.why === "chosen" ? "Mat foundation (chosen)" : "Mat foundation — " + mt.why) + ' · plate on compression-only Winkler springs, ks = ' + f(mt.ks, 0) + ' kN/m³ · ' + mt.el.length + ' elements (' + f(mt.h, 2) + ' m) · thickness ' + mt.T + ' mm' + (mt.fixedT ? ' (entered)' : ' (smallest that passes, ' + mt.passes + ' trial' + (mt.passes > 1 ? 's' : '') + ')') + ' · net pressures (backfill over the mat balances the excavated soil)</div>' + svgs(dws, W);
+      h += '<div class="dwgt">Net soil pressure under DL+LL (kN/m²)</div><div class="tw">' + MAT.heat(mt, function (q) { return q.qG; }, "kN/m²", Math.min(W, 520)) + '</div>';
+      h += '<div class="dwgt">Required bottom steel, larger direction (mm²/m)</div><div class="tw">' + MAT.heat(mt, function (q) { return Math.max(q.req.bx, q.req.by); }, "mm²/m", Math.min(W, 520)) + '</div>';
+      h += '<div class="dwgt">Required top steel, larger direction (mm²/m)</div><div class="tw">' + MAT.heat(mt, function (q) { return Math.max(q.req.tx, q.req.ty); }, "mm²/m", Math.min(W, 520)) + '</div>';
+      h += dchk(mt.checks, mt.msg);
+      h += tbl(["Service set", "FE q max", "Rigid q max", "q min", "Allowable", "Lift-off"], mt.svc.map(function (r) { return [esc(r.name), f(r.qmax, 1), f(r.rig.max, 1), f(r.qmin === Infinity ? 0 : r.qmin, 1), f(r.lim, 0), f(100 * r.lift, 1) + " %"]; }));
+      h += tbl(["Column", "Type", "Pu kN", "Vu kN", "b0 mm", "d mm", "τv", "ks·0.25√fck", ""], mt.pun.slice().sort(function (a, b) { return b.u - a.u; }).map(function (q) { return [esc(q.name), q.type, f(q.Pu, 0), f(q.Vu, 0), f(q.b0, 0), f(q.d, 0), f(q.tv, 3), f(q.kc, 3), okc(q.ok)]; }));
+      var M0 = mt.mesh;
+      h += tbl(["Layer", "Base mesh", "As mm²/m", "d mm"], [["Bottom X", M0.bx.dia + "φ@" + M0.bx.s, f(M0.bx.As, 0), f(mt.d.bx, 0)], ["Bottom Y", M0.by.dia + "φ@" + M0.by.s, f(M0.by.As, 0), f(mt.d.by, 0)], ["Top X", M0.tx.dia + "φ@" + M0.tx.s, f(M0.tx.As, 0), f(mt.d.tx, 0)], ["Top Y", M0.ty.dia + "φ@" + M0.ty.s, f(M0.ty.As, 0), f(mt.d.ty, 0)]]);
+      if (mt.zones.length) h += tbl(["Mark", "Face / dir", "Zone x (m)", "Zone y (m)", "Extra bars", "Req. As", "Prov. As"], mt.zones.map(function (z) { return [z.mark, z.face + " " + z.dir, f(z.x0, 2) + " – " + f(z.x1, 2), f(z.y0, 2) + " – " + f(z.y1, 2), z.dia + "φ@" + z.s, f(z.req, 0), f(z.As, 0)]; }));
+      h += '<div class="note">Minimum steel 0.12 % of the section in each direction, half to each face (IS 456 cl 26.5.2.1); spacing ≤ min(3d, 300) (cl 26.3.3). The base mesh covers 75 % of the area; extra bars go between the mesh bars where the Wood–Armer moments or one-way shear (τc raised by more steel) need them, extended Ld beyond the zone. Punching at d/2 is checked without the moment-transfer part (IS 456 cl 31.6.2.2) — check edge and corner columns with large moments by hand. Settlements from springs are indicative: confirm with a settlement analysis (IS 8009). Chairs for the top mesh are not scheduled.</div>' + bbs(mt.bars, 1);
     } else if (kind === "f") {
       var Gf = dt.gF[i], ft = Gf.rep; dws = DT.drawFoot(ft, cf);
       h += '<div class="note">' + esc(Gf.list.map(function (q) { return q.name; }).join(", ")) + ' · SBC ' + ft.q + ' kN/m² (seismic ×' + ft.incr + ') · governing ' + esc(ft.gov.set.name) + ' · factored qu ' + f(ft.qu, 1) + ' kN/m² (' + esc(ft.gq) + ')</div>' + svgs(dws, Math.min(W, 420));
@@ -8047,7 +8535,7 @@ var SU = (function () {
       });
       h += '</div>';
     });
-    h += '<h2 class="grp">Analysis — stiffness matrix & FEA</h2><div class="grid"><a class="card wide" href="#model"><span class="ic">⌗</span><b>Frame & FE analysis</b><small>3D/2D frames by the direct stiffness method, slabs & walls by shell FEA. Linear static, P-Delta, response spectrum, pushover. Automatic design, IS 13920 detailing, BOQ, drawings and calculation report.</small><em>IS 456 · IS 800 · IS 875 · IS 1893</em></a></div>';
+    h += '<h2 class="grp">Analysis — stiffness matrix & FEA</h2><div class="grid"><a class="card wide" href="#model"><span class="ic">⌗</span><b>Frame & FE analysis</b><small>3D/2D frames by the direct stiffness method, slabs & walls by shell FEA. Linear static, P-Delta, response spectrum, pushover. Automatic design, IS 13920 detailing, isolated or mat foundations, BOQ, drawings and calculation report.</small><em>IS 456 · IS 800 · IS 875 · IS 1893</em></a></div>';
     h += '<h2 class="grp">Reference</h2><div class="grid"><a class="card" href="#tables"><span class="ic">☰</span><b>Section tables</b><small>ISA, ISMB, ISMC properties</small><em>SP 6(1)</em></a>' +
       '<a class="card" href="#about"><span class="ic">i</span><b>About & scope</b><small>Codes, assumptions, limits</small><em>engine ' + (window.REG ? REG.ENGINE : "") + '</em></a></div>';
     app.innerHTML = h;
@@ -8155,7 +8643,7 @@ var SU = (function () {
     app.innerHTML = '<div class="rep"><h4>IS StructDesign — engine ' + (window.REG ? REG.ENGINE : "") + '</h4><p>Analysis, design, detailing and documentation of buildings to Indian Standards. Works offline; projects are stored on this device.</p>' +
       '<h4>What it does</h4><ul><li>Frame & shell FE analysis: linear static, P-Delta, modal and response spectrum (IS 1893:2016), accidental torsion, pushover</li>' +
       '<li>Design: IS 456 (limit state or working stress), IS 800, with worked calculations</li><li>Loads & durability: snow (IS 875 Pt 4), pattern imposed load, imposed-load reduction, covers for exposure and fire (IS 456 Table 16/16A)</li><li>Automatic design & detailing: storey-wise enlargement until every check passes</li>' +
-      '<li>Detailing: IS 13920 beams, columns, joints, strong column–weak beam, shear walls, slabs, isolated footings; bar bending schedule (IS 2502)</li>' +
+      '<li>Detailing: IS 13920 beams, columns, joints, strong column–weak beam, shear walls, slabs, isolated footings; bar bending schedule (IS 2502)</li><li>Mat (raft) foundations: plate on compression-only soil springs, punching, one-way shear, flexure, settlement (IS 2950, IS 456, IS 1904)</li>' +
       '<li>Outputs: Excel with live formulas, calculation report (print/PDF), drawing set DXF, STAAD.Pro input, BOQ of the whole building priced with JKSOR 2022 (with contingencies, cess and GST) and reinforcement schedules</li>' +
       '<li>Projects: offline database with revisions, backups and an engineering verification mode with reviewer sign-off; engineering assistant</li><li>Standalone modules for beams, slabs, columns, footings, stairs, steel members, connections, trusses and loads</li></ul>' +
       '<h4>Not covered</h4><ul><li>Time-history analysis, combined / raft / pile foundations, settlement, soil–structure interaction</li><li>Deflection and crack width in the frame design (use the beam and slab modules)</li><li>Full building wind pressure-coefficient workflow</li></ul>' +

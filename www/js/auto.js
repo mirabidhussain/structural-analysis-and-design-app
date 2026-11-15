@@ -36,6 +36,7 @@ AUTO.failures = function (S) {
     dt.joints.forEach(function (q) { var i = lev(q.z); if (!q.ok) { add(f.col, i, "joint shear"); if (i + 1 < lv.length) add(f.col, i + 1, "joint shear"); } if (!q.anch) add(f.col, i, "joint depth < 20φ"); });
     dt.walls.forEach(function (w) { w.checks.forEach(function (q) { if (!q.ok) f.walls++; }); });
     dt.foot.forEach(function (ft) { ft.checks.forEach(function (q) { if (!q.ok) f.other++; }); });
+    if (dt.mat) dt.mat.checks.forEach(function (q) { if (!q.ok) f.other++; });
   }
   (S.drift || []).forEach(function (q) { if (q.ok === false) for (var i = 1; i < lv.length; i++) add(f.col, i, "storey drift"); });
   f.n = Object.keys(f.col).length + Object.keys(f.beam).length;

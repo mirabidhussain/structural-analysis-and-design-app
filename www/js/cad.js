@@ -76,10 +76,12 @@ var CAD = (function () {
     function sheet(t, dws) { no++; rows.push({ title: t, dws: dws.concat([title(p, t, code + "/S-" + (no < 10 ? "0" : "") + no)]) }); }
     for (var i = 1; i < dt.g.lv.length; i++) if (dt.beams.some(function (b) { return b.lev === i; })) sheet("GA plan +" + dt.g.lv[i].toFixed(2), [plan(S, i)]);
     if (dt.foot.length) sheet("Foundation layout", [footPlan(S)]);
+    if (dt.mat) sheet("Mat foundation — " + dt.mat.L.toFixed(2) + " × " + dt.mat.B.toFixed(2) + " m × " + dt.mat.T + " mm", MAT.draw(dt.mat, dt.cf));
     var sc = BOQ.schedules(S);
     if (sc.cols.length) sheet("Column schedule", [table("Column schedule", BOQ.HEAD.cols, sc.cols, [600, 2200, 900, 900, 1000, 800, 1700, 1600, 800])]);
     if (sc.beams.length) sheet("Beam schedule", [table("Beam schedule", BOQ.HEAD.beams, sc.beams, [600, 2600, 900, 1500, 1000, 1000, 1000, 1700])]);
     if (sc.foot.length) sheet("Footing schedule", [table("Footing schedule", BOQ.HEAD.foot, sc.foot, [600, 3000, 1200, 600, 1000, 1000, 500])]);
+    if (sc.mat.length) sheet("Mat reinforcement schedule", [table("Mat reinforcement schedule", BOQ.HEAD.mat, sc.mat, [700, 1400, 1300, 2000, 2000, 1200])]);
     if (sc.walls.length) sheet("Wall schedule", [table("Wall schedule", BOQ.HEAD.walls, sc.walls, [600, 2600, 900, 500, 1300, 1300, 1700])]);
     var cf = dt.cf;
     dt.gB.forEach(function (G) { sheet("Beam " + G.id + " — " + G.list.map(function (b) { return b.name; }).join(", "), DT.drawBeam(G.rep, cf, 1)); });

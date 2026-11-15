@@ -428,5 +428,68 @@ console.log('\n== I. Snow, pattern and reduced imposed load, exposure / fire cov
   ok('Fire: 3 h (beam ≥ 240, column ≥ 400, slab ≥ 150) passes 300×450 / 400×400 / 150; 4 h flags the 150 mm slabs and 400 mm columns (≥ 170 / 450)', !Sf.det.dur.length && S4.det.dur.some(t => /thickness 150 < 170/.test(t)) && S4.det.dur.some(t => /^Column .*400 < 450/.test(t)) && !S4.det.dur.some(t => /^Beam/.test(t)), S4.det.dur.length + ' items');
 })();
 
+console.log('\n== J. Mat (raft) foundation');
+(function () {
+  const { PIPE, MAT, FE, DT, BOQ, RX, CAD, RPT } = c;
+  /* J1 Hertz: point load on an infinite plate on Winkler springs, w(r) = −Pℓ²/(2πD)·kei(r/ℓ) (linear springs) */
+  (function () {
+    const T = 0.25, h = 0.25, xs = []; for (let x = -8; x <= 8 + 1e-9; x += h) xs.push(+x.toFixed(6));
+    const E = 25e6, ks = 20000, pm = MAT.model({ xs, ys: xs }, T, E, ks), n = xs.length, ic = xs.findIndex(x => Math.abs(x) < 1e-9), F = new Float64Array(6 * pm.m.nodes.length);
+    F[6 * (ic * n + ic) + 2] = -1000;
+    const r = MAT.solve(pm, F, {}, true), D = E * T ** 3 / (12 * 0.96), l = Math.pow(D / ks, 0.25), kei = { 1: -0.49499463651872, 2: -0.20240006776470437 };
+    const wAt = x => { let i = 0; while (xs[i + 1] < x) i++; const t = (x - xs[i]) / h; return -((1 - t) * r.U[6 * (ic * n + i) + 2] + t * r.U[6 * (ic * n + i + 1) + 2]); };
+    const e1 = wAt(l) / (-1000 * l * l / (2 * Math.PI * D) * kei[1]) - 1, e2 = wAt(2 * l) / (-1000 * l * l / (2 * Math.PI * D) * kei[2]) - 1;
+    ok('Mat J1: Hertz point load on a plate on springs — deflection at r = ℓ and 2ℓ within 1 %', Math.abs(e1) < 0.01 && Math.abs(e2) < 0.01 && Math.abs(r.R.reduce((a, b) => a + b, 0) - 1000) < 1e-6, (100 * e1).toFixed(2) + ' %, ' + (100 * e2).toFixed(2) + ' %');
+  })();
+  /* J2 Hetényi: line load on a long strip in cylindrical bending — w0 = Pλ/(2k), M = P/(4λ)·e^(−λx)(cos λx − sin λx) */
+  (function () {
+    const T = 0.1, h = 0.1, xs = [], ys = [0, 0.5, 1]; for (let x = -16; x <= 16 + 1e-9; x += h) xs.push(+x.toFixed(6));
+    const E = 25e6, ks = 200, pm = MAT.model({ xs, ys }, T, E, ks), m = pm.m, n = xs.length, ic = xs.findIndex(x => Math.abs(x) < 1e-9);
+    Object.keys(m.sup).forEach(k => m.sup[k] = [1, 1, 0, 1, 0, 1]); FE.prepare(m); pm.K0 = FE.assemble(m, null).A;
+    const F = new Float64Array(6 * m.nodes.length); [0, 1, 2].forEach(j => F[6 * (j * n + ic) + 2] = -1000 * (j === 1 ? 0.5 : 0.25));
+    const r = MAT.solve(pm, F, {}, true), D = E * T ** 3 / (12 * 0.96), lam = Math.pow(ks / (4 * D), 0.25), k = m.shells.findIndex(sh => Math.abs(m.nodes[sh.n[0]].x) < 1e-9 && sh.j === 0);
+    const w0 = -r.U[6 * (n + ic) + 2], Mfe = -FE.shellForces(m, k, r.U).Mx, Mex = 1000 / (4 * lam) * Math.exp(-lam * h / 2) * (Math.cos(lam * h / 2) - Math.sin(lam * h / 2));
+    ok('Mat J2: Hetényi beam on elastic foundation — deflection and moment within 0.5 %', Math.abs(w0 / (1000 * lam / (2 * ks)) - 1) < 0.005 && Math.abs(Mfe / Mex - 1) < 0.005, (w0 * 1000).toFixed(1) + ' mm, ' + Mfe.toFixed(1) + ' vs ' + Mex.toFixed(1) + ' kNm/m');
+  })();
+  /* J3 stiff mat = rigid method; J4 compression-only springs lift off under a large eccentric load */
+  (function () {
+    const xs = [], ys = []; for (let x = 0; x <= 10 + 1e-9; x += 0.5) xs.push(+x.toFixed(6)); for (let y = 0; y <= 8 + 1e-9; y += 0.5) ys.push(+y.toFixed(6));
+    const pm = MAT.model({ xs, ys }, 1.0, 25e9, 10000), n = xs.length, N = pm.m.nodes.length, at = (x, y) => Math.round(y / 0.5) * n + Math.round(x / 0.5);
+    const loads = [[2, 2, 1500], [8, 2, 900], [2, 6, 1200], [8, 6, 600], [5, 4, 2000]], F = new Float64Array(6 * N); loads.forEach(q => F[6 * at(q[0], q[1]) + 2] -= q[2]);
+    const r = MAT.solve(pm, F, {}), P = loads.reduce((a, q) => a + q[2], 0), A = 80, ex = loads.reduce((a, q) => a + q[2] * (q[0] - 5), 0), ey = loads.reduce((a, q) => a + q[2] * (q[1] - 4), 0);
+    const rig = (x, y) => P / A + ex * (x - 5) / (8 * 1000 / 12) + ey * (y - 4) / (10 * 512 / 12);
+    const corners = [[0, 0], [10, 0], [0, 8], [10, 8]], err = Math.max(...corners.map(cn => Math.abs(r.q[at(cn[0], cn[1])] / rig(cn[0], cn[1]) - 1)));
+    ok('Mat J3: a very stiff mat gives the rigid-method pressures q = P/A ± M·y/I at the corners (within 1 %)', err < 0.01 && r.lift === 0, (100 * err).toFixed(2) + ' %');
+    const F2 = new Float64Array(6 * N); F2[6 * at(9.5, 4) + 2] = -3000; F2[6 * at(9.5, 4) + 4] = -6000;
+    const r2 = MAT.solve(pm, F2, {}), neg = r2.q.some(v => v < -1e-9), sum = r2.R.reduce((a, b) => a + b, 0);
+    ok('Mat J4: compression-only springs — the far side lifts off, no tension, reactions still equal the load', r2.lift > 10 && !neg && Math.abs(sum - 3000) < 1e-6, r2.lift.toFixed(1) + ' m² lifted, ' + r2.it + ' iterations');
+  })();
+  /* J5–J12 the 3-storey building on a mat */
+  const base = { fck: 25, fy: 500, fys: 250, crack: true, pcCol: 2, pcBeam: 1, colSec: '400x400', beamSec: '300x450', braceSec: 'ISA 75x75x6', tSlab: 150, tWall: 200, ff: 1.5, ffRoof: 2.5, ll: 3, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0, eq: true, zone: 'V', I: 1.2, R: 5, soil: 'II', sys: 'rc', wind: false, vb: 39, terrain: 2, cf: 1.3, trib: 4, kcol: 1.2, accTor: true, rsa: true, nModes: 12, rsComb: 'cqc', method: 'lsm', sbc: 100, Df: 1.5, secOver: '', entered: [] };
+  const geo = MD.generate({ bx: '4,4,4', by: '5,5', hs: '3.5,3.2,3.2', slabs: true, mesh: 1 });
+  const Sa = PIPE.run(geo, Object.assign({}, base, { found: 'auto' })), mt = Sa.det.mat;
+  ok('Mat J5: Auto chooses a mat when isolated footings would cover more than half the plan (SBC 100)', !!mt && /65 %/.test(mt.why) && Sa.det.foot.length === 0 && Sa.det.footIso.length === 12, mt ? mt.why : Sa.det.warn.join('; '));
+  const Si = PIPE.run(geo, Object.assign({}, base, { found: 'auto', sbc: 300 }));
+  ok('Mat J5b: … and keeps isolated footings at SBC 300', !Si.det.mat && Si.det.foot.length === 12);
+  ok('Mat J6: plan = column extents + 0.5 m projection beyond the outer faces (13.4 × 11.4 m); all checks pass', Math.abs(mt.L - 13.4) < 1e-9 && Math.abs(mt.B - 11.4) < 1e-9 && mt.checks.every(q => q.ok), mt.T + ' mm, ' + mt.checks.filter(q => !q.ok).map(q => q.t).join('; '));
+  const pw = mt.pun.find(q => q.type === 'interior'), d = mt.T - Sa.det.cf.cf - 16;
+  ok('Mat J7: punching recomputed — b0 = 2(a + b + 2d), τv = Vu/(b0·d), ks·0.25√fck', Math.abs(pw.d - d) < 1e-9 && Math.abs(pw.b0 - 2 * (400 + 400 + 2 * d)) < 1e-6 && Math.abs(pw.tv - pw.Vu * 1000 / (pw.b0 * d)) < 1e-12 && Math.abs(pw.kc - 1.25) < 1e-12 && mt.pun.every(q => q.Vu < q.Pu));
+  const fx = mt.flex.bx;
+  ok('Mat J8: flexure — Ast from IS 456 Annex G at the most stressed element, provided ≥ required everywhere', Math.abs(fx.req - RCC.astFlex(fx.M, 1000, fx.d, 25, 500)) < 1e-9 && ['bx', 'by', 'tx', 'ty'].every(k => mt.flex[k].prov >= mt.flex[k].req - 1e-6) && mt.el.every(q => ['bx', 'by', 'tx', 'ty'].every(k => { let A0 = mt.mesh[k].As; mt.zones.forEach(z => { if (z.key === k && q.x0 >= z.x0 - 1e-6 && q.x1 <= z.x1 + 1e-6 && q.y0 >= z.y0 - 1e-6 && q.y1 <= z.y1 + 1e-6) A0 = Math.max(A0, z.As); }); return A0 >= q.req[k] - 1e-6; })), fx.M.toFixed(1) + ' kNm/m → ' + fx.req.toFixed(0) + ' mm²/m');
+  ok('Mat J9: base mesh ≥ 0.12 %/2 per face and spacing ≤ min(3d, 300); sagging under the columns needs bottom bars', ['bx', 'by', 'tx', 'ty'].every(k => mt.mesh[k].As >= mt.Amin - 1e-9 && mt.mesh[k].s <= Math.min(300, 3 * mt.d.by)) && mt.zones.some(z => z.face === 'bottom' && mt.sups.some(s => s.col && s.x >= z.x0 && s.x <= z.x1 && s.y >= z.y0 && s.y <= z.y1)));
+  const sh = mt.strips.find(q => q.u === Math.max(...mt.strips.map(x => x.u)));
+  ok('Mat J10: one-way shear on column strips — τv = V/d, τc from the steel provided (IS 456 Table 19)', Math.abs(sh.tv - sh.V / sh.d) < 1e-12 && Math.abs(sh.tc - RCC.tauc(25, sh.pt)) < 1e-12 && sh.tv <= sh.tc + 1e-9, sh.col + ' ' + sh.dir + ': ' + sh.tv.toFixed(3) + ' ≤ ' + sh.tc.toFixed(3));
+  const g0 = mt.svc[0], Wn = (25 - 18) * mt.T / 1000 * mt.L * mt.B, NL = Object.keys(Sa.res.caseReac.DL).reduce((a, n) => a + Sa.res.caseReac.DL[n][2] + Sa.res.caseReac.LL[n][2], 0);
+  ok('Mat J11: rigid-method check uses ΣV = column loads + net mat weight (25 − 18)·t·A; plate peak ≥ rigid average', Math.abs(g0.rig.N - NL - Wn) < 1e-6 && g0.qmax >= g0.rig.N / (mt.L * mt.B) - 1e-9, g0.rig.N.toFixed(0) + ' kN');
+  const q = id => (Sa.boq.items.find(i => i.id === id) || { qty: 0 }).qty;
+  ok('Mat J12: BOQ — raft concrete L·B·t, edge formwork, PCC under the mat, necks to the plinth; bars in the schedule', Math.abs(q('rcf') - mt.L * mt.B * mt.T / 1000) < 1e-9 && Math.abs(q('fwf') - 2 * (mt.L + mt.B) * mt.T / 1000) < 1e-9 && Math.abs(q('pcc') - (mt.L + 0.2) * (mt.B + 0.2) * 0.1) < 1e-9 && Math.abs(q('rcn') - 12 * 0.16 * (1.5 - mt.T / 1000)) < 1e-9 && Sa.det.tot.reduce((a, t) => a + t.foot, 0) > 0.99 * mt.wt);
+  const wb = RX.build(Sa), rp = RPT.html(Sa, {}, {}), dx = CAD.drawingSet(Sa, {});
+  ok('Mat J13: Excel "Mat Foundation" sheet, report section, drawing set sheet and schedule', wb.sheets.some(s => s.name === 'Mat Foundation') && /Mat \(raft\) foundation/.test(rp) && /Mat reinforcement schedule/.test(rp) && /MAT FOUNDATION|Mat foundation/.test(dx));
+  const Sf = PIPE.run(geo, Object.assign({}, base, { found: 'mat', matT: 300 }));
+  ok('Mat J14: an entered thickness is kept and too thin a mat is reported (300 mm: punching / shear fail)', Sf.det.mat.T === 300 && Sf.det.mat.checks.some(q => !q.ok && /Punching|shear|Flexure/.test(q.t)) && Sf.det.fails > 0);
+  const S2 = PIPE.run(MD.generate({ bx: '4,4', by: '', hs: '3', twoD: true, mesh: 1 }), Object.assign({}, base, { found: 'mat', rsa: false }));
+  ok('Mat J15: a 2D frame keeps isolated footings (a mat needs a plan)', !S2.det.mat && S2.det.foot.length > 0);
+})();
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;

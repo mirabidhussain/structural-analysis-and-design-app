@@ -2,7 +2,7 @@
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "3.1";
+REG.ENGINE = "3.2";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],
@@ -11,6 +11,8 @@ REG.STANDARDS = [
   ["IS 875 (Part 1)", "Dead loads — unit weights", "1987 values used; 2026 revision published", "Only concrete 25 kN/m³ is built in — finishes and wall loads are user inputs. Unit weights not yet reviewed against IS 875 (Part 1):2026."],
   ["IS 875 (Part 2):1987", "Imposed loads", "In use", "Imposed loads are user inputs; pattern loading (IS 456 cl 22.4.1) and reduction for floors carried (cl 3.2.1, footings) are options; seismic weight per IS 1893 Table 10"],
   ["IS 875 (Part 3):2015", "Wind loads", "In use", "Vz = Vb·k1·k2·k3·k4, pressure on the building frontal area (no building pressure-coefficient workflow)"],
+  ["IS 2950 (Part 1):1981", "Design and construction of raft foundations — Part 1 Design", "In use", "Mat foundations: flexible-plate method on Winkler springs, rigidity criterion 1.75/λ, rigid method as a check"],
+  ["IS 1904:1986", "Design and construction of foundations in soils — general requirements", "In use", "Permissible settlement and angular distortion (raft: 75 mm sand / 100 mm clay, 1/500) — editable"],
   ["IS 875 (Part 4):2021", "Snow loads (Third Revision)", "In use", "Roof snow s = μ·s0 (flat roof μ = 0.8), designed for the more severe of snow and roof imposed load (cl 1); drift, unbalanced and the exposure/thermal effects are not modelled — enter an adjusted s0 where they matter"],
   ["IS 1200", "Method of measurement of building and civil engineering works", "In use", "Measurement rules of the bill of quantities"],
   ["JKSOR 2022", "Jammu & Kashmir Schedule of Rates 2022 (PW(R&B) Department)", "In use", "Default BOQ rates (exclusive of GST); project rates override them; apply the cost index / premium of your work"],
@@ -49,7 +51,9 @@ REG.CHECKS = [
   ["Detailing", "Bar bending schedule (IS 2502)", "Verified", "Cutting lengths and weights vs hand values; Excel formulas recalculate to the app values"],
   ["Foundations", "Isolated footings: pressure, shear, punching, bearing (IS 456 cl 34)", "Verified", "Pressures recomputed from reactions in acceptance.js F"],
   ["Foundations", "Footing soil pressure distribution", "Simplified", "Rigid footing, full contact (no partial-uplift redistribution), +10 % self weight"],
-  ["Foundations", "Combined footings, rafts, piles, settlement, soil–structure interaction", "Not implemented", "Overlapping isolated footings are flagged"],
+  ["Foundations", "Mat (raft): plate on compression-only Winkler springs; punching, one-way shear, Wood–Armer flexure (IS 2950 Pt 1, IS 456)", "Verified", "Hertz point load on a plate on springs and Hetényi's beam on an elastic foundation within 1 %; a stiff mat reproduces the rigid method; punching and shear recomputed (acceptance.js J)"],
+  ["Foundations", "Mat soil model and design simplifications", "Simplified", "Winkler springs (ks from the soil report, else 120 × SBC), net pressures, punching without the moment-transfer part, settlement from springs only (indicative)"],
+  ["Foundations", "Combined footings, piles, settlement analysis, soil–structure interaction", "Not implemented", "Overlapping isolated footings are flagged (choose Auto or Mat)"],
   ["Loads", "Wind on buildings (IS 875-3): pressure coefficients, internal pressure, torsion cases", "Simplified", "Frontal-area pressure with a single force coefficient"],
   ["Loads", "Working stress projects: walls designed by limit state with 1.5 × service forces", "Simplified", "Stated in the wall results"],
   ["Loads", "Snow on roofs (IS 875 Pt 4): s = μ·s0, the larger of snow and roof imposed load", "Simplified", "Uniform balanced snow only — no drift at parapets or steps; s0 is a user input (acceptance.js I)"],
@@ -62,12 +66,12 @@ REG.CHECKS = [
 /* stable ids of REG.CHECKS rows, used by the verification mode */
 REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "timehist",
   "rcbeam", "rccol", "rcslab", "rcwallel", "rcwall", "servic", "stfcd", "stltb", "stklen", "dtbeam", "dtcol", "scwb", "joint", "dtslab", "bbs",
-  "foot", "footpress", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto"];
+  "foot", "footpress", "mat", "matsoil", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto"];
 REG.byId = function (id) { var i = REG.IDS.indexOf(id); return i >= 0 ? { id: id, area: REG.CHECKS[i][0], t: REG.CHECKS[i][1], st: REG.CHECKS[i][2], ev: REG.CHECKS[i][3] } : null; };
 REG.RANK = { "Not implemented": 0, Simplified: 1, Calculated: 2, Verified: 3 };
 /* checks behind each kind of result; the weakest decides the result's verification state */
 REG.KIND = { beam: ["frame", "rcbeam", "dtbeam", "servic"], column: ["frame", "rccol", "dtcol", "scwb", "joint"], slab: ["shell", "rcslab", "dtslab", "servic"],
-  wall: ["shell", "rcwall", "rcwallel"], steel: ["frame", "stfcd", "stltb", "stklen"], footing: ["foot", "footpress", "foundmore"], seismic: ["spectrum", "statbase", "modal", "rsa", "torsion", "irreg"] };
+  wall: ["shell", "rcwall", "rcwallel"], steel: ["frame", "stfcd", "stltb", "stklen"], footing: ["foot", "footpress", "foundmore"], mat: ["mat", "matsoil"], seismic: ["spectrum", "statbase", "modal", "rsa", "torsion", "irreg"] };
 REG.state = function (ids) { var w = null; ids.forEach(function (id) { var r = REG.byId(id); if (r && (!w || REG.RANK[r.st] < REG.RANK[w.st])) w = r; }); return w; };
 REG.html = function (esc) {
   var col = { Verified: "okt", Calculated: "", Simplified: "warnt", "Not implemented": "not" };

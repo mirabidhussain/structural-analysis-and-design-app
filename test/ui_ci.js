@@ -59,6 +59,16 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   ok('BOQ: "Recalculate BOQ" applies a new masonry thickness without re-analysis', v230 > 0 && Math.abs(v115 / v230 - 115 / 230) < 0.02, v230 + ' → ' + v115);
   await pg.evaluate(() => { const e = document.querySelector('[data-k=mT]'); e.value = ''; e.dispatchEvent(new Event('change', { bubbles: true })); });
   ok('Load inputs: snow, pattern load, imposed-load reduction, exposure and fire are on the form', await pg.evaluate(() => ['snow', 's0', 'mu', 'pattern', 'llRed', 'exposure', 'fire', 'gst', 'sorOn'].every(k => document.querySelector('[data-k=' + k + ']'))));
+  /* mat foundation */
+  const setK = (k, v) => pg.evaluate(([k, v]) => { const e = document.querySelector('[data-k=' + k + ']'); e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }, [k, v]);
+  await setK('found', 'mat'); await setK('sbc', '100');
+  await pg.evaluate(() => document.querySelector('#bAna').click()); await pg.waitForFunction(() => document.querySelector('#dtSel option[value=m0]'), null, { timeout: 120000 });
+  await pg.evaluate(() => { const s = document.querySelector('#dtSel'); s.value = 'm0'; s.dispatchEvent(new Event('change')); }); await pg.waitForTimeout(300);
+  const mv = await pg.evaluate(() => { const v = document.querySelector('#dtView'), t = v.textContent; return { heat: v.querySelectorAll('svg rect').length, press: /Net soil pressure under DL\+LL/.test(t), pun: /ks·0.25√fck/.test(t), bbs: /Bottom mesh, bars along X/.test(t), dwg: v.querySelectorAll('svg.dwg').length }; });
+  ok('Mat foundation: plan and section, pressure and steel maps, punching table and bar schedule', mv.heat > 200 && mv.press && mv.pun && mv.bbs && mv.dwg >= 4, JSON.stringify(mv));
+  ok('Mat foundation in the design summary and BOQ', await pg.evaluate(() => /Mat under 12 supports/.test(document.querySelector('#results').textContent) && /Mat reinforcement schedule/.test(document.querySelector('#results').textContent)));
+  await setK('found', 'isolated'); await setK('sbc', '');
+  await pg.evaluate(() => document.querySelector('#bAna').click()); await pg.waitForFunction(() => document.querySelector('#dtSel') && !document.querySelector('#dtSel option[value=m0]'), null, { timeout: 120000 });
   await pg.evaluate(() => document.querySelectorAll('.rep.pro details').forEach(d => d.open = true));
   await pg.fill('#aQ', 'why does C-B2 fail?'); await pg.click('#aGo'); await pg.waitForTimeout(300);
   ok('Assistant answers offline (member lookup)', /C-B2/.test(await pg.textContent('#aOut')));

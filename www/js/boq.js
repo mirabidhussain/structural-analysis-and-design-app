@@ -18,13 +18,13 @@ BOQ.ITEMS = [
   ["exc", "Earthwork in excavation for footings, all kinds of soil, lift up to 1.5 m (300 mm working space, vertical sides)", "m³", "exc"],
   ["exl", "Extra for additional lift in excavation (depth beyond 1.5 m)", "m³", "exl"],
   ["pcc", "PCC 1:4:8 (40 mm aggregate) 100 mm below footings, 100 mm offset", "m³", "pcc"],
-  ["rcf", "RCC {g} in footings up to plinth (excl. steel & formwork)", "m³", "below"],
+  ["rcf", "RCC {g} in footings / raft up to plinth (excl. steel & formwork)", "m³", "below"],
   ["rcn", "RCC {g} in column necks, footing to plinth", "m³", "below"],
   ["rcc", "RCC {g} in columns above plinth", "m³", "col"],
   ["rcb", "RCC {g} in beams (below slab)", "m³", "beam"],
   ["rcs", "RCC {g} in suspended slabs", "m³", "beam"],
   ["rcw", "RCC {g} in walls", "m³", "col"],
-  ["fwf", "Centering & shuttering — footings and bases", "m²", "fwf"],
+  ["fwf", "Centering & shuttering — footings, raft edges and bases", "m²", "fwf"],
   ["fwc", "Centering & shuttering — columns", "m²", "fwc"],
   ["fwb", "Centering & shuttering — beams", "m²", "fwb"],
   ["fws", "Centering & shuttering — suspended slabs", "m²", "fws"],
@@ -99,6 +99,13 @@ BOQ.run = function (m, S, p) {
     br.rcf.push([nf + " footings L × B × D", q.rcf]); br.rcn.push([nf + " necks over " + Df + " m founding depth", q.rcn]); br.pcc.push([nf + " beds (L + 0.2) × (B + 0.2) × 0.1", q.pcc]);
     br.bfl.push(["Excavation − footing − PCC − neck", q.bfl]); br.fwf.push([nf + " footings, four sides 2(L + B) × D", q.fwf]);
   }
+  if (dt && dt.mat) {
+    var mt = dt.mat, Lm = mt.L, Bm = mt.B, Tm = mt.T / 1000, neckH = Math.max(Df - Tm, 0), dep = Df + 0.1, ax = (Lm + 0.6) * (Bm + 0.6), vm = Lm * Bm * Tm, vp = (Lm + 0.2) * (Bm + 0.2) * 0.1, vn = 0, fn = 0;
+    mt.sups.forEach(function (s0) { if (s0.rcc) { vn += s0.a * s0.b * neckH; fn += 2 * (s0.a + s0.b) * neckH; } });
+    add("rcf", vm, "Mat " + Lm.toFixed(2) + " × " + Bm.toFixed(2) + " × " + Tm.toFixed(2) + " m"); add("fwf", 2 * (Lm + Bm) * Tm, "Mat edges 2(L + B) × t");
+    add("pcc", vp, "Under the mat (L + 0.2)(B + 0.2) × 0.1"); add("exc", ax * Math.min(dep, 1.5), "Mat pit (L + 0.6)(B + 0.6) × min(depth, 1.5 m)"); add("exl", ax * Math.max(dep - 1.5, 0), "Mat pit, depth below 1.5 m");
+    add("rcn", vn, "Column necks from the mat to the plinth, " + neckH.toFixed(2) + " m"); add("fwc", fn, "Necks, four faces"); add("bfl", ax * dep - vm - vp - vn, "Excavation − mat − PCC − necks");
+  }
   /* masonry: storey s on the level s−1 beams (storey 1 on the plinth, layout of level 1); perimeter lines are external */
   var xs = g ? g.xs : [], ys = g ? g.ys : [], ext = 0, int = 0, aE = 0, aI = 0, L1 = 0, perim = 0, Hb = lv[lv.length - 1] - lv[0], top = lv.length - 1;
   function onEdge(bl) {
@@ -170,15 +177,17 @@ BOQ.price = function (boq, rates) {
 };
 /* reinforcement schedules (rows ready for tables) */
 BOQ.schedules = function (S) {
-  var dt = S.det, o = { cols: [], beams: [], slabs: [], foot: [], walls: [] };
+  var dt = S.det, o = { cols: [], beams: [], slabs: [], foot: [], walls: [], mat: [] };
   if (!dt || dt.err || !dt.gB) return o;
   dt.gC.forEach(function (G) { G.rep.st.forEach(function (s, i) { o.cols.push([i ? "" : G.id, i ? "" : G.list.map(function (c) { return c.name; }).join(" "), "Storey " + (s.i + 1), s.b + "×" + s.D, s.ar.n + "-" + s.ar.dia + "φ", s.pct.toFixed(2) + " %", s.tie.dia + "φ" + (s.tie.lB > 2 || s.tie.lD > 2 ? " + " + (s.tie.lB - 2 + s.tie.lD - 2) + " crossties" : ""), s.tie.sc ? "@" + s.tie.sc + " over " + s.tie.lo : "—", "@" + s.tie.sm]); }); });
   dt.gB.forEach(function (G) { var bl = G.rep; bl.spans.forEach(function (sp, j) { o.beams.push([j ? "" : G.id, j ? "" : G.list.map(function (b) { return b.name; }).join(" "), j ? "" : bl.b + "×" + bl.D, "Span " + (j + 1) + " (" + Math.round(sp.Lc) + ")", bl.sup[j].nt + "-" + bl.dia + "φ", sp.nb + "-" + bl.dia + "φ", bl.sup[j + 1].nt + "-" + bl.dia + "φ", sp.sv.ph + "φ@" + sp.sv.sh + " / @" + sp.sv.sm]); }); });
   dt.slabs.forEach(function (fl) { fl.panels.forEach(function (P, j) { o.slabs.push([j ? "" : fl.name, "S" + (j + 1), P.Lx + "×" + P.Ly, P.t, P.bot.X.dia + "φ@" + P.bot.X.s, P.bot.Y.dia + "φ@" + P.bot.Y.s, ["W", "E", "S", "N"].map(function (k) { return P.top[k].sp.dia + "@" + P.top[k].sp.s; }).join(" / ")]); }); });
   dt.gF.forEach(function (G) { var f = G.rep; o.foot.push([G.id, G.list.map(function (c) { return c.name; }).join(" "), f.Lx + "×" + f.Ly, f.D, f.bx.dia + "φ@" + f.bx.s, f.by.dia + "φ@" + f.by.s, G.n]); });
+  if (dt.mat) { var mt = dt.mat; [["bx", "Bottom", "X"], ["by", "Bottom", "Y"], ["tx", "Top", "X"], ["ty", "Top", "Y"]].forEach(function (k) { o.mat.push(["Mesh", k[1] + " " + k[2], mt.mesh[k[0]].dia + "φ@" + mt.mesh[k[0]].s, "whole mat", "", Math.round(mt.mesh[k[0]].As)]); });
+    mt.zones.forEach(function (z) { o.mat.push([z.mark, z.face + " " + z.dir, z.dia + "φ@" + z.s, "x " + z.x0.toFixed(2) + "–" + z.x1.toFixed(2), "y " + z.y0.toFixed(2) + "–" + z.y1.toFixed(2), Math.round(z.As)]); }); }
   (dt.gW || []).forEach(function (G) { G.rep.storeys.forEach(function (st, i) { o.walls.push([i ? "" : G.id, i ? "" : G.list.map(function (w) { return w.line; }).join("; "), "Storey " + (i + 1), G.rep.t, st.vb.dia + "φ@" + st.vb.s + (G.rep.two ? " EF" : ""), st.hb.dia + "φ@" + st.hb.s + (G.rep.two ? " EF" : ""), st.be ? (st.beBars ? st.beL + ", " + st.beBars.n + "-" + st.beBars.dia + "φ" : "end columns") : "—"]); }); });
   return o;
 };
 BOQ.HEAD = { cols: ["Mark", "Columns", "Storey", "Size", "Bars", "Steel", "Ties", "Confining zones", "Middle"], beams: ["Mark", "Beams", "Size", "Span (clear)", "Top left", "Bottom", "Top right", "Hoops ends / middle"],
-  slabs: ["Floor", "Panel", "Lx × Ly", "t", "Bottom X", "Bottom Y", "Top W / E / S / N"], foot: ["Mark", "Columns", "Lx × Ly", "D", "Bars X", "Bars Y", "No."], walls: ["Mark", "Walls", "Storey", "t", "Vertical", "Horizontal", "Boundary"] };
+  slabs: ["Floor", "Panel", "Lx × Ly", "t", "Bottom X", "Bottom Y", "Top W / E / S / N"], foot: ["Mark", "Columns", "Lx × Ly", "D", "Bars X", "Bars Y", "No."], mat: ["Mark", "Layer", "Bars", "Extent x (m)", "Extent y (m)", "As mm²/m"], walls: ["Mark", "Walls", "Storey", "t", "Vertical", "Horizontal", "Boundary"] };
 if (typeof module !== "undefined") module.exports = BOQ;

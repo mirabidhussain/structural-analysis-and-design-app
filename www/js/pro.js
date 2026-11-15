@@ -87,6 +87,10 @@ var PRO = (function () {
         var u = 0; fl.panels.forEach(function (P) { u = Math.max(u, Math.max(P.req.bX, P.amin) / P.bot.X.As, Math.max(P.req.bY, P.amin) / P.bot.Y.As); });
         rows.push({ kind: "slab", id: "S" + (i + 1), mem: fl.name, res: "t " + fl.t + " · " + fl.panels.length + " panels", u: u, why: "Ast req / prov", ok: u <= 1 + 1e-9 && !fl.panels.some(function (P) { return P.msg.length; }) });
       });
+      if (dt.mat) {
+        var mt = dt.mat, mu = 0, mwhy = ""; mt.checks.forEach(function (c) { if (c.u !== undefined && c.u > mu) { mu = c.u; mwhy = c.t.replace(/ —.*| \(.*/, ""); } });
+        rows.push({ kind: "mat", id: "MAT", mem: "Mat under " + mt.sups.length + " supports", res: f(mt.L, 2) + " × " + f(mt.B, 2) + " m × " + mt.T + " · mesh B " + mt.mesh.bx.dia + "φ@" + mt.mesh.bx.s + " T " + mt.mesh.tx.dia + "φ@" + mt.mesh.tx.s + " + " + mt.zones.length + " extra zones", u: mu, why: mwhy, ok: mt.checks.every(function (c) { return c.ok; }) });
+      }
       dt.gF.forEach(function (G) {
         var ft = G.rep, u = Math.max(ft.gov.u, ft.tv[0] / ft.tc[0], ft.tv[1] / ft.tc[1], ft.tp / ft.kp, ft.fact / ft.fbr), why = u === ft.gov.u ? "soil pressure" : u === ft.tp / ft.kp ? "punching" : "shear / bearing";
         rows.push({ kind: "footing", id: G.id, mem: G.list.map(function (c) { return c.name; }).join(", "), res: ft.Lx + "×" + ft.Ly + "×" + ft.D + " · " + ft.bx.dia + "φ@" + ft.bx.s + " / " + ft.by.dia + "φ@" + ft.by.s, u: u, why: why, ok: !ft.checks.some(function (q) { return !q.ok; }) });
@@ -102,7 +106,7 @@ var PRO = (function () {
   function vItems(S) {
     var m = S.m, items = [], has = { wall: m.shells.some(function (s) { return s.kind === "wall"; }), slab: m.shells.some(function (s) { return s.kind === "slab"; }), steel: m.frames.some(function (e) { return e.sec.kind === "steel"; }), rcc: m.frames.some(function (e) { return e.sec.kind === "rcc"; }), eq: !!(S.p && S.p.eq), wsm: S.p && S.p.method === "wsm", wind: !!(S.p && S.p.wind) };
     var app = { pdelta: !!(S.res && S.res.pd), pushover: !!S.po, rcwall: has.wall, rcwallel: has.wall, rcslab: has.slab, dtslab: has.slab, stfcd: has.steel, stltb: has.steel, stklen: has.steel, rcbeam: has.rcc, rccol: has.rcc, dtbeam: has.rcc, dtcol: has.rcc, scwb: has.rcc && has.eq, joint: has.rcc && has.eq,
-      spectrum: has.eq, statbase: has.eq, modal: has.eq && S.p.rsa, rsa: has.eq && S.p.rsa, torsion: has.eq, irreg: has.eq, timehist: has.eq, wind: has.wind, wsmwall: has.wsm && has.wall, foot: has.rcc, footpress: has.rcc, foundmore: has.rcc, servic: has.rcc, bbs: has.rcc, snow: !!(S.p && S.p.snow), pattern: !!(S.L && S.L.cases && S.L.cases.LP1), llred: !!(S.p && S.p.llRed), cover: has.rcc, boq: !!S.boq, auto: !!S.autoRes };
+      spectrum: has.eq, statbase: has.eq, modal: has.eq && S.p.rsa, rsa: has.eq && S.p.rsa, torsion: has.eq, irreg: has.eq, timehist: has.eq, wind: has.wind, wsmwall: has.wsm && has.wall, foot: has.rcc && !(S.det && S.det.mat), footpress: has.rcc && !(S.det && S.det.mat), mat: !!(S.det && S.det.mat), matsoil: !!(S.det && S.det.mat), foundmore: has.rcc, servic: has.rcc, bbs: has.rcc, snow: !!(S.p && S.p.snow), pattern: !!(S.L && S.L.cases && S.L.cases.LP1), llred: !!(S.p && S.p.llRed), cover: has.rcc, boq: !!S.boq, auto: !!S.autoRes };
     REG.IDS.forEach(function (id) {
       var r = REG.byId(id); if (!r) return;
       if (app[id] === false || (app[id] === undefined && ["frame", "shell", "modelchk"].indexOf(id) < 0)) return;
@@ -116,7 +120,7 @@ var PRO = (function () {
       if (sw) items.push({ key: "fail:scwb", area: "Failing result", t: sw + " strong column–weak beam joint checks", st: "FAIL", why: "IS 13920 cl 7.2.1 — enlarge columns (Automatic design does this)" });
       if (jj) items.push({ key: "fail:joint", area: "Failing result", t: jj + " beam–column joint checks", st: "FAIL", why: "IS 13920 cl 9 — enlarge columns or use higher concrete grade" });
       var ov = S.det.foot.filter(function (ft) { return ft.warn && ft.warn.length; }).length;
-      if (ov) items.push({ key: "fail:overlap", area: "Failing result", t: ov + " overlapping isolated footings", st: "FAIL", why: "Design a combined footing or raft separately" });
+      if (ov) items.push({ key: "fail:overlap", area: "Failing result", t: ov + " overlapping isolated footings", st: "FAIL", why: "Set Foundation type to Auto or Mat — the app then designs a raft" });
     }
     (S.drift || []).filter(function (q) { return q.ok === false; }).slice(0, 1).forEach(function () { items.push({ key: "fail:drift", area: "Failing result", t: "Storey drift > 0.004h", st: "FAIL", why: "IS 1893 cl 7.11.1 — stiffen the structure" }); });
     var dfl = S.p && S.p.entered ? ["sbc", "fck", "fy", "zone", "soil", "ll", "I", "R"].filter(function (k) { return S.p.entered.indexOf(k) < 0; }) : [];
@@ -172,7 +176,7 @@ var PRO = (function () {
       'Measurement (IS 1200 style): columns floor-to-floor less the slab, necks from footing to plinth (founding depth ' + f(b.Df, 2) + ' m); beams below the slab between column faces; slabs over the panels; walls between end columns; PCC 100 mm with 100 mm offset; excavation with 300 mm working space, extra lift below 1.5 m; ' + I.mT + ' mm masonry under every beam line with ' + I.open + ' % openings; plinth ' + I.pH + ' m; parapet ' + I.parH + ' m; steel from the bar bending schedule + ' + I.wst + ' % wastage. Doors, windows, roofing/waterproofing, painting, services and external works are not included.</div>';
     h += tbl(["Bar φ", "kg (schedule)"], Object.keys(b.byDia).map(Number).sort(function (a, c) { return a - c; }).map(function (k) { return [k + " mm", f(b.byDia[k], 0)]; }));
     var sc = b.schedules;
-    [["cols", "Column schedule"], ["beams", "Beam schedule"], ["slabs", "Slab schedule"], ["walls", "Wall schedule"], ["foot", "Footing schedule"]].forEach(function (g) { if (sc[g[0]].length) h += '<h4>' + g[1] + '</h4>' + tblL(BOQ.HEAD[g[0]], sc[g[0]].map(function (r) { return r.map(esc); })); });
+    [["cols", "Column schedule"], ["beams", "Beam schedule"], ["slabs", "Slab schedule"], ["walls", "Wall schedule"], ["foot", "Footing schedule"], ["mat", "Mat reinforcement schedule"]].forEach(function (g) { if (sc[g[0]].length) h += '<h4>' + g[1] + '</h4>' + tblL(BOQ.HEAD[g[0]], sc[g[0]].map(function (r) { return r.map(esc); })); });
     return h;
   }
 
@@ -226,7 +230,8 @@ var PRO = (function () {
       if (ja.length) add(2, ja.length + " joints: column depth < 20 × beam bar φ", "e.g. " + ja[0].col + ": " + ja[0].hc + " mm < " + 20 * ja[0].dia + " mm", "Use smaller beam bars (φ ≤ hc/20) or deeper columns.", "IS 13920 cl 7.1.1");
       dt.cols.forEach(function (c) { c.st.forEach(function (s) { if (s.pct > 2.5 && s.pct <= 4) add(1, c.name + " storey " + (s.i + 1) + ": " + f(s.pct, 2) + " % steel", "High steel makes laps congested (laps double it).", "Consider a larger section to bring steel near 1–2.5 %.", "IS 456 cl 26.5.3.1"); }); });
       dt.beams.forEach(function (bl) { if (bl.msg.some(function (t) { return /second layer/.test(t); })) add(2, "Beam " + bl.name + " needs two layers of bars", "The effective depth is smaller than assumed.", "Deepen the beam or use larger bars.", "IS 456 cl 26.3"); });
-      dt.foot.forEach(function (ft) { if (ft.warn && ft.warn.length) add(2, "Footing " + ft.name + " overlaps a neighbour", ft.warn[0], "Design a combined footing or raft.", "IS 456 cl 34"); });
+      dt.foot.forEach(function (ft) { if (ft.warn && ft.warn.length) add(2, "Footing " + ft.name + " overlaps a neighbour", ft.warn[0], "Set Foundation type to Auto or Mat to design a raft.", "IS 456 cl 34"); });
+      if (dt.mat) dt.mat.checks.forEach(function (c) { if (!c.ok) add(1, "Mat: " + c.t, c.v, /pressure/.test(c.t) ? "Enlarge the mat projection, or check the SBC — the mat already spreads the load over the whole plan" : /Settlement|distortion/.test(c.t) ? "Thicker / stiffer mat, better ks from a plate load test, or piles" : /Punching|shear|Flexure/.test(c.t) ? "Thicken the mat (or leave the thickness blank to let the app pick it), or add column pedestals" : "Check the input", c.cl); });
       (dt.walls || []).forEach(function (w) { w.storeys.forEach(function (st) { if (st.be) add(1, w.name + " storey " + (st.i + 1) + " needs boundary elements", "σ = " + f(st.sMax, 2) + " N/mm² > 0.2fck. " + st.beText, "Detail the end zones as confined boundary elements.", "IS 13920 cl 10.4"); }); });
     }
     var dr = (S.drift || []).filter(function (q) { return q.ok === false; });
@@ -244,6 +249,7 @@ var PRO = (function () {
     if (!dt || dt.err) return null;
     dt.cols.forEach(function (c) { if (c.name.toUpperCase() === n || (c.grp && c.grp.toUpperCase() === n)) out = { type: "column", name: c.name, group: c.grp, storeys: c.st.map(function (s) { return { storey: s.i + 1, size: s.b + "x" + s.D, bars: s.ar.n + "-" + s.ar.dia, steel_pct: +s.pct.toFixed(2), ties: s.tie.dia + "@" + s.tie.sc + "/" + s.tie.sm }; }), failing: c.checks.filter(function (q) { return !q.ok; }).map(function (q) { return q.t + ": " + q.v; }), scwb: dt.scwb.filter(function (q) { return q.colRef === c; }).map(function (q) { return { z: q.z, dir: q.dir, ratio: +q.r.toFixed(2), ok: q.ok }; }), joints: dt.joints.filter(function (q) { return q.colRef === c; }).map(function (q) { return { z: q.z, dir: q.dir, Vj: +q.Vj.toFixed(0), cap: +q.cap.toFixed(0), ok: q.ok, depth20phi: q.anch }; }) }; });
     dt.beams.forEach(function (b) { if (!out && (b.name.toUpperCase() === n || (b.grp && b.grp.toUpperCase() === n))) out = { type: "beam line", name: b.name, group: b.grp, size: b.b + "x" + b.D, bar: b.dia, spans: b.spans.map(function (sp, j) { return { span: j + 1, clear: Math.round(sp.Lc), top_left: b.sup[j].nt, bottom: sp.nb, top_right: b.sup[j + 1].nt, hoops: sp.sv.ph + "@" + sp.sv.sh + "/" + sp.sv.sm }; }), failing: b.checks.filter(function (q) { return !q.ok; }).map(function (q) { return q.t + ": " + q.v; }), notes: b.msg }; });
+    if (!out && dt.mat && /^(MAT|RAFT)/.test(n)) { var mt = dt.mat; out = { type: "mat", size: mt.L.toFixed(2) + " x " + mt.B.toFixed(2) + " m x " + mt.T + " mm", mesh: mt.mesh, zones: mt.zones.length, ks: mt.ks, qmax: +mt.gov.qmax.toFixed(1), settlement_mm: +mt.wmax.toFixed(1), punching_worst: mt.pun.slice().sort(function (a, b) { return b.u - a.u; })[0], failing: mt.checks.filter(function (q) { return !q.ok; }).map(function (q) { return q.t + ": " + q.v; }) }; }
     dt.foot.forEach(function (ft) { if (!out && (ft.name.toUpperCase() === n)) out = { type: "footing", name: ft.name, size: ft.Lx + "x" + ft.Ly + "x" + ft.D, bars: ft.bx.dia + "@" + ft.bx.s + " / " + ft.by.dia + "@" + ft.by.s, governing: ft.gov.set.name, qmax: +ft.gov.pr.max.toFixed(1), failing: ft.checks.filter(function (q) { return !q.ok; }).map(function (q) { return q.t + ": " + q.v; }) }; });
     (dt.walls || []).forEach(function (w) { if (!out && (w.name.toUpperCase().indexOf(n) === 0)) out = { type: "wall", name: w.name, t: w.t, Lw: Math.round(w.Lw), storeys: w.storeys.map(function (st) { return { storey: st.i + 1, vertical: st.vb.dia + "@" + st.vb.s, horizontal: st.hb.dia + "@" + st.hb.s, boundary: st.be }; }), failing: w.checks.filter(function (q) { return !q.ok; }).map(function (q) { return q.t + ": " + q.v; }) }; });
     return out;
@@ -262,7 +268,7 @@ var PRO = (function () {
     Promise.resolve(window.claude.use("sample")).then(function (s) { sampleFn = s || null; cb(sampleFn); }, function () { cb(null); });
   }
   function offlineAnswer(S, q) {
-    var h = "", mm = q.match(/\b([A-Z]{1,2}-[A-Z]{1,2}\d+|F\d+-[A-Z0-9]+\([XY]\)|[BCFW]\d+)\b/i), info = mm ? memberInfo(S, mm[1]) : null;
+    var h = "", mm = q.match(/\b([A-Z]{1,2}-[A-Z]{1,2}\d+|F\d+-[A-Z0-9]+\([XY]\)|[BCFW]\d+|mat|raft)\b/i), info = mm ? memberInfo(S, mm[1]) : null;
     if (info) h += '<div class="aans"><b>' + esc(info.type + " " + info.name) + '</b><pre>' + esc(JSON.stringify(info, null, 1)) + '</pre></div>';
     var kb = kbFind(q); kb.forEach(function (k) { h += '<div class="aans"><b>' + esc(k[1]) + '</b><br>' + esc(k[2]) + '</div>'; });
     var ad = advise(S).filter(function (a) { var s = q.toLowerCase(); return s.split(/\W+/).filter(function (w) { return w.length > 3; }).some(function (w) { return (a.t + a.d).toLowerCase().indexOf(w) >= 0; }); }).slice(0, 3);
@@ -282,7 +288,7 @@ var PRO = (function () {
       if (!sample) return;
       var box = document.createElement("div"); box.className = "aans ai"; box.innerHTML = "<b>Claude</b><br><span>Thinking…</span>"; out.insertBefore(box, out.firstChild);
       var ctx = context(S), tools = [
-        { name: "get_member", description: "Detailing and checks of one member or member group by name (e.g. C-B2, C1, F1-A(X), B2, F-A1, W1)", inputSchema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] }, execute: function (a) { return memberInfo(S, a.name) || { error: "not found" }; } },
+        { name: "get_member", description: "Detailing and checks of one member or member group by name (e.g. C-B2, C1, F1-A(X), B2, F-A1, W1, MAT)", inputSchema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] }, execute: function (a) { return memberInfo(S, a.name) || { error: "not found" }; } },
         { name: "search_notes", description: "Look up the app's code notes (IS 13920, IS 1893, IS 456) on a topic", inputSchema: { type: "object", properties: { topic: { type: "string" } }, required: ["topic"] }, execute: function (a) { return kbFind(a.topic).map(function (k) { return { title: k[1], text: k[2] }; }); } }
       ];
       var prompt = "You are the engineering assistant inside IS StructDesign, an Indian-Standards structural analysis and design app. Answer the engineer's question about THIS model using the results below and the tools; cite IS clauses; be concise (≤ 180 words); if a check fails say why and give concrete fixes with numbers; never claim the design is safe — remind that a qualified engineer must verify when relevant.\n\nModel results (JSON):\n" + JSON.stringify(ctx) + "\n\nQuestion: " + q;

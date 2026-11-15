@@ -19,5 +19,6 @@ async function run(name, g, pp) {
 (async () => {
   await run('rc3d', MD.generate({ bx: '5,5', by: '4,4', hs: '3.2,3.2', slabs: true, walls: true, mesh: 1.5 }));
   await run('rc2d_wsm', MD.generate({ bx: '5,4', by: '', hs: '3.5,3.2', twoD: true, mesh: 1 }), { bDL: 20, bLL: 10, method: 'wsm' });
+  await run('mat', MD.generate({ bx: '4,4,4', by: '5,5', hs: '3.5,3.2,3.2', slabs: true, mesh: 1 }), { found: 'mat', sbc: 100 });
   await run('steel', MD.generate({ bx: '6,6', by: '5', hs: '4,4', slabs: false, brace: true, mesh: 1 }), { colSec: 'ISMB 300', beamSec: 'ISMB 250', sys: 'steel', bDL: 15, bLL: 8, rsa: false });
 })();

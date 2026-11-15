@@ -894,7 +894,23 @@ DT.run = function (m, S, p) {
   out.beams = DT.beams(m, S, p, cf, g);
   out.beams.forEach(function (bl) { var lv = g.lev(bl.z); bl.lev = lv; bl.name = (lv > 0 ? "F" + lv : "z" + bl.z.toFixed(2)) + "-" + (bl.ux ? (m.twoD ? "X" : g.gy(bl.xy[0].y) + "(X)") : g.gx(bl.xy[0].x) + "(Y)"); });
   try { out.foot = DT.footings(m, S, p, cf, g); } catch (e) { out.warn.push("Footings: " + e.message); }
-  out.cols = DT.columns(m, S, p, cf, g, out.beams, out.foot);
+  /* mat (raft) foundation when chosen, or automatically when isolated footings overlap / cover > 50 % of the plan */
+  var fm = p.found || "isolated", colFoot = out.foot;
+  if (typeof MAT !== "undefined" && fm !== "isolated" && !m.twoD) {
+    var nd = MAT.need(out.foot, g);
+    if (fm === "mat" || nd.need) {
+      try {
+        var mt = MAT.run(m, S, p, cf, g, out.foot);
+        if (mt.err) out.warn.push("Mat foundation: " + mt.err);
+        else {
+          mt.why = fm === "mat" ? "chosen" : nd.why; out.mat = mt; out.footIso = out.foot; out.foot = [];
+          colFoot = mt.sups.filter(function (s) { return s.col; }).map(function (s) { return { n: s.n, D: mt.T, dia: mt.mesh.bx.dia, Lx: mt.L * 1000, Ly: mt.B * 1000, name: "Mat", sig: mt.sig }; });
+          if (fm === "auto") out.warn.push("Mat foundation used: " + nd.why);
+        }
+      } catch (e) { out.warn.push("Mat foundation: " + e.message); }
+    }
+  }
+  out.cols = DT.columns(m, S, p, cf, g, out.beams, colFoot);
   if (cf.duct) { out.scwb = DT.scwb(m, out.cols, out.beams); out.joints = DT.joints(m, out.cols, out.beams); } else out.joints = [];
   try { out.slabs = DT.slabs(m, S, p, cf, g); } catch (e) { out.warn.push("Slabs: " + e.message); }
   try { out.walls = DT.walls(m, S, p, cf, g, out.cols); } catch (e) { out.warn.push("Walls: " + e.message); }
@@ -920,6 +936,7 @@ DT.run = function (m, S, p) {
   out.gF.forEach(function (G) { acc(G.rep.bars, G.n, "foot"); });
   out.slabs.forEach(function (s) { acc(s.bars, 1, "slabs"); });
   out.gW.forEach(function (G) { acc(G.rep.bars, G.n, "walls"); });
+  if (out.mat) acc(out.mat.bars, 1, "foot");
   out.tot = Object.keys(tot).map(Number).sort(function (a, b) { return a - b; }).map(function (k) { var t = tot[k]; t.all = t.beams + t.cols + t.slabs + t.foot + t.walls; return t; });
   out.total = 0; out.tot.forEach(function (t) { out.total += t.all; });
   out.area = 0; out.slabs.forEach(function (s) { out.area += s.area; });
@@ -928,6 +945,7 @@ DT.run = function (m, S, p) {
   out.cols.forEach(function (c) { c.checks.forEach(function (q) { if (!q.ok) out.fails++; }); });
   out.foot.forEach(function (f) { f.checks.forEach(function (q) { if (!q.ok) out.fails++; }); });
   out.walls.forEach(function (w) { w.checks.forEach(function (q) { if (!q.ok) out.fails++; }); });
+  if (out.mat) out.mat.checks.forEach(function (q) { if (!q.ok) out.fails++; });
   out.scwb.forEach(function (q) { if (!q.ok) out.fails++; });
   out.fails += (out.dur || []).length;
   out.joints.forEach(function (q) { if (!q.ok || !q.anch) out.fails++; });
