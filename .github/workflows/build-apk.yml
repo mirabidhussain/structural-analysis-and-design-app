@@ -21,6 +21,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Version from the engine
+        run: |
+          ENG=$(grep -o 'REG.ENGINE = "[0-9.]*"' www/js/reg.js | grep -o '[0-9.]*')
+          echo "VERSION_NAME=$ENG.${{ github.run_number }}" >> $GITHUB_ENV
+          echo "VERSION_CODE=$(( ${{ github.run_number }} + 100 ))" >> $GITHUB_ENV
+          echo "BUILT=$(TZ=Asia/Kolkata date '+%d %b %Y %H:%M IST')" >> $GITHUB_ENV
       - name: Build debug APK
         run: gradle -p android assembleDebug --no-daemon
       - name: Rename APK
@@ -29,14 +35,12 @@ jobs:
         with:
           name: IS-StructDesign-apk
           path: IS-StructDesign.apk
-      # Always-current download link: Releases → "latest-apk"
+      # Always-current download link: Releases → "latest-apk" (recreated each build so the date, tag and title are current)
       - name: Publish to release "latest-apk"
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest-apk
-          name: IS StructDesign — latest APK
-          body: |
-            Debug APK built automatically from commit ${{ github.sha }}.
-            Install: download IS-StructDesign.apk on your phone, open it, allow "Install unknown apps" for your browser/files app.
-          files: IS-StructDesign.apk
-          make_latest: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest-apk --cleanup-tag -y || true
+          git push origin :refs/tags/latest-apk || true
+          printf 'IS StructDesign %s — built %s from commit %s.\n\nInstall: download IS-StructDesign.apk on your phone, open it, allow "Install unknown apps" for your browser / files app. It installs over the previous version (your projects are kept).\n' "$VERSION_NAME" "$BUILT" "${GITHUB_SHA::7}" > notes.md
+          gh release create latest-apk IS-StructDesign.apk --target "$GITHUB_SHA" --title "IS StructDesign $VERSION_NAME (latest APK)" --notes-file notes.md --latest
