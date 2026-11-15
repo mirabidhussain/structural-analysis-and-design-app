@@ -43,3 +43,18 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: python build.py
       - run: node test/ui_ci.js
+
+  excel:
+    name: Excel formulas recomputed by LibreOffice
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-calc python3-openpyxl
+      - name: Build workbooks without cached values
+        run: node test/xlsx_ci.js test/xci
+      - name: LibreOffice computes every formula; compare with the app
+        run: python3 test/xlsx_check.py test/xci
+

@@ -289,6 +289,27 @@ SE.run = function (m, S, p) {
   out.ms = Date.now() - t0;
   return out;
 };
+/* spectral envelope of any linear response r(U) (vector-valued), consistent with SE.run: modal combination × scale,
+   + 0.3 × the orthogonal direction (if chosen), + |r(accidental-torsion case)| */
+SE.respEnv = function (m, S, p, fn) {
+  var se = S.se, out = {};
+  if (!se || !se.rs || !se.md) return out;
+  var modes = se.md.modes, cache = {};
+  function modal(d) {
+    if (cache[d]) return cache[d];
+    var a = se.rs[d], per = modes.map(function (mo, k) { var Um = mo.U.map(function (v) { return v * a.amp[k]; }); return fn(Um); }), n = per[0].length, r = [];
+    for (var c = 0; c < n; c++) r.push(SE.combine(per.map(function (q) { return q[c]; }), modes, a.meth) * a.scale);
+    return (cache[d] = r);
+  }
+  Object.keys(se.rs).forEach(function (dk) {
+    var d = +dk, r = modal(d).slice(), o = p.ortho && se.rs[1 - d] ? 0.3 : 0;
+    if (o) modal(1 - d).forEach(function (v, c) { r[c] += o * v; });
+    var tA = S.res.cases["T" + (d ? "Y" : "X") + "a"];
+    if (tA && p.accTor) fn(tA.U).forEach(function (v, c) { r[c] += Math.abs(v); });
+    out[d] = r;
+  });
+  return out;
+};
 /* one response-spectrum combination: Σ f·(static case) + fac·(± envelope) */
 SE.combo = function (m, res, f, E, fac, name) {
   var nU = 6 * m.nodes.length, U = new Float64Array(nU), cs = Object.keys(f);

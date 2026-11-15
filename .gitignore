@@ -10,3 +10,4 @@ test/*.pdf
 test/*.xlsx
 test/r_*
 node_modules/
+test/xci/

@@ -31,6 +31,8 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   for (const k of ['c', 's', 'f']) { const v = await pg.evaluate(k0 => [...document.querySelectorAll('#dtSel option')].find(o => o.value[0] === k0).value, k); await pg.selectOption('#dtSel', v); }
   ok('Detailing: column, slab and footing views render', await pg.evaluate(() => document.querySelectorAll('#dtView svg.dwg').length >= 2 && /Cut length/.test(document.querySelector('#dtView').textContent)));
   const [dxfDl] = await Promise.all([pg.waitForEvent('download', { timeout: 30000 }), pg.click('#bDtDxf')]);
+  ok('Standards register and verification status shown (IS 1893:2016 reinstated)', await pg.evaluate(() => /Standards register/.test(document.querySelector('#results').textContent) && /withdrawn by BIS/.test(document.querySelector('#results').textContent) && /Not implemented/.test(document.querySelector('#results').textContent)));
+  ok('Joint shear and strong-column checks reported', await pg.evaluate(() => /Beam–column joints/.test(document.querySelector('#results').textContent) && /Strong column – weak beam/.test(document.querySelector('#results').textContent)));
   ok('Detail drawings DXF downloads', /detailing\.dxf$/.test(dxfDl.suggestedFilename()), dxfDl.suggestedFilename());
   const [dl] = await Promise.all([pg.waitForEvent('download', { timeout: 60000 }), pg.click('#results .bXls')]);
   ok('Excel export downloads an .xlsx', /\.xlsx$/.test(dl.suggestedFilename()), dl.suggestedFilename());

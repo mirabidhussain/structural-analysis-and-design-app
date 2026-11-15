@@ -48,6 +48,13 @@ Home → **Frame & FE analysis**.
 - **Irregularity indicators:** torsional (Table 5 (i), both the 2016 text and Amendment 2 thresholds), soft storey and mass irregularity (Table 6, 2016 definitions), first-two-modes-translational check.
 - **Excel:** a Seismic sheet with live formulas for Sa/g, Ak, modal base shears, scale factor, eccentricities, torques and irregularity ratios.
 
+## Codes in use (v2.9)
+IS 456:2000, IS 13920:2016, IS 1893 (Part 1):2016 with Amendments 1–2, IS 800:2007, IS 875 Parts 2, 3, 5 (Part 1 unit weights: only concrete 25 kN/m³ is built in; the 2026 revision has not yet been reviewed), SP 16, SP 34, IS 2502. IS 1893 (Part 1):2025 and (Part 5):2025 were published in November 2025 and withdrawn by BIS on 3 March 2026, so the 2016 edition applies. The app and the Excel workbook carry a **standards register** and a **verification status** for every check (Verified / Calculated / Simplified / Not implemented).
+
+## Shear walls and joints (v2.9)
+- **Shear walls** are designed as piers storey by storey (IS 13920 cl 10): section forces at every floor from the wall elements (nodal forces K·u; response-spectrum combinations by modal combination), flexure with axial load by strain compatibility with uniformly distributed vertical steel, shear (cl 10.2), minimum steel and spacing, two curtains, boundary elements where Pu/A + 6Mu/(tLw²) > 0.2fck (end columns checked as boundary elements), bar schedule and drawings.
+- **Beam–column joints** (IS 13920 cl 9): Vj = 1.25fy(Ast,top + Ast,bot) − Vcol against 1.5/1.2/1.0·√fck·Aej by confinement, column depth ≥ 20 × beam bar φ.
+
 ## Reinforcement detailing & bar bending schedule (v2.8)
 After the frame & FE design the app details every RCC member and groups identical ones:
 - **Beam lines** (collinear beam elements chained between columns): continuous and extra top/bottom bars with curtailment (theoretical cut-off + max(d, 12φ), ≥ Ld, ≥ Lc/4), anchorage in end columns (Ld + 10φ with 90° bend in ductile frames), laps for 12 m stock bars outside joints and 2d of the faces, hoops with 135° hooks: 2d end zones at ≤ min(d/4, 6φ, 100) and capacity-design shear 1.2(DL+LL) + 1.4(Mu,h + Mu,s)/Lc (IS 13920 cl 6).
@@ -64,14 +71,16 @@ Run `npm test` (Node 18+) or let GitHub Actions run it on every push:
 - `test/po_verify.js` — plastic collapse loads (portal 4Mp/h, propped cantilever 6Mp/L), P–M hinges, P-Delta equilibrium.
 - `test/model_test.js` — equilibrium of a 3D building, DXF import/export round trip.
 - `test/verify.js` — design-module checks against hand calculations.
-- `test/acceptance.js` — 109 acceptance and independent-benchmark checks:
+- `test/acceptance.js` — 119 acceptance and independent-benchmark checks:
   - design modules with **expected pass**, **expected fail** (e.g. 150 mm stair waist fails deflection, 3 bolts for 150 kN fails) and boundary cases;
   - IS code reference values: SP 16 Mu,lim factors 0.138/0.133/0.149, IS 456 Tables 19–22, IS 800 Table 9(c) fcd 107 & 183 N/mm², IS 1893 Sa/g, IS 800 cl 9.2.2 high-shear reduction by hand calculation;
   - FE benchmarks: MacNeal–Harder membrane patch test with distorted elements (exact), continuous beams wL²/8 and 0.1wL² (three-moment equation), torsion TL/GJ, Cook's skewed membrane convergence, SS plate mesh convergence;
   - solver safety: P-Delta above the buckling load rejected, convergence iterations/residual reported, floating parts and zero-area shells rejected before solving;
   - storey drift at vertically stacked nodes and the Δmax/Δave torsion indicator;
   - seismic: 2-storey shear-frame periods vs the exact eigen-solution, single-storey RSA base shear = Ak·W and displacement Ak·g/ω², CQC correlation, scaling rules, CR = CM for a symmetric plan and CR shift towards one-sided walls, accidental-torsion torque, soft-storey and mass-irregularity detection;
-  - detailing: hand-checked cutting lengths, unit weights, Ld and laps, provided ≥ required steel along beams and in columns, IS 13920 beam and column rules, capacity shear, Ash, SCWB sums, lap positions and hoops over laps, footing pressures and shear, slab panel steel, totals, DXF round trip.
+  - detailing: hand-checked cutting lengths, unit weights, Ld and laps, provided ≥ required steel along beams and in columns, IS 13920 beam and column rules, capacity shear, Ash, SCWB sums, lap positions and hoops over laps, footing pressures and shear, slab panel steel, totals, DXF round trip;
+  - walls and joints: wall P–M against an independent stress-block computation, squash load, wall + column shears = base reaction, shear steel, boundary-element trigger, joint shear and capacity recomputed.
+- `test/xlsx_ci.js` + `test/xlsx_check.py` — workbooks written without cached values; LibreOffice computes every formula (≈ 70 000) and the results must equal the app's values with no Excel errors (CI job).
 - `test/ui_ci.js` — browser test (Playwright): every module with blank inputs, frame analysis, Excel download, WSM switch, no JavaScript errors.
 - `test/smoke.js` — prints sample design reports (diagnostic).
 

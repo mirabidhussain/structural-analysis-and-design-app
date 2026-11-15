@@ -213,7 +213,7 @@ MD.cases = function (m, p) {
         if (!ld) return;
         fl.forEach(function (f) {
           var Q = 0; ld.nodal.forEach(function (l) { if (f.nodes.indexOf(l.n) >= 0) Q += l.f[d]; });
-          var es = d ? (f.esx || 0) : (f.esy || 0), b = d ? f.bx : f.by, sg = es >= 0 ? 1 : -1;
+          var es = d ? (f.esx || 0) : (f.esy || 0), b = d ? f.bx : f.by, sg = es >= -1e-6 ? 1 : -1;   /* |es| < 1 µm treated as 0 (symmetric plans) */
           var ea = 0.5 * es + 0.05 * b * sg, eb = -0.05 * b * sg;
           var Ma = (d ? 1 : -1) * Q * ea, Mb = (d ? 1 : -1) * Q * eb;   /* Fx at +y offset gives −Mz; Fy at +x offset gives +Mz */
           ca = ca.concat(SE.torque(m, f, Ma, W)); cb2 = cb2.concat(SE.torque(m, f, Mb, W));

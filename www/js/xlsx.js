@@ -39,7 +39,8 @@ var XL = (function () {
         var sa = STY[st] ? ' s="' + STY[st] + '"' : "";
         if (f) {
           var fx = '<f>' + esc(f.replace(/^=/, "")) + '</f>';
-          if (typeof v === "number" && isFinite(v)) cs.push('<c r="' + ref + '"' + sa + '>' + fx + '<v>' + v + '</v></c>');
+          if (XL.NOCACHE) cs.push('<c r="' + ref + '"' + sa + '>' + fx + '</c>');
+          else if (typeof v === "number" && isFinite(v)) cs.push('<c r="' + ref + '"' + sa + '>' + fx + '<v>' + v + '</v></c>');
           else if (typeof v === "string") cs.push('<c r="' + ref + '"' + sa + ' t="str">' + fx + '<v>' + esc(v) + '</v></c>');
           else cs.push('<c r="' + ref + '"' + sa + '>' + fx + '</c>');
         } else if (typeof v === "number") { if (isFinite(v)) cs.push('<c r="' + ref + '"' + sa + '><v>' + v + '</v></c>'); }

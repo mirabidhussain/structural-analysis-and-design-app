@@ -469,6 +469,45 @@ DT.scwb = function (m, cols, beams) {
   return out;
 };
 
+/* beam–column joints (IS 13920:2016 cl 9): Vj = 1.25fy(Ast,top + Ast,bot) − Vcol, Vcol = (Mo,L + Mo,R)/hst with beam moments at 1.25fy;
+   capacity 1.5/1.2/1.0·√fck·Aej for joints confined on four faces / three or two opposite faces / others; Aej = bj·hc, bj = min(bc, bb + hc) */
+DT.joints = function (m, cols, beams) {
+  var byNode = {}, out = [];
+  beams.forEach(function (bl) { bl.sup.forEach(function (s, si) { (byNode[s.n] = byNode[s.n] || []).push({ bl: bl, si: si }); }); });
+  cols.forEach(function (c) {
+    c.st.forEach(function (s, i) {
+      var n = s.nTop, list = byNode[n] || [], above = c.st[i + 1], hst = (above ? (s.h + above.h) / 2 : s.h) / 1000;
+      /* faces covered by beams at least 3/4 of the column face width */
+      var faces = 0;
+      list.forEach(function (q) {
+        var bl = q.bl, face = bl.ux ? s.b : s.D, wide = bl.b >= 0.75 * face;
+        if (q.si > 0 || bl.cantL) faces += wide ? 1 : 0;
+        if (q.si < bl.sup.length - 1 || bl.cantR) faces += wide ? 1 : 0;
+      });
+      [0, 1].forEach(function (dir) {
+        var bls = list.filter(function (q) { return q.bl.ux === (dir === 0); });
+        if (!bls.length) return;
+        var hc = dir === 0 ? s.D : s.b, bc = dir === 0 ? s.b : s.D, best = null;
+        bls.forEach(function (q) {
+          var bl = q.bl, sp = bl.sup[q.si], a = bl.a, At = sp.nt * a, Ab = bl.ncb * a, hasL = q.si > 0 || !!bl.cantL, hasR = q.si < bl.sup.length - 1 || !!bl.cantR;
+          function Mo(As) { var T = 1.25 * bl.fy * As, x = T / (0.36 * bl.fck * bl.b); return T * (bl.d - 0.42 * Math.min(x, bl.d)) / 1e6; }
+          /* two sway senses: hogging on the left + sagging on the right, and the reverse */
+          [[hasL, hasR], [hasR, hasL]].forEach(function (pr) {
+            var T1 = pr[0] ? 1.25 * bl.fy * At / 1000 : 0, C2 = pr[1] ? 1.25 * bl.fy * Ab / 1000 : 0;
+            var Vcol = ((pr[0] ? Mo(At) : 0) + (pr[1] ? Mo(Ab) : 0)) / hst, Vj = T1 + C2 - Vcol;
+            if (!best || Vj > best.Vj) best = { Vj: Vj, T1: T1, C2: C2, Vcol: Vcol, bb: bl.b, dia: bl.dia };
+          });
+        });
+        var bj = Math.min(bc, best.bb + hc), Aej = bj * hc, k = faces >= 4 ? 1.5 : faces === 3 || (faces === 2 && opposite()) ? 1.2 : 1.0;
+        function opposite() { var lx = list.filter(function (q) { return q.bl.ux; }).length, ly = list.length - lx; return (lx && !ly) || (ly && !lx); }
+        var cap = k * Math.sqrt(s.fck) * Aej / 1000, fy0 = best.dia;
+        out.push({ col: c.name, colRef: c, z: s.z1 / 1000, dir: dir ? "Y" : "X", faces: faces, k: k, bj: bj, hc: hc, Aej: Aej, Vj: best.Vj, T1: best.T1, C2: best.C2, Vcol: best.Vcol, cap: cap, r: best.Vj / cap, ok: best.Vj <= cap, anch: hc >= 20 * fy0, dia: fy0, fck: s.fck });
+      });
+    });
+  });
+  return out;
+};
+
 /* ------------------------------------------------------------------ ISOLATED FOOTINGS */
 /* size from service loads (DL+LL; DL+LL±EQ with the IS 1893 Table 1 increase in allowable pressure), depth and steel from
    the factored pressures (IS 456 cl 34): bending at the column face, one-way shear at d, punching at d/2, bearing. */
@@ -672,39 +711,214 @@ DT.slabs = function (m, S, p, cf, g) {
   return out;
 };
 
+/* ------------------------------------------------------------------ SHEAR WALLS (IS 13920:2016 cl 10, IS 456 cl 32) */
+/* rectangular wall tw × Lw with vertical steel ratio ρ spread uniformly: P–M by strain compatibility, IS 456 cl 38.1/39.1
+   (εcu 0.0035; full compression: 0.002 at 3Lw/7 from the compressed face), parabolic–rectangular concrete, IS 456 Fig. 23 steel */
+DT.wallPM = function (tw, Lw, rho, fck, fy) {
+  var nc = 60, ns = 40, As = rho * tw * Lw, pts = [];
+  function sig(e) { if (e <= 0) return 0; var x = Math.min(e / 0.002, 1); return 0.446 * fck * (2 * x - x * x); }
+  function at(xu) {
+    var et = xu <= Lw ? 0.0035 : 0.002 * xu / (xu - 3 * Lw / 7), P = 0, M = 0;
+    for (var i = 0; i < nc; i++) { var y = (i + 0.5) * Lw / nc, e = et * (xu - y) / xu, f = sig(e) * tw * Lw / nc; P += f; M += f * (Lw / 2 - y); }
+    for (i = 0; i < ns; i++) { var y2 = (i + 0.5) * Lw / ns, e2 = et * (xu - y2) / xu, fs = (e2 >= 0 ? 1 : -1) * RCC.fs(Math.abs(e2), fy), f2 = fs * As / ns; P += f2; M += f2 * (Lw / 2 - y2); }
+    return { P: P / 1000, M: M / 1e6 };
+  }
+  for (var j = 0; j <= 80; j++) pts.push(at(Lw * (0.01 + j * 0.02)));
+  for (j = 1; j <= 20; j++) pts.push(at(Lw * (2.6 + j * 0.5)));
+  var Pt = -0.87 * fy * As / 1000;
+  return { pts: pts, P0: pts[pts.length - 1].P, Pt: Pt,
+    Mcap: function (Pu) {   /* moment capacity at axial load Pu (compression +) */
+      if (Pu > pts[pts.length - 1].P) return 0;
+      if (Pu < pts[0].P) { var t = (Pu - Pt) / (pts[0].P - Pt); return t <= 0 ? 0 : t * pts[0].M; }
+      var best = 0;
+      for (var i = 0; i + 1 < pts.length; i++) { var a = pts[i], b = pts[i + 1]; if ((Pu - a.P) * (Pu - b.P) <= 0 && b.P !== a.P) best = Math.max(best, a.M + (b.M - a.M) * (Pu - a.P) / (b.P - a.P)); }
+      return best;
+    } };
+};
+DT.walls = function (m, S, p, cf, g, cols) {
+  var res = S.res, edges = {}, pid = {}, panels = [], out = [];
+  function ek(a, b) { return Math.min(a, b) + "-" + Math.max(a, b); }
+  m.shells.forEach(function (sh, k) { if (sh.kind !== "wall") return; sh.n.forEach(function (a, i) { (edges[ek(a, sh.n[(i + 1) % 4])] = edges[ek(a, sh.n[(i + 1) % 4])] || []).push(k); }); });
+  function plane(k) { var R = (m._shellCache && m._shellCache[k] ? m._shellCache[k] : FE.shellElem(m, m.shells[k])).R; return R[2]; }
+  m.shells.forEach(function (sh, k0) {
+    if (sh.kind !== "wall" || pid[k0] !== undefined) return;
+    var nrm = plane(k0), id = panels.length, st = [k0], list = []; pid[k0] = id;
+    while (st.length) {
+      var k = st.pop(), s0 = m.shells[k]; list.push(k);
+      s0.n.forEach(function (a, i) { (edges[ek(a, s0.n[(i + 1) % 4])] || []).forEach(function (j) { if (pid[j] !== undefined) return; var q = plane(j); if (Math.abs(Math.abs(q[0] * nrm[0] + q[1] * nrm[1] + q[2] * nrm[2]) - 1) < 1e-3) { pid[j] = id; st.push(j); } }); });
+    }
+    panels.push({ k: list, nrm: nrm });
+  });
+  var lv = g.lv;
+  panels.forEach(function (P, pi) {
+    /* in-plane horizontal axis */
+    var ax = Math.abs(P.nrm[0]) > Math.abs(P.nrm[1]) ? [0, 1] : [1, 0], s0 = Infinity, s1 = -Infinity, z0 = Infinity, z1 = -Infinity, t = m.shells[P.k[0]].t * 1000, fck = p.fck, fy = p.fy, xy = null;
+    P.k.forEach(function (k) { m.shells[k].n.forEach(function (i) { var n = m.nodes[i], sv = n.x * ax[0] + n.y * ax[1]; s0 = Math.min(s0, sv); s1 = Math.max(s1, sv); z0 = Math.min(z0, n.z); z1 = Math.max(z1, n.z); if (!xy) xy = n; }); });
+    var Lw = (s1 - s0) * 1000, sc = (s0 + s1) / 2, cuts = lv.filter(function (z) { return z >= z0 - 0.01 && z < z1 - 0.01; });
+    if (Lw < 300 || !cuts.length) return;
+    var line = ax[0] ? "along X at y = " + xy.y.toFixed(2) : "along Y at x = " + xy.x.toFixed(2), name = "W" + (out.length + 1) + " (" + (ax[0] ? g.gy(xy.y) || "" : g.gx(xy.x)) + ", " + (ax[0] ? "X" : "Y") + ")";
+    /* boundary columns at the wall ends */
+    var endCols = cols.filter(function (c) { var sv = c.x * ax[0] + c.y * ax[1], on = ax[0] ? Math.abs(c.y - xy.y) < 0.01 : Math.abs(c.x - xy.x) < 0.01; return on && (Math.abs(sv - s0) < 0.01 || Math.abs(sv - s1) < 0.01); });
+    var storeys = [];
+    cuts.forEach(function (zc, si) {
+      var ztop = lv.filter(function (z) { return z > zc + 0.01; })[0] || z1, h = (ztop - zc) * 1000;
+      var els = P.k.filter(function (k) { var zmin = Infinity; m.shells[k].n.forEach(function (i) { zmin = Math.min(zmin, m.nodes[i].z); }); return Math.abs(zmin - zc) < 0.005; });
+      /* section forces just above the cut: Σ element nodal forces K·u of the wall elements above, at the cut nodes */
+      var pre = els.map(function (k) { var e = m.shells[k]; return { e: e, d: m._shellCache[k] || FE.shellElem(m, e) }; });
+      function cut(U) {
+        var F = 0, V = 0, M = 0;
+        pre.forEach(function (q) {
+          var ug = []; q.e.n.forEach(function (v) { for (var t2 = 0; t2 < 6; t2++) ug.push(U[6 * v + t2]); });
+          var fg = FE.toGlobal(q.d.R, 8, FE.mv(q.d.K, FE.toLocal(q.d.R, 8, ug)));
+          q.e.n.forEach(function (v, a) {
+            var n = m.nodes[v]; if (Math.abs(n.z - zc) > 0.005) return;
+            var fz = fg[6 * a + 2], fh = fg[6 * a] * ax[0] + fg[6 * a + 1] * ax[1], sv = n.x * ax[0] + n.y * ax[1];
+            F += fz; V += fh; M += fz * (sv - sc) + (ax[0] ? -fg[6 * a + 4] : fg[6 * a + 3]);
+          });
+        });
+        return [F, V, M];
+      }
+      var cv0 = {}, E = SE.respEnv(m, S, p, cut), env = [];
+      res.combos.forEach(function (cb, ci) {
+        var meta = (S.cb || [])[ci] || {}, ic = (res.incMap || {})[cb.name] || 1, r;
+        if (cb.rs && meta.rs) {   /* response spectrum: static part + sign·fac·envelope */
+          r = [0, 0, 0];
+          Object.keys(meta.f).forEach(function (c) { if (!cv0[c]) cv0[c] = cut(res.cases[c].U); cv0[c].forEach(function (v, j) { r[j] += meta.f[c] * v; }); });
+          var e = E[meta.rs.dir] || [0, 0, 0]; r = r.map(function (v, j) { return v + meta.rs.sign * meta.rs.fac * e[j]; });
+        } else r = cut(cb.U);
+        var fac = cf.wsm ? 1.5 / ic : 1;   /* WSM projects: wall designed by limit state with 1.5 × service forces */
+        env.push({ cb: cb.name, P: r[0] * fac, V: Math.abs(r[1]) * fac, M: Math.abs(r[2]) * fac });
+      });
+      storeys.push({ i: si, z: zc, h: h, env: env, els: els.length });
+    });
+    /* design per storey */
+    var Ag = t * Lw, dw = 0.8 * Lw, two = t >= 200, msg = [], checks = [];
+    storeys.forEach(function (st) {
+      var Vu = 0, Pmax = 0, Pmin = Infinity, gv = null, sMax = 0, gs = null;
+      st.env.forEach(function (q) { if (q.V > Vu) { Vu = q.V; gv = q; } Pmax = Math.max(Pmax, q.P); Pmin = Math.min(Pmin, q.P); var sg = q.P * 1000 / Ag + q.M * 1e6 * 6 / (t * Lw * Lw); if (sg > sMax) { sMax = sg; gs = q; } });
+      /* flexure + axial: smallest uniform ρv (≥ 0.25 %) giving M ≤ Mcap(P) for every combination */
+      var rho = 0.0025, pm = null, worst = 0, okF = false;
+      for (; rho <= 0.04 + 1e-9; rho += 0.0005) {
+        pm = DT.wallPM(t, Lw, rho, fck, fy); worst = 0;
+        st.env.forEach(function (q) { var c = pm.Mcap(q.P); worst = Math.max(worst, c > 0 ? q.M / c : (q.M > 1e-6 || q.P > pm.P0 ? 99 : 0)); });
+        if (worst <= 1) { okF = true; break; }
+      }
+      rho = Math.min(rho, 0.04);
+      /* shear, IS 13920 cl 10.2 */
+      var tv = Vu * 1000 / (t * dw), tcm = RCC.tcmax ? RCC.tcmax(fck) : Math.min(0.62 * Math.sqrt(fck), 4), tc = RCC.tauc(fck, Math.min(100 * rho, 3));
+      var rh = 0.0025, Vus = Vu * 1000 - tc * t * dw; if (Vus > 0) rh = Math.max(rh, Vus / (0.87 * fy * dw) / t);   /* Ah/(t·Sv) */
+      two = two || tv > 0.25 * Math.sqrt(fck);
+      var smax = Math.min(Lw / 5, 3 * t, 450), nc = two ? 2 : 1;
+      function bars(r) { var pick = null; [8, 10, 12, 16, 20].forEach(function (f) { if (f > t / 10 + 1e-9 && f > 8) return; var s0 = DT.rf(Math.min(1000 * nc * D.barArea(f) / (r * t * 1000), smax), 5); if (!pick && s0 >= 100) pick = { dia: f, s: s0 }; }); return pick || { dia: Math.max(8, Math.floor(t / 10 / 2) * 2), s: 100, short: true }; }
+      st.vb = bars(rho); st.hb = bars(rh); st.rho = rho; st.rh = rh; st.tv = tv; st.tc = tc; st.tcm = tcm; st.Vu = Vu; st.okF = okF; st.worst = worst; st.pm = pm; st.gv = gv;
+      st.rhoP = nc * D.barArea(st.vb.dia) / (st.vb.s * t); st.rhP = nc * D.barArea(st.hb.dia) / (st.hb.s * t);
+      /* boundary elements, cl 10.4: σ = Pu/A + 6Mu/(t·Lw²) > 0.2fck */
+      st.sMax = sMax; st.gs = gs; st.be = sMax > 0.2 * fck;
+      if (st.be) {
+        var Cw = endCols.length >= 2 ? Lw : 0.85 * Lw, PbeMax = 0;
+        st.env.forEach(function (q) { PbeMax = Math.max(PbeMax, q.P / 2 + q.M / (Cw / 1000)); });
+        st.Pbe = PbeMax;
+        if (endCols.length) {
+          var cs = endCols.map(function (c) { return c.st.filter(function (q) { return Math.abs(q.z0 / 1000 - st.z) < 0.01; })[0]; }).filter(Boolean);
+          st.beCap = cs.length ? Math.min.apply(null, cs.map(function (q) { return (0.4 * q.fck * (q.b * q.D - q.As) + 0.67 * q.fy * q.As) / 1000; })) : 0;
+          st.beText = "end columns act as boundary elements: Pu,BE ≤ 0.4fck·Ac + 0.67fy·Asc of the column";
+        } else {
+          var Lb = DT.r(Math.max(0.15 * Lw, 2 * t, 300), 25), Ab = Lb * t, Asb = Math.max((PbeMax * 1000 - 0.4 * fck * Ab) / (0.67 * fy - 0.4 * fck), 0.008 * Ab), pk = U.pickBars(Asb, [12, 16, 20, 25], 4, 40);
+          st.beL = Lb; st.beBars = { n: pk.n + (pk.n % 2), dia: pk.dia }; st.beCap = (0.4 * fck * (Ab - st.beBars.n * D.barArea(pk.dia)) + 0.67 * fy * st.beBars.n * D.barArea(pk.dia)) / 1000;
+          st.beText = "boundary element " + t + " × " + Lb + " mm with " + st.beBars.n + "-" + pk.dia + "φ and special confining hoops (cl 8) over the storey";
+        }
+      }
+      checks.push({ t: "Flexure + axial (strain compatibility, uniform ρv)", ok: okF, v: "ρv = " + (100 * rho).toFixed(2) + " % → max M/Mcap = " + worst.toFixed(2), cl: "IS 456 cl 38, 39; IS 13920 cl 10.3", st: st.i });
+      checks.push({ t: "Shear stress τv = Vu/(tw·0.8Lw) ≤ τc,max", ok: tv <= tcm, v: tv.toFixed(2) + " ≤ " + tcm.toFixed(2) + " N/mm²", cl: "IS 13920 cl 10.2.1", st: st.i });
+      checks.push({ t: "Horizontal steel ρh ≥ max(0.25 %, (Vu − τc·tw·dw)/(0.87fy·dw·tw))", ok: st.rhP >= rh - 1e-9, v: st.hb.dia + "φ@" + st.hb.s + (nc > 1 ? " each face" : "") + " = " + (100 * st.rhP).toFixed(3) + " %", cl: "IS 13920 cl 10.1.5, 10.2.3", st: st.i });
+      checks.push({ t: "Vertical steel ρv ≥ max(0.25 %, ρh needed for shear), spacing ≤ min(Lw/5, 3tw, 450)", ok: st.rhoP >= Math.max(rho, 0.0025) - 1e-9 && st.vb.s <= smax, v: st.vb.dia + "φ@" + st.vb.s + (nc > 1 ? " each face" : "") + " = " + (100 * st.rhoP).toFixed(3) + " %", cl: "IS 13920 cl 10.1.7, 10.1.9", st: st.i });
+      checks.push({ t: "Bar diameter ≤ tw/10", ok: Math.max(st.vb.dia, st.hb.dia) <= Math.max(t / 10, 8), v: Math.max(st.vb.dia, st.hb.dia) + " ≤ " + (t / 10).toFixed(0) + " mm", cl: "IS 13920 cl 10.1.8", st: st.i });
+      checks.push({ t: "Boundary element needed if σ = Pu/A + 6Mu/(tLw²) > 0.2fck", ok: !st.be || st.beCap >= st.Pbe - 1e-6, v: sMax.toFixed(2) + (st.be ? " > " : " ≤ ") + (0.2 * fck).toFixed(1) + " N/mm²" + (st.be ? " → Pu,BE " + st.Pbe.toFixed(0) + " ≤ " + st.beCap.toFixed(0) + " kN; " + st.beText : " (not required)"), cl: "IS 13920 cl 10.4", st: st.i });
+    });
+    if (t < 150) msg.push("Wall thickness " + t + " mm < 150 mm (IS 13920 cl 10.1.2)");
+    if (two) msg.push("Two curtains of reinforcement (tw ≥ 200 mm or τv > 0.25√fck, IS 13920 cl 10.1.4)");
+    checks.push({ t: "Thickness ≥ 150 mm", ok: t >= 150, v: t + " mm", cl: "IS 13920 cl 10.1.2" });
+    /* bar schedule */
+    var bars = [], cv = 25, mk = 0;
+    function add(o) { o.B = o.B || 0; o.C = o.C || 0; o.mark = String.fromCharCode(97 + (mk % 26)) + (mk++ >= 26 ? Math.floor(mk / 26) : ""); o.L = DT.cut(o); bars.push(o); }
+    var nc2 = two ? 2 : 1;
+    storeys.forEach(function (st, i) {
+      var lapV = DT.lap(st.vb.dia, fy, fck), nV = nc2 * (Math.floor((Lw - 2 * cv) / st.vb.s) + 1), nH = nc2 * (Math.floor((st.h - 50) / st.hb.s) + 1), Lh = DT.r(Lw - 2 * cv, 5), leg = DT.r(Math.max(10 * st.hb.dia, 100), 25);
+      add({ desc: "Vertical bars storey " + (i + 1) + (nc2 > 1 ? " (both faces)" : ""), pos: "V", dia: st.vb.dia, n: nV, shape: i === 0 ? "L" : "S", A: DT.r(st.h + lapV + (i === 0 ? 400 : 0), 5), B: i === 0 ? DT.r(Math.max(12 * st.vb.dia, 150), 25) : 0, n90: i === 0 ? 1 : 0, st: i });
+      add({ desc: "Horizontal bars storey " + (i + 1) + (nc2 > 1 ? " (both faces), 90° legs at ends" : ""), pos: "H", dia: st.hb.dia, n: nH, shape: "U", A: Lh, B: leg, C: leg, n90: 2, st: i });
+      if (nc2 > 1) add({ desc: "Crossties between curtains storey " + (i + 1) + " (alternate bars, ≤ 1 m grid)", pos: "X", dia: 8, n: Math.ceil(Lw / 1000) * Math.ceil(st.h / 1000) + 2, shape: "CT", A: t - 2 * cv, n90: 0, st: i });
+      if (st.be && st.beBars) {
+        var lb = DT.lap(st.beBars.dia, fy, fck), sc2 = DT.rf(Math.min(Math.min(t, st.beL) / 4, 6 * st.beBars.dia, 100), 5), nt = Math.floor(st.h / sc2) + 1;
+        add({ desc: "Boundary element bars storey " + (i + 1) + " (2 ends)", pos: "BE", dia: st.beBars.dia, n: 2 * st.beBars.n, shape: "S", A: DT.r(st.h + lb, 5), n90: 0, st: i });
+        add({ desc: "Boundary element hoops storey " + (i + 1) + " (2 ends) @ " + sc2, pos: "BE", dia: 8, n: 2 * nt, shape: "ST", A: t - 2 * 40, B: st.beL - 2 * 40, n90: 3, st: i });
+      }
+    });
+    var w = { name: name, line: line, Lw: Lw, t: t, fck: fck, fy: fy, ax: ax, s0: s0 * 1000, z0: z0 * 1000, z1: z1 * 1000, storeys: storeys, checks: checks, msg: msg, bars: bars, two: two, endCols: endCols.map(function (c) { return c.name; }) };
+    w.wt = 0; bars.forEach(function (q) { w.wt += q.n * q.L / 1000 * DT.wpm(q.dia); });
+    w.sig = [t, Math.round(Lw), storeys.map(function (s) { return [Math.round(s.h), s.vb.dia, s.vb.s, s.hb.dia, s.hb.s, s.be ? 1 : 0].join(","); }).join("|"), bars.map(function (q) { return q.n + "x" + Math.round(q.L); }).join(",")].join("|");
+    out.push(w);
+  });
+  return out;
+};
+DT.drawWall = function (w, cf) {
+  var dw = new DW("Elevation " + w.name), th = 120, Lw = w.Lw, t = w.t;
+  w.storeys.forEach(function (st, i) {
+    var z0 = st.z * 1000, z1 = z0 + st.h;
+    dw.r(0, z0, Lw, st.h, "C").tx(-150, z1 - 300, "+" + (z1 / 1000).toFixed(2), th, "r", "D");
+    for (var x = 25; x <= Lw - 25 + 1; x += st.vb.s) dw.l(x, z0, x, z1, "R");
+    for (var z = z0 + 50; z <= z1 - 1; z += st.hb.s) dw.l(25, z, Lw - 25, z, "S");
+    dw.tx(Lw + 150, (z0 + z1) / 2 + 150, "V: " + st.vb.dia + "φ@" + st.vb.s + (w.two ? " EF" : ""), th, "l", "R").tx(Lw + 150, (z0 + z1) / 2 - 100, "H: " + st.hb.dia + "φ@" + st.hb.s + (w.two ? " EF" : ""), th, "l", "S");
+    if (st.be) dw.tx(Lw + 150, (z0 + z1) / 2 - 350, st.beBars ? "BE " + st.beL + ": " + st.beBars.n + "-" + st.beBars.dia + "φ" : "BE = end columns", th, "l", "R");
+    if (st.be && st.beL) { dw.r(0, z0, st.beL, st.h, "S"); dw.r(Lw - st.beL, z0, st.beL, st.h, "S"); }
+  });
+  dw.dim(0, w.storeys[0].z * 1000 - 200, Lw, w.storeys[0].z * 1000 - 200, -150, "Lw " + Math.round(Lw), th);
+  dw.tx(0, w.z1 + 400, w.name + "  t = " + t + " mm  M" + w.fck + " / Fe" + w.fy, 150, "l").it[dw.it.length - 1].b = true;
+  /* plan section of the lowest storey */
+  var st0 = w.storeys[0], sec = new DW("Plan section, storey 1"), cv = 25;
+  sec.r(0, 0, Lw, t, "C");
+  var ys = w.two ? [cv + st0.vb.dia / 2 + st0.hb.dia, t - cv - st0.vb.dia / 2 - st0.hb.dia] : [t / 2];
+  ys.forEach(function (y) { for (var x = cv; x <= Lw - cv + 1; x += st0.vb.s) sec.c(x, y, st0.vb.dia / 2, "R"); sec.l(cv, y + (w.two ? (y < t / 2 ? -1 : 1) * st0.hb.dia : 0), Lw - cv, y + (w.two ? (y < t / 2 ? -1 : 1) * st0.hb.dia : 0), "S"); });
+  if (st0.be && st0.beL) { sec.r(40, 40, st0.beL - 80, t - 80, "S"); sec.r(Lw - st0.beL + 40, 40, st0.beL - 80, t - 80, "S"); }
+  sec.dim(0, -40, Lw, -40, -80, String(Math.round(Lw)), 80);
+  return [dw, sec];
+};
+
 /* ------------------------------------------------------------------ RUN */
 DT.run = function (m, S, p) {
-  var cf = DT.cfg(p), g = DT.grid(m), out = { cf: cf, g: g, beams: [], cols: [], slabs: [], foot: [], scwb: [], warn: [] };
+  var cf = DT.cfg(p), g = DT.grid(m), out = { cf: cf, g: g, beams: [], cols: [], slabs: [], foot: [], scwb: [], joints: [], walls: [], warn: [] };
   if (!S.des || !m.frames.some(function (e) { return e.sec.kind === "rcc"; })) { out.warn.push("Detailing is for RCC frames only"); return out; }
   out.beams = DT.beams(m, S, p, cf, g);
   out.beams.forEach(function (bl) { var lv = g.lev(bl.z); bl.lev = lv; bl.name = (lv > 0 ? "F" + lv : "z" + bl.z.toFixed(2)) + "-" + (bl.ux ? (m.twoD ? "X" : g.gy(bl.xy[0].y) + "(X)") : g.gx(bl.xy[0].x) + "(Y)"); });
   try { out.foot = DT.footings(m, S, p, cf, g); } catch (e) { out.warn.push("Footings: " + e.message); }
   out.cols = DT.columns(m, S, p, cf, g, out.beams, out.foot);
-  if (cf.duct) out.scwb = DT.scwb(m, out.cols, out.beams);
+  if (cf.duct) { out.scwb = DT.scwb(m, out.cols, out.beams); out.joints = DT.joints(m, out.cols, out.beams); } else out.joints = [];
   try { out.slabs = DT.slabs(m, S, p, cf, g); } catch (e) { out.warn.push("Slabs: " + e.message); }
-  if (m.shells.some(function (s) { return s.kind === "wall"; })) out.warn.push("Shear walls: reinforcement per element is in the design tables; boundary elements and wall bar schedules are not detailed here.");
+  try { out.walls = DT.walls(m, S, p, cf, g, out.cols); } catch (e) { out.warn.push("Walls: " + e.message); }
   /* group identical members */
   function grp(list, nm) {
     var gs = {}, order = [];
     list.forEach(function (o) { if (!gs[o.sig]) { gs[o.sig] = { rep: o, list: [] }; order.push(o.sig); } gs[o.sig].list.push(o); });
     return order.map(function (k, i) { var G = gs[k]; G.id = nm + (i + 1); G.n = G.list.length; G.list.forEach(function (o) { o.grp = G.id; }); return G; });
   }
-  out.gB = grp(out.beams, "B"); out.gC = grp(out.cols, "C"); out.gF = grp(out.foot, "F");
+  out.gB = grp(out.beams, "B"); out.gC = grp(out.cols, "C"); out.gF = grp(out.foot, "F"); out.gW = grp(out.walls, "W");
   /* totals by diameter */
   var tot = {}, conc = 0;
-  function acc(bars, nm, kind) { bars.forEach(function (q) { var w = nm * q.n * q.L / 1000 * DT.wpm(q.dia); tot[q.dia] = tot[q.dia] || { dia: q.dia, beams: 0, cols: 0, slabs: 0, foot: 0 }; tot[q.dia][kind] += w; }); }
+  function acc(bars, nm, kind) { bars.forEach(function (q) { var w = nm * q.n * q.L / 1000 * DT.wpm(q.dia); tot[q.dia] = tot[q.dia] || { dia: q.dia, beams: 0, cols: 0, slabs: 0, foot: 0, walls: 0 }; tot[q.dia][kind] += w; }); }
   out.gB.forEach(function (G) { acc(G.rep.bars, G.n, "beams"); });
   out.gC.forEach(function (G) { acc(G.rep.bars, G.n, "cols"); });
   out.gF.forEach(function (G) { acc(G.rep.bars, G.n, "foot"); });
   out.slabs.forEach(function (s) { acc(s.bars, 1, "slabs"); });
-  out.tot = Object.keys(tot).map(Number).sort(function (a, b) { return a - b; }).map(function (k) { var t = tot[k]; t.all = t.beams + t.cols + t.slabs + t.foot; return t; });
+  out.gW.forEach(function (G) { acc(G.rep.bars, G.n, "walls"); });
+  out.tot = Object.keys(tot).map(Number).sort(function (a, b) { return a - b; }).map(function (k) { var t = tot[k]; t.all = t.beams + t.cols + t.slabs + t.foot + t.walls; return t; });
   out.total = 0; out.tot.forEach(function (t) { out.total += t.all; });
   out.area = 0; out.slabs.forEach(function (s) { out.area += s.area; });
   out.fails = 0;
   out.beams.forEach(function (b) { b.checks.forEach(function (c) { if (!c.ok) out.fails++; }); });
   out.cols.forEach(function (c) { c.checks.forEach(function (q) { if (!q.ok) out.fails++; }); });
   out.foot.forEach(function (f) { f.checks.forEach(function (q) { if (!q.ok) out.fails++; }); });
+  out.walls.forEach(function (w) { w.checks.forEach(function (q) { if (!q.ok) out.fails++; }); });
   out.scwb.forEach(function (q) { if (!q.ok) out.fails++; });
+  out.joints.forEach(function (q) { if (!q.ok || !q.anch) out.fails++; });
   return out;
 };
 

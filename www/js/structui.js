@@ -564,14 +564,17 @@ var SU = (function () {
     if (dt.err) return '<h4>Reinforcement detailing</h4><div class="note">Detailing not available: ' + esc(dt.err) + '</div>';
     if (!dt.beams.length && !dt.cols.length) return dt.warn.length ? '<h4>Reinforcement detailing</h4><div class="note">' + dt.warn.map(esc).join("<br>") + '</div>' : "";
     var h = '<h4 id="dtH">Reinforcement detailing & bar bending schedule — ' + (dt.cf.duct ? 'IS 13920:2016 ductile detailing (zone ' + esc(S.p.zone) + ')' : 'IS 456 / SP 34') + ' · ' + (dt.fails ? '<span class="not">' + dt.fails + ' check(s) fail</span>' : '<span class="okt">all checks OK</span>') + '</h4>';
-    h += '<div class="sum"><div><span>Reinforcement (beams / columns / slabs / footings)</span><b>' + ["beams", "cols", "slabs", "foot"].map(function (k) { var t = 0; dt.tot.forEach(function (q) { t += q[k]; }); return f(t / 1000, 2); }).join(" / ") + ' t</b></div><div><span>Total steel</span><b>' + f(dt.total / 1000, 2) + ' t' + (dt.area ? ' · ' + f(dt.total / dt.area, 1) + ' kg per m² of slab' : '') + '</b></div></div>';
-    h += tbl(["Diameter", "Beams kg", "Columns kg", "Slabs kg", "Footings kg", "Total kg"], dt.tot.map(function (t) { return [t.dia + " mm", f(t.beams, 0), f(t.cols, 0), f(t.slabs, 0), f(t.foot, 0), "<b>" + f(t.all, 0) + "</b>"]; }));
+    h += '<div class="sum"><div><span>Reinforcement (beams / columns / slabs / footings' + (dt.walls.length ? ' / walls' : '') + ')</span><b>' + ["beams", "cols", "slabs", "foot"].concat(dt.walls.length ? ["walls"] : []).map(function (k) { var t = 0; dt.tot.forEach(function (q) { t += q[k]; }); return f(t / 1000, 2); }).join(" / ") + ' t</b></div><div><span>Total steel</span><b>' + f(dt.total / 1000, 2) + ' t' + (dt.area ? ' · ' + f(dt.total / dt.area, 1) + ' kg per m² of slab' : '') + '</b></div></div>';
+    h += tbl(["Diameter", "Beams kg", "Columns kg", "Slabs kg", "Footings kg"].concat(dt.walls.length ? ["Walls kg"] : []).concat(["Total kg"]), dt.tot.map(function (t) { return [t.dia + " mm", f(t.beams, 0), f(t.cols, 0), f(t.slabs, 0), f(t.foot, 0)].concat(dt.walls.length ? [f(t.walls, 0)] : []).concat(["<b>" + f(t.all, 0) + "</b>"]); }));
     var bad = dt.scwb.filter(function (q) { return !q.ok; });
     if (dt.scwb.length) h += '<div class="note"><b>Strong column – weak beam</b> (IS 13920 cl 7.2.1, ΣMc ≥ 1.4 ΣMb): ' + (bad.length ? '<span class="not">' + bad.length + ' of ' + dt.scwb.length + ' joint checks fail</span> — ' + bad.slice(0, 8).map(function (q) { return esc(q.col) + " +" + f(q.z, 2) + " " + q.dir + " (" + f(q.r, 2) + ")"; }).join(", ") + (bad.length > 8 ? " …" : "") + '. Enlarge or add steel to these columns.' : '<span class="okt">all ' + dt.scwb.length + ' joint checks OK</span> (min ratio ' + f(Math.min.apply(null, dt.scwb.map(function (q) { return q.r; })), 2) + ')') + '</div>';
+    var jb = (dt.joints || []).filter(function (q) { return !q.ok || !q.anch; });
+    if (dt.joints && dt.joints.length) h += '<div class="note"><b>Beam–column joints</b> (IS 13920 cl 9: Vj = 1.25fy(Ast,top + Ast,bot) − Vcol ≤ k√fck·Aej; column depth ≥ 20 × beam bar φ): ' + (jb.length ? '<span class="not">' + jb.length + ' of ' + dt.joints.length + ' joint checks fail</span> — ' + jb.slice(0, 8).map(function (q) { return esc(q.col) + " +" + f(q.z, 2) + " " + q.dir + (q.ok ? "" : " (Vj/cap " + f(q.r, 2) + ")") + (q.anch ? "" : " (hc < 20φ)"); }).join(", ") + (jb.length > 8 ? " …" : "") + '.' : '<span class="okt">all ' + dt.joints.length + ' joint checks OK</span> (max Vj/capacity ' + f(Math.max.apply(null, dt.joints.map(function (q) { return q.r; })), 2) + ')') + '</div>';
     if (dt.warn.length) h += '<div class="note">' + dt.warn.map(esc).join("<br>") + '</div>';
     var opts = [];
     dt.gB.forEach(function (G, i) { opts.push(["b" + i, "Beam " + G.id + ": " + G.rep.name + (G.n > 1 ? " (×" + G.n + ")" : "") + (G.rep.checks.some(function (c) { return !c.ok; }) ? " ⚠" : "")]); });
     dt.gC.forEach(function (G, i) { opts.push(["c" + i, "Column " + G.id + ": " + G.list.map(function (c) { return c.name; }).slice(0, 4).join(", ") + (G.n > 4 ? " … (×" + G.n + ")" : "") + (G.rep.checks.some(function (c) { return !c.ok; }) || G.rep.msg.length ? " ⚠" : "")]); });
+    (dt.gW || []).forEach(function (G, i) { opts.push(["w" + i, "Wall " + G.id + ": " + G.list.map(function (w) { return w.name.replace(/^W\d+ /, "") + " " + w.line; }).slice(0, 2).join("; ") + (G.n > 1 ? " (×" + G.n + ")" : "") + (G.rep.checks.some(function (c) { return !c.ok; }) ? " ⚠" : "")]); });
     dt.slabs.forEach(function (sl, i) { opts.push(["s" + i, sl.name]); });
     dt.gF.forEach(function (G, i) { opts.push(["f" + i, "Footing " + G.id + ": " + G.rep.Lx + "×" + G.rep.Ly + "×" + G.rep.D + " — " + G.list.map(function (c) { return c.name; }).slice(0, 4).join(", ") + (G.n > 4 ? " …" : "") + (G.rep.checks.some(function (c) { return !c.ok; }) ? " ⚠" : "")]); });
     h += '<div class="btns noprint"><select id="dtSel" style="flex:1;min-width:0">' + opts.map(function (o) { return '<option value="' + o[0] + '">' + esc(o[1]) + '</option>'; }).join("") + '</select></div><div id="dtView"></div>';
@@ -589,6 +592,7 @@ var SU = (function () {
     dt.gB.forEach(function (G) { rows.push({ title: "Beam " + G.id + " — " + G.list.map(function (b) { return b.name; }).join(", "), dws: DT.drawBeam(G.rep, cf, 1) }); });
     dt.gC.forEach(function (G) { rows.push({ title: "Column " + G.id + " — " + G.list.map(function (c) { return c.name; }).join(", "), dws: DT.drawCol(G.rep, cf, 1) }); });
     dt.gF.forEach(function (G) { rows.push({ title: "Footing " + G.id + " — " + G.list.map(function (c) { return c.name; }).join(", "), dws: DT.drawFoot(G.rep, cf) }); });
+    (dt.gW || []).forEach(function (G) { rows.push({ title: "Wall " + G.id + " — " + G.list.map(function (w) { return w.line; }).join("; "), dws: DT.drawWall(G.rep, cf) }); });
     dt.slabs.forEach(function (sl) { rows.push({ title: sl.name, dws: DT.drawSlab(sl, cf) }); });
     return rows;
   }
@@ -606,7 +610,14 @@ var SU = (function () {
       h += tbl(["Storey", "Section", "Bars", "Steel %", "Ties", "lo (mm)", "Confining", "Middle"], c.st.map(function (s) { return [s.i + 1, s.b + "×" + s.D, s.ar.n + "-" + s.ar.dia + "φ", f(s.pct, 2), s.tie.dia + "φ, " + s.tie.lB + "×" + s.tie.lD + " legs", s.tie.lo, s.tie.sc ? s.tie.dia + "φ@" + s.tie.sc : "—", s.tie.dia + "φ@" + s.tie.sm]; }));
       var sw = dt.scwb.filter(function (q) { return q.colRef === c; });
       if (sw.length) h += tbl(["Joint", "Dir", "ΣMc kNm", "ΣMb kNm", "ΣMc/ΣMb", "≥ 1.4"], sw.map(function (q) { return ["+" + f(q.z, 2), q.dir, f(q.Mc, 0), f(q.Mb, 0), f(q.r, 2), okc(q.ok)]; }));
+      var jj = (dt.joints || []).filter(function (q) { return q.colRef === c; });
+      if (jj.length) h += tbl(["Joint", "Dir", "Faces confined", "Vj kN", "k√fck·Aej kN", "Vj/cap", "hc ≥ 20φ", ""], jj.map(function (q) { return ["+" + f(q.z, 2), q.dir, q.faces + " (k = " + q.k + ")", f(q.Vj, 0), f(q.cap, 0), f(q.r, 2), q.anch ? "✓ " + q.hc + " ≥ " + 20 * q.dia : "✗ " + q.hc + " < " + 20 * q.dia, okc(q.ok && q.anch)]; }));
       h += dchk(c.checks, c.msg) + bbs(c.bars, Gc.n);
+    } else if (kind === "w") {
+      var Gw = dt.gW[i], w = Gw.rep; dws = DT.drawWall(w, cf);
+      h += '<div class="note">' + esc(Gw.list.map(function (q) { return q.name + " " + q.line; }).join("; ")) + ' · Lw ' + f(w.Lw, 0) + ' × tw ' + w.t + ' mm' + (w.endCols.length ? ' · end columns ' + esc(w.endCols.join(", ")) : '') + '</div>' + svgs(dws, Math.min(W, 520));
+      h += tbl(["Storey", "Pu max kN", "Mu max kNm", "Vu kN", "τv / τc,max", "ρv (req)", "Vertical", "Horizontal", "σ/0.2fck", "Boundary el."], w.storeys.map(function (st) { var P = 0, M = 0; st.env.forEach(function (q) { P = Math.max(P, q.P); M = Math.max(M, q.M); }); return [st.i + 1, f(P, 0), f(M, 0), f(st.Vu, 0), f(st.tv, 2) + " / " + f(st.tcm, 2), f(100 * st.rho, 2) + " %", st.vb.dia + "φ@" + st.vb.s + (w.two ? " EF" : ""), st.hb.dia + "φ@" + st.hb.s + (w.two ? " EF" : ""), f(st.sMax / (0.2 * w.fck), 2), st.be ? (st.beBars ? st.beL + " mm, " + st.beBars.n + "-" + st.beBars.dia + "φ" : "end columns") : "not req."]; }));
+      h += '<div class="note">Section forces at each floor from the wall elements (nodal forces K·u, response-spectrum combinations by modal combination); flexure with axial load by strain compatibility with uniformly distributed vertical steel; out-of-plane bending of the wall is checked element by element in the Wall Design table.</div>' + dchk(w.checks, w.msg) + bbs(w.bars, Gw.n);
     } else if (kind === "s") {
       var sl = dt.slabs[i]; dws = DT.drawSlab(sl, cf);
       h += svgs(dws, W) + tbl(["Panel", "Lx × Ly", "Bottom X", "Bottom Y", "Top W / E / S / N"], sl.panels.map(function (P, j) { return ["S" + (j + 1), P.Lx + "×" + P.Ly, P.bot.X.dia + "φ@" + P.bot.X.s, P.bot.Y.dia + "φ@" + P.bot.Y.s, ["W", "E", "S", "N"].map(function (k) { var T = P.top[k]; return T.sp.dia + "φ@" + T.sp.s + (T.cont ? "" : "*"); }).join(" / ")]; }));
@@ -660,6 +671,7 @@ var SU = (function () {
       var r = c[1], nm = c[0] === "slab" || c[0] === "wall" ? cap(c[0]) + " element S" + (r.k + 1) : cap(c[0]) + " F" + (r.k + 1) + " (" + r.name + ")";
       h += '<details class="calc" open><summary>' + esc(nm) + ' — ' + (r.ok ? '<span class="okt">OK</span>' : '<span class="not">FAIL</span>') + '</summary>' + CALC.html(CALC.stepsFor(c[0], r, S.m, S.p), esc) + '</details>';
     });
+    if (typeof REG !== "undefined") h += REG.html(esc);
     h += '<div class="btns noprint"><button type="button" id="bAllCalc">Show worked calculations for all members (for printing)</button></div><div id="allCalc"></div>';
     return h;
   }

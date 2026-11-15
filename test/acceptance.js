@@ -276,5 +276,45 @@ console.log('\n== F. Reinforcement detailing: IS 13920 / IS 456 / SP 34 / IS 250
   ok('Detail drawings: DXF written and read back (lines, circles, text)', back.ents.length > 500 && /REBAR/.test(dxf) && /EOF\n$/.test(dxf), back.ents.length + ' entities');
 })();
 
+console.log('\n== G. Shear walls (IS 13920 cl 10) and beam–column joints (cl 9)');
+(function () {
+  const { DT, RCC, SE } = c;
+  /* P–M of a wall with uniform steel: independent check with the IS 456 rectangular stress block (0.36fck·xu at 0.42xu) */
+  const tw = 200, Lw = 3000, rho = 0.005, fck = 25, fy = 500, pm = DT.wallPM(tw, Lw, rho, fck, fy), As = rho * tw * Lw;
+  function Pof(xu) { let P = 0.36 * fck * tw * xu; for (let i = 0; i < 400; i++) { const y = (i + 0.5) * Lw / 400, e = 0.0035 * (xu - y) / xu; P += (e >= 0 ? 1 : -1) * RCC.fs(Math.abs(e), fy) * As / 400; } return P; }
+  let lo = 1, hi = Lw; for (let i = 0; i < 80; i++) { const mid = (lo + hi) / 2; if (Pof(mid) > 0) hi = mid; else lo = mid; }
+  let M0 = 0.36 * fck * tw * lo * (Lw / 2 - 0.42 * lo); for (let i = 0; i < 400; i++) { const y = (i + 0.5) * Lw / 400, e = 0.0035 * (lo - y) / lo; M0 += (e >= 0 ? 1 : -1) * RCC.fs(Math.abs(e), fy) * As / 400 * (Lw / 2 - y); }
+  near('Wall P–M at P = 0 vs independent stress-block computation', pm.Mcap(0), M0 / 1e6, 0.015);
+  near('Wall squash load ≈ 0.446fck·Ag + fs(0.002)·As', pm.P0, (0.446 * fck * tw * Lw + RCC.fs(0.002, fy) * As) / 1000, 0.01);
+
+  const p = { fck: 25, fy: 500, fys: 250, crack: true, pcCol: 2, pcBeam: 1, colSec: '450x450', beamSec: '300x500', braceSec: 'ISA 75x75x6', tSlab: 150, tWall: 200, ff: 1.5, ffRoof: 2.5, ll: 3, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0, eq: true, zone: 'V', I: 1.2, R: 5, soil: 'II', sys: 'rc', wind: false, vb: 39, terrain: 2, cf: 1.3, trib: 4, kcol: 1.2, accTor: true, rsa: true, nModes: 12, rsComb: 'cqc', method: 'lsm', sbc: 250 };
+  const m = MD.make(MD.generate({ bx: '5,5', by: '4,4', hs: '3.2,3.2,3.2,3.2,3.2', slabs: true, walls: true, mesh: 1 }), p), S = { m, p };
+  S.L = MD.cases(m, p); S.cb = MD.combos(S.L.cases, p.method); S.res = FE.linear(m, S.L.cases, S.cb, { caseReac: true }); S.res.incMap = {};
+  S.se = SE.run(m, S, p); S.des = MD.design(m, S.res, p);
+  const R = DT.run(m, S, p), w = R.walls[0], st0 = w.storeys[0];
+  ok('Walls found and designed storey by storey', R.walls.length === 2 && w.storeys.length === 5, R.walls.map(x => x.name + ' ' + x.Lw + '×' + x.t).join(', '));
+  /* equilibrium: wall section shear + column shears at the base = base reaction (a static combination) */
+  const ci = S.res.combos.findIndex(x => /^1\.5\(DL\+EQY\+TYa\)$/.test(x.name)), cb = S.res.combos[ci];
+  let Ry = 0; Object.keys(cb.reac).forEach(n => { Ry += cb.reac[n][1]; });
+  let Vw = 0; R.walls.forEach(x => { const q = x.storeys[0].env[ci]; Vw += q.V; });
+  let Vc = 0; m.frames.forEach((e, k) => { if (e.type !== 'column') return; const z = Math.min(m.nodes[e.n1].z, m.nodes[e.n2].z); if (z > 0.01) return; Vc += FE.frameDiagram(cb.fr[k], 8)[0].Vz; });
+  near('Wall section forces: Σ wall shear + Σ column shear at the base = base reaction', Vw + Math.abs(Vc), Math.abs(Ry), 0.005);
+  const Pw = R.walls.reduce((a, x) => a + x.storeys[0].env[ci].P, 0);
+  ok('Wall axial forces are compressive under gravity + EQ and less than the total reaction', Pw > 0 && Pw < Object.keys(cb.reac).reduce((a, n) => a + cb.reac[n][2], 0));
+  const rh = Math.max(0.0025, (st0.Vu * 1000 - st0.tc * w.t * 0.8 * w.Lw) / (0.87 * 500 * 0.8 * w.Lw * w.t));
+  ok('IS 13920 cl 10.2: horizontal steel ≥ max(0.25 %, (Vu − τc·tw·dw)/(0.87fy·dw·tw))', st0.rhP >= rh - 1e-9, (100 * st0.rhP).toFixed(3) + ' % ≥ ' + (100 * rh).toFixed(3) + ' %');
+  ok('Flexure: every combination inside the P–M curve with the vertical steel provided', w.storeys.every(st => { const pm2 = DT.wallPM(w.t, w.Lw, st.rhoP, 25, 500); return st.env.every(q => q.M <= pm2.Mcap(q.P) + 1e-6); }));
+  const sg = Math.max(...st0.env.map(q => q.P * 1000 / (w.t * w.Lw) + q.M * 6e6 / (w.t * w.Lw * w.Lw)));
+  ok('IS 13920 cl 10.4: boundary-element trigger σ = Pu/A + 6Mu/(tLw²) vs 0.2fck', Math.abs(sg - st0.sMax) < 1e-9 && st0.be === (sg > 5), 'σ = ' + sg.toFixed(2) + ' N/mm², boundary element ' + (st0.be ? 'required — ' + st0.beText : 'not required'));
+  /* joint shear recomputed */
+  const j = R.joints.find(q => q.col === 'C-B2' && q.dir === 'X' && Math.abs(q.z - 3.2) < 0.01), col = R.cols.find(x => x.name === 'C-B2');
+  const bl = R.beams.find(b => b.ux && b.lev === 1 && Math.abs(b.xy[0].y - 4) < 0.01), si = bl.sup.findIndex(s0 => s0.n === col.st[0].nTop);
+  const At = bl.sup[si].nt * bl.a, Ab = bl.ncb * bl.a, Mo = As2 => { const T = 1.25 * 500 * As2, x = Math.min(T / (0.36 * 25 * bl.b), bl.d); return T * (bl.d - 0.42 * x) / 1e6; };
+  const Vj = 1.25 * 500 * (At + Ab) / 1000 - (Mo(At) + Mo(Ab)) / 3.2;
+  near('IS 13920 cl 9.1: interior joint Vj = 1.25fy(Ast,top + Ast,bot) − Vcol', j.Vj, Vj, 1e-9);
+  const kj = bl.b >= 0.75 * 450 ? 1.5 : 1.0;   /* 300 mm beams on a 450 mm column are narrower than ¾ of the face → not confining */
+  near('Joint capacity k·√fck·bj·hc, k = 1.5 only if beams ≥ ¾ column width frame into all faces (here k = ' + kj + ')', j.cap, kj * 5 * Math.min(450, bl.b + 450) * 450 / 1000, 1e-9);
+})();
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;

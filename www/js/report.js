@@ -420,6 +420,14 @@ var RX = (function () {
     });
 
     if (S.det && !S.det.err && (S.det.beams.length || S.det.cols.length)) detailSheets(wb, S, G);
+    if (typeof REG !== "undefined") {
+      var rg0 = wb.sheet("Standards Register", { cols: [24, 46, 22, 70], color: TAB.guide });
+      intro(rg0, "Standards register and verification status — engine " + REG.ENGINE, "Which edition of each code is used and how, and the verification status of every check: Verified (agrees with an independent benchmark in the test suite), Calculated (implemented from the clauses, not independently benchmarked), Simplified (stated approximation), Not implemented (check separately). A PASS elsewhere in this workbook means the check that was made passed; it is not a certificate of structural safety — independent review by a qualified engineer is required before construction.", 4);
+      rg0.row(["Standard", "Title", "Status", "How it is used"], "h");
+      REG.STANDARDS.forEach(function (r) { rg0.row([{ v: r[0], s: "b" }, r[1], r[2], r[3]]); });
+      rg0.row([]); rg0.row(["Area", "Check", "Status", "Evidence / assumption"], "h");
+      REG.CHECKS.forEach(function (r) { rg0.row([r[0], r[1], { v: r[2], s: r[2] === "Verified" ? "ok" : r[2] === "Not implemented" ? "no" : "" }, r[3]]); });
+    }
     /* ===== Design basis & worked calculations ===== */
     if (des) {
       var bs = wb.sheet("Design Basis", { cols: [34, 90, 26], color: TAB.guide });
@@ -518,6 +526,7 @@ var RX = (function () {
     dt.gC.forEach(function (G0) { grpRows("Column", G0, G0.rep.bars); });
     dt.slabs.forEach(function (sl) { grpRows("Slab", { id: "S" + (dt.slabs.indexOf(sl) + 1), list: [{ name: sl.name }], n: 1 }, sl.bars); });
     dt.gF.forEach(function (G0) { grpRows("Footing", G0, G0.rep.bars); });
+    (dt.gW || []).forEach(function (G0) { grpRows("Wall", G0, G0.rep.bars); });
     var sh = wb.sheet("BBS", { cols: [7, 8, 26, 6, 5, 34, 6, 7, 8, 7, 7, 5, 8, 10, 9, 10, 8, 10], color: TAB.design });
     intro(sh, "Bar Bending Schedule — IS 2502 / SP 34", "One row per bar mark of each group of identical members (the Members column lists them). Shapes: S straight; L one 90° bend; U two 90° bends (A = straight length, B and C = bend legs); ST closed hoop/stirrup with two 135° hooks (A × B outer dimensions); CT crosstie with 135° hooks. Cutting length = A + B + C − 2φ per 90° bend; hoop = 2(A+B) + 2 hooks − 12φ, hook allowance = MAX(10φ, 75 mm); crosstie = A + 2 hooks − 6φ. Weight = φ²/162 kg/m. Every length, count and weight is a live formula — change a dimension or count and the totals update.", 14);
     var t = table(sh, [{ k: "grp", h: "Group" }, { k: "kind", h: "Element" }, { k: "mem", h: "Members" }, { k: "nm", h: "No. of members", s: "n0" }, { k: "mark", h: "Mark" }, { k: "desc", h: "Description" },
@@ -528,14 +537,14 @@ var RX = (function () {
     sh.row([]);
     sh.row(["Summary by diameter and element (kg)"], "tb");
     var L = t.L, rg = function (c) { return "$" + L[c] + "$" + t.first + ":$" + L[c] + "$" + t.last; }, r0 = sh.next() + 1;
-    sh.row(["φ (mm)", "", "Beams", "Columns", "Slabs", "Footings", "Total", "", "Total (t)"], "h");
+    sh.row(["φ (mm)", "", "Beams", "Columns", "Slabs", "Footings", "Walls", "Total", "", "Total (t)"], "h");
     dt.tot.forEach(function (q) {
       var rn = sh.next(), cell = function (kind, v) { return { f: '=SUMIFS(' + rg("wt") + ',' + rg("dia") + ',A' + rn + ',' + rg("kind") + ',"' + kind + '")', v: v, s: "f0" }; };
-      sh.row([q.dia, "", cell("Beam", q.beams), cell("Column", q.cols), cell("Slab", q.slabs), cell("Footing", q.foot), { f: "=SUM(C" + rn + ":F" + rn + ")", v: q.all, s: "f0" }, "", { f: "=G" + rn + "/1000", v: q.all / 1000, s: "f3" }]);
+      sh.row([q.dia, "", cell("Beam", q.beams), cell("Column", q.cols), cell("Slab", q.slabs), cell("Footing", q.foot), cell("Wall", q.walls || 0), { f: "=SUM(C" + rn + ":G" + rn + ")", v: q.all, s: "f0" }, "", { f: "=H" + rn + "/1000", v: q.all / 1000, s: "f3" }]);
     });
     var r1 = sh.next() - 1, rt = sh.next();
-    sh.row(["Total", "", { f: "=SUM(C" + r0 + ":C" + r1 + ")", s: "f0" }, { f: "=SUM(D" + r0 + ":D" + r1 + ")", s: "f0" }, { f: "=SUM(E" + r0 + ":E" + r1 + ")", s: "f0" }, { f: "=SUM(F" + r0 + ":F" + r1 + ")", s: "f0" }, { f: "=SUM(G" + r0 + ":G" + r1 + ")", v: dt.total, s: "f0" }, "", { f: "=SUM(I" + r0 + ":I" + r1 + ")", v: dt.total / 1000, s: "f3" }], "b");
-    if (dt.area) sh.row(["Steel per m² of slab area (" + dt.area.toFixed(1) + " m²)", "", "", "", "", "", { f: "=G" + rt + "/" + dt.area.toFixed(3), v: dt.total / dt.area, s: "f2" }, "kg/m²"]);
+    sh.row(["Total", ""].concat(["C", "D", "E", "F", "G"].map(function (cl) { return { f: "=SUM(" + cl + r0 + ":" + cl + r1 + ")", s: "f0" }; })).concat([{ f: "=SUM(H" + r0 + ":H" + r1 + ")", v: dt.total, s: "f0" }, "", { f: "=SUM(J" + r0 + ":J" + r1 + ")", v: dt.total / 1000, s: "f3" }]), "b");
+    if (dt.area) sh.row(["Steel per m² of slab area (" + dt.area.toFixed(1) + " m²)", "", "", "", "", "", "", { f: "=H" + rt + "/" + dt.area.toFixed(3), v: dt.total / dt.area, s: "f2" }, "kg/m²"]);
     sh.row([{ v: "Rolling margin and wastage are not included. Laps: max(Ld, 30φ) with Ld = 0.87fy·φ/(4τbd), τbd from IS 456 cl 26.2.1.1 (+60 % for deformed bars); beam bars spliced outside joints and 2d from the faces, column bars in the central half of the storey (IS 13920 cl 6.2.6, 7.2.1). Stock length 12 m.", s: "note" }]);
 
     /* ductile detailing & detailing checks */
@@ -545,6 +554,7 @@ var RX = (function () {
     dt.gB.forEach(function (G0) { G0.rep.checks.forEach(function (q) { cr.push({ grp: G0.id, mem: G0.rep.name + (G0.n > 1 ? " ×" + G0.n : ""), at: q.sp !== undefined ? "span " + (q.sp + 1) : "", t: q.t, v: q.v, cl: q.cl, st: q.ok ? "OK" : "FAIL" }); }); });
     dt.gC.forEach(function (G0) { G0.rep.checks.forEach(function (q) { cr.push({ grp: G0.id, mem: G0.list.map(function (c) { return c.name; }).join(", "), at: q.st !== undefined ? "storey " + (q.st + 1) : "", t: q.t, v: q.v, cl: q.cl, st: q.ok ? "OK" : "FAIL" }); }); });
     dt.gF.forEach(function (G0) { G0.rep.checks.forEach(function (q) { cr.push({ grp: G0.id, mem: G0.list.map(function (c) { return c.name; }).join(", "), at: "", t: q.t, v: q.v, cl: q.cl, st: q.ok ? "OK" : "FAIL" }); }); });
+    (dt.gW || []).forEach(function (G0) { G0.rep.checks.forEach(function (q) { cr.push({ grp: G0.id, mem: G0.list.map(function (w) { return w.name; }).join(", "), at: q.st !== undefined ? "storey " + (q.st + 1) : "", t: q.t, v: q.v, cl: q.cl, st: q.ok ? "OK" : "FAIL" }); }); });
     table(ck, [{ k: "grp", h: "Group" }, { k: "mem", h: "Member(s)" }, { k: "at", h: "Where" }, { k: "t", h: "Check" }, { k: "v", h: "Value" }, { k: "cl", h: "Clause" }, { k: "st", h: "Status", s: "" }], cr, G, { fc: 2 });
     var tl = ck.next() - 1; ck.status("G" + (tl - cr.length + 1) + ":G" + tl);
     if (dt.scwb.length) {
@@ -553,6 +563,14 @@ var RX = (function () {
         { k: "r", h: "ΣMc / ΣMb", f: "{Mc}/{Mb}", s: "f2" }, { k: "st", h: "Status", f: 'IF({r}>=1.4,"OK","FAIL")', s: "stat" }],
         dt.scwb.map(function (q) { return { col: q.col, z: q.z, dir: q.dir, Mc: q.Mc, Mb: q.Mb }; }), G, { freeze: false });
       ck.row([{ v: "Column moment capacities from the P–M interaction with the bars provided at the least favourable axial load of all combinations; beam capacities Mu = 0.87fy·Ast·(d − 0.42xu) with the bars provided, hogging on one side + sagging on the other (larger of the two senses).", s: "note" }]);
+    }
+    if (dt.joints && dt.joints.length) {
+      ck.row([]); ck.row(["Beam–column joint shear (IS 13920 cl 9)"], "tb");
+      table(ck, [{ k: "col", h: "Column" }, { k: "z", h: "Joint level", u: "m", s: "n2" }, { k: "dir", h: "Direction" }, { k: "T1", h: "1.25fy·Ast,top", u: "kN", s: "n1" }, { k: "C2", h: "1.25fy·Ast,bot", u: "kN", s: "n1" }, { k: "Vcol", h: "Vcol = ΣMo/hst", u: "kN", s: "n1" },
+        { k: "Vj", h: "Vj = T1 + C2 − Vcol", u: "kN", f: "{T1}+{C2}-{Vcol}", s: "f1" }, { k: "k", h: "k (faces confined)", s: "n2" }, { k: "bj", h: "bj", u: "mm", s: "n0" }, { k: "hc", h: "hc", u: "mm", s: "n0" }, { k: "fck", h: "fck", s: "n0" },
+        { k: "cap", h: "k·√fck·bj·hc", u: "kN", f: "{k}*SQRT({fck})*{bj}*{hc}/1000", s: "f1" }, { k: "hm", h: "20 × beam φ", u: "mm", s: "n0" }, { k: "st", h: "Status", f: 'IF(AND({Vj}<={cap},{hc}>={hm}),"OK","FAIL")', s: "stat" }],
+        dt.joints.map(function (q) { return { col: q.col, z: q.z, dir: q.dir, T1: q.T1, C2: q.C2, Vcol: q.Vcol, k: q.k, bj: q.bj, hc: q.hc, fck: q.fck, hm: 20 * q.dia }; }), G, { freeze: false });
+      ck.row([{ v: "Beam bars at 1.25fy; Vcol from the beam overstrength moments over the mean storey height. k = 1.5 when beams at least ¾ of the column width frame into all four faces, 1.2 for three faces or two opposite faces, 1.0 otherwise; bj = min(bc, bb + hc).", s: "note" }]);
     }
 
     /* footings with live pressure formulas */
@@ -604,13 +622,13 @@ var RX = (function () {
       var tor = S.L.tor && S.L.tor.dir ? S.L.tor.dir : {};
       table(sh, [{ k: "z", h: "Floor z", u: "m", s: "n3" }, { k: "W", h: "W", u: "kN", s: "n0" }, { k: "cmx", h: "CM x", u: "m", s: "n3" }, { k: "cmy", h: "CM y", u: "m", s: "n3" }, { k: "crx", h: "CR x", u: "m", s: "n3" }, { k: "cry", h: "CR y", u: "m", s: "n3" },
         { k: "esx", h: "esi,x = CMx − CRx", u: "m", f: "{cmx}-{crx}", s: "f3" }, { k: "esy", h: "esi,y = CMy − CRy", u: "m", f: "{cmy}-{cry}", s: "f3" }, { k: "bx", h: "b x", u: "m", s: "n2" }, { k: "by", h: "b y", u: "m", s: "n2" },
-        { k: "edx", h: "edi for EQY = 1.5esi + 0.05b", u: "m", f: "1.5*{esx}+0.05*{bx}*IF({esx}<0,-1,1)", s: "f3" }, { k: "edy", h: "edi for EQX = 1.5esi + 0.05b", u: "m", f: "1.5*{esy}+0.05*{by}*IF({esy}<0,-1,1)", s: "f3" }],
+        { k: "edx", h: "edi for EQY = 1.5esi + 0.05b", u: "m", f: "1.5*{esx}+0.05*{bx}*IF({esx}<-0.000001,-1,1)", s: "f3" }, { k: "edy", h: "edi for EQX = 1.5esi + 0.05b", u: "m", f: "1.5*{esy}+0.05*{by}*IF({esy}<-0.000001,-1,1)", s: "f3" }],
         se.floors.map(function (f) { return { z: f.z, W: f.W, cmx: f.cm.x, cmy: f.cm.y, crx: f.cr ? f.cr.x : f.cm.x, cry: f.cr ? f.cr.y : f.cm.y, bx: f.bx, by: f.by }; }), G, { freeze: false });
       if (tor[0]) {
         sh.row([{ v: "Applied extra torques (the 3D model already carries esi): case a = Qi·(0.5esi + 0.05b), case b = Qi·(−0.05b), signed with esi — TXa/TXb for EQX, TYa/TYb for EQY.", s: "note" }]);
         table(sh, [{ k: "z", h: "Floor z", u: "m", s: "n3" }, { k: "dir", h: "Load" }, { k: "Q", h: "Qi", u: "kN", s: "n2" }, { k: "es", h: "esi", u: "m", s: "n3" }, { k: "b", h: "b", u: "m", s: "n2" },
-          { k: "Ma", h: "Torque case a", u: "kNm", f: function (q) { return (q.d ? "" : "-") + "{Q}*(0.5*{es}+0.05*{b}*IF({es}<0,-1,1))"; }, s: "f2" },
-          { k: "Mb", h: "Torque case b", u: "kNm", f: function (q) { return (q.d ? "" : "-") + "{Q}*(-0.05*{b}*IF({es}<0,-1,1))"; }, s: "f2" }],
+          { k: "Ma", h: "Torque case a", u: "kNm", f: function (q) { return (q.d ? "" : "-") + "{Q}*(0.5*{es}+0.05*{b}*IF({es}<-0.000001,-1,1))"; }, s: "f2" },
+          { k: "Mb", h: "Torque case b", u: "kNm", f: function (q) { return (q.d ? "" : "-") + "{Q}*(-0.05*{b}*IF({es}<-0.000001,-1,1))"; }, s: "f2" }],
           [].concat.apply([], [0, 1].map(function (d) { return (tor[d] || []).map(function (q) { return { z: q.z, dir: d ? "EQY" : "EQX", d: d, Q: q.Q, es: q.es, b: q.b }; }); })), G, { freeze: false });
       }
       sh.row([]);
@@ -780,7 +798,7 @@ var RX = (function () {
     }
     return 1;
   }
-  var SHEETDESC = { BBS: "Bar bending schedule of every member group, cutting lengths and weights (formulas), totals by diameter", "Detailing Checks": "IS 13920 / IS 456 detailing rules for beams, columns, joints (strong column–weak beam) and footings", Footings: "Isolated footing sizes, soil pressure (formulas), reinforcement and shear checks", Seismic: "Modal analysis, response spectrum, centres of mass/rigidity, accidental torsion, irregularity checks (formulas)", Summary: "Key results and pass/fail counts for each member group", Notation: "Meaning and units of every symbol", Inputs: "Design parameters you can change (named cells p_fck, p_fy, p_Zz …)", Nodes: "Node coordinates and restraints", Members: "Frame members, lengths and section properties (formulas)", Shells: "Shell (slab / wall) elements",
+  var SHEETDESC = { "Standards Register": "Code editions used (IS 1893:2025 withdrawn — 2016 applies) and Verified / Calculated / Simplified / Not implemented status of every check", BBS: "Bar bending schedule of every member group (incl. walls), cutting lengths and weights (formulas), totals by diameter", "Detailing Checks": "IS 13920 / IS 456 detailing rules for beams, columns, joints (strong column–weak beam) and footings", Footings: "Isolated footing sizes, soil pressure (formulas), reinforcement and shear checks", Seismic: "Modal analysis, response spectrum, centres of mass/rigidity, accidental torsion, irregularity checks (formulas)", Summary: "Key results and pass/fail counts for each member group", Notation: "Meaning and units of every symbol", Inputs: "Design parameters you can change (named cells p_fck, p_fy, p_Zz …)", Nodes: "Node coordinates and restraints", Members: "Frame members, lengths and section properties (formulas)", Shells: "Shell (slab / wall) elements",
     Loads: "Load-case totals, IS 1893 base shear & vertical distribution, IS 875-3 wind (formulas)", Combinations: "Load factors (IS 456 Table 18)", Disp_Cases: "Nodal displacements per load case", Disp_Combos: "Nodal displacements per combination",
     Forces_Cases: "Member end forces per load case", Forces_Combos: "Member end forces per combination", Reactions: "Support reactions with equilibrium check", Drift: "Storey drift check (formulas)", Pushover: "Capacity curve (chart), hinge sequence, ductility", "Design Basis": "Equations and IS code limits used, with clause numbers", "Worked Calcs": "Step-by-step calculation of every member: equation, substituted values, limit, clause, status", "Method & Formulas": "Element formulations, solver, design equations and clauses" };
   var METHOD = [
@@ -813,7 +831,7 @@ var RX = (function () {
     ["6 · Design"],
     ["RCC beams", "IS 456 Annex G: Mu,lim = 0.36fck·b·xu,max(d − 0.42xu,max); Ast = 0.5fck/fy[1 − √(1 − 4.6Mu/fck·b·d²)]bd; doubly reinforced Asc = (Mu − Mu,lim)/((fsc − 0.446fck)(d − d')). Torsion cl 41.4.2: Me1 = Mu + Tu(1 + D/b)/1.7, Ve = Vu + 1.6Tu/b. Shear cl 40: τc from Table 19, τc,max Table 20, sv = 0.87fy·Asv·d/Vus; minimum cl 26.5.1.6."],
     ["RCC columns", "IS 456 cl 25.4 minimum eccentricity, cl 39.7.1 additional moments for slender columns (le/D > 12), cl 39.6 biaxial: (Mux/Mux1)^αn + (Muy/Muy1)^αn ≤ 1, Puz = 0.45fck·Ac + 0.75fy·Asc."],
-    ["Steel members", "IS 800: compression cl 7.1.2 (buckling curves a/b/c), tension cl 6.2, LTB Annex E (Mcr, χLT, αLT = 0.21), combined cl 9.3.2 (simplified, Cm = 1): N/Nd + Mz/Mdz + My/Mdy ≤ 1, shear cl 8.4."],
+    ["Steel members", "IS 800: compression cl 7.1.2 (buckling curves a/b/c), tension cl 6.2, LTB Annex E (Mcr, χLT, αLT = 0.21), section strength cl 9.3.1.1 and member buckling cl 9.3.2.2 with Ky, Kz, KLT and Cm from Table 18, shear cl 8.4 with the high-shear reduction of cl 9.2.2."],
     ["Slabs / walls", "Wood–Armer moments → Ast per metre (Annex G), minimum steel cl 26.5.2.1 (0.12% HYSD) / walls 0.25%; wall compression ≤ 0.4fck, in-plane shear ≤ τc,max."],
     ["Drift", "IS 1893 cl 7.11.1: storey drift ≤ 0.004h under unfactored design lateral force."],
     ["7 · Limitations"],
