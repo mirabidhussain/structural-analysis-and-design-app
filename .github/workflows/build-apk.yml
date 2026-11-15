@@ -23,7 +23,7 @@ jobs:
           gradle-version: '8.9'
       - name: Version from the engine
         run: |
-          ENG=$(grep -o 'REG.ENGINE = "[0-9.]*"' www/js/reg.js | grep -o '[0-9.]*')
+          ENG=$(sed -n 's/^REG.ENGINE = "\([0-9.]*\)".*/\1/p' www/js/reg.js | head -1)
           echo "VERSION_NAME=$ENG.${{ github.run_number }}" >> $GITHUB_ENV
           echo "VERSION_CODE=$(( ${{ github.run_number }} + 100 ))" >> $GITHUB_ENV
           echo "BUILT=$(TZ=Asia/Kolkata date '+%d %b %Y %H:%M IST')" >> $GITHUB_ENV
