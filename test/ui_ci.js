@@ -57,6 +57,16 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   const fx2 = await pg.evaluate(() => ({ pass: !!document.querySelector('#out .badge.pass'), D: document.querySelector('#f [name=D]').value }));
   ok('Failed design shows changes that pass; Apply fills the input and the design passes', fx1.fail && fx2.pass, fx1.t + ' → D ' + fx2.D);
   await pg.evaluate(() => { document.getElementById('rst').click(); });
+  /* v3.8: brand banner, slab module, live sketches, governing check */
+  await pg.evaluate(() => { location.hash = ''; }); await pg.waitForTimeout(300);
+  const br = await pg.evaluate(() => ({ brand: !!document.querySelector('.brand .brand-art'), sticky: getComputedStyle(document.querySelector('.brand')).position, logo: !!document.querySelector('header .logo img'), qa: document.querySelectorAll('.qa .qai').length, slab: !!document.querySelector('.card[href="#slab"]') && !document.querySelector('.card[href="#slab1"]') }));
+  ok('Home: logo banner stays fixed while scrolling, header logo, quick actions, single Slab Design module', br.brand && br.sticky === 'sticky' && br.logo && br.qa === 8 && br.slab, JSON.stringify(br));
+  await pg.evaluate(() => { location.hash = '#slab'; }); await pg.waitForSelector('#sk svg');
+  const s1 = await pg.evaluate(() => document.querySelector('#sk').textContent); await pg.fill('#f [name=ly]', '9'); await pg.waitForTimeout(400); const s2 = await pg.evaluate(() => document.querySelector('#sk').textContent);
+  await pg.click('button.pri'); await pg.waitForSelector('#out .gov');
+  const sv = await pg.evaluate(() => ({ title: document.querySelector('#out h3').textContent, gov: document.querySelector('#out .gov b') ? document.querySelector('#out .gov b').textContent : '' }));
+  ok('Slab Design decides one-way / two-way from lx, ly; the live sketch follows the inputs; governing check shown', /TWO-WAY/.test(s1) && /ONE-WAY/.test(s2) && /one-way/.test(sv.title) && sv.gov.length > 3, sv.title + ' · ' + sv.gov);
+  await pg.evaluate(() => document.getElementById('rst').click());
   /* v3.7: grouped inputs, units, project elements, design aids */
   await pg.evaluate(() => { location.hash = '#beam'; }); await pg.waitForSelector('#f');
   ok('Inputs grouped into sections with segmented choices', await pg.evaluate(() => document.querySelectorAll('#f details.fgrp').length >= 4 && !!document.querySelector('#f .fseg button.on')));
@@ -94,7 +104,7 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   const av = await pg.evaluate(() => ({ n: document.querySelectorAll('.acard').length, loaded: [...document.querySelectorAll('.acard img')].filter(i => i.complete && i.naturalWidth > 1000).length, ld: !!document.querySelector('table.ldt') }));
   await pg.click('.acard'); await pg.waitForSelector('.zoomv img'); const zv = await pg.evaluate(() => document.querySelector('.zoomv img').naturalWidth > 1000); await pg.click('.zoomv [data-z=x]');
   await pg.click('#achips [data-g=Ld]'); await pg.waitForTimeout(200); av.ld = await pg.evaluate(() => document.querySelectorAll('table.ldt').length === 2);
-  ok('Design aids: 36 charts load offline, zoom viewer, development-length tables', av.n === 36 && av.loaded >= 2 && av.ld && zv, JSON.stringify(av));
+  ok('Design aids: 65 charts load offline, zoom viewer, development-length tables', av.n === 65 && av.loaded >= 2 && av.ld && zv, JSON.stringify(av));
   await pg.evaluate(() => { location.hash = '#model'; }); await pg.waitForTimeout(300);
   await pg.click('#bAna'); await pg.waitForSelector('#results .rh', { timeout: 60000 });
   ok('Frame & FE analysis (linear) runs on the default 3D model', await pg.$('#results table.basis') !== null);

@@ -2,7 +2,7 @@
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "3.7";
+REG.ENGINE = "3.8";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],
@@ -71,12 +71,13 @@ REG.CHECKS = [
   ["Automation", "Fix suggestions for failed member designs: smallest change of size, bars or grade that passes every check", "Calculated", "Each suggestion is re-run through the design and the input limits (acceptance.js N, UI test)"],
   ["Inputs", "Input units SI / MKS / FPS — converted at the form, stored and calculated in SI", "Verified", "Conversion factors and round trip checked in acceptance.js O; same design in FPS and SI (UI test)"],
   ["Quantities", "Project elements: take-off, bar bending schedule and JKSOR 2022 estimate of individually designed members (span + Ld/3 anchorage, 50φ column laps, 2(a + b) + 20φ links)", "Approximate", "Take-off rules recomputed by hand in acceptance.js O; excavation, backfill and finishes not included"],
-  ["Design aids", "SP 16 style charts: rectangular and circular column P–M, flexure Mu/bd²–pt, τc, kt, kc, doubly reinforced sections; Ld tables", "Calculated", "Drawn from the engine's strain-compatibility routines; Pu = 0 point checked against a hand solution in acceptance.js O"]
+  ["Slabs", "Slab design: one-way when ly/lx > 2 (IS 456 cl 24.4, spanning lx; continuous if both long edges are), otherwise two-way by Annex D Table 26/27; cantilever option", "Verified", "Decision rule and identical results to the one-way and two-way routines checked in acceptance.js Q"],
+  ["Design aids", "SP 16 style charts: rectangular and circular column P–M (Fe 415/500/550), slab coefficients (Tables 26, 27), flexure Mu/bd²–pt, τc, kt, kc, doubly reinforced sections, IS 800 fcd and LTB curves, IS 1893 spectrum, IS 875 k2; Ld tables", "Calculated", "Drawn from the engine's strain-compatibility routines; Pu = 0 point checked against a hand solution in acceptance.js O"]
 ];
 /* stable ids of REG.CHECKS rows, used by the verification mode */
 REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "mmc", "timehist",
   "rcbeam", "rccol", "rcslab", "rcwallel", "rcwall", "servic", "stfcd", "stltb", "stklen", "dtbeam", "dtcol", "scwb", "joint", "dtslab", "bbs",
-  "foot", "footpress", "mat", "matsoil", "pilecap", "pilelat", "pilegrp", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto", "inlim", "fixes", "units", "elements", "aids"];
+  "foot", "footpress", "mat", "matsoil", "pilecap", "pilelat", "pilegrp", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto", "inlim", "fixes", "units", "elements", "slabauto", "aids"];
 REG.byId = function (id) { var i = REG.IDS.indexOf(id); return i >= 0 ? { id: id, area: REG.CHECKS[i][0], t: REG.CHECKS[i][1], st: REG.CHECKS[i][2], ev: REG.CHECKS[i][3] } : null; };
 REG.RANK = { "Not implemented": 0, Simplified: 1, Calculated: 2, Verified: 3 };
 /* checks behind each kind of result; the weakest decides the result's verification state */

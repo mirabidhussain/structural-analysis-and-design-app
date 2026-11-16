@@ -1,7 +1,7 @@
 /* Project elements: quantities, bar bending schedule and JKSOR 2022 estimate of individually designed members. */
 var EL = (function () {
   var E = {};
-  E.PREFIX = { beam: "B", slab1: "S", slab2: "S", column: "C", footing: "F", strip: "SF", stair: "ST", pile: "PF", raft: "RF", truss: "T", purlin: "PU", tension: "TM", comp: "CM", sbeam: "SB", bolts: "J", roof: "RL", seismic: "EQ" };
+  E.PREFIX = { beam: "B", slab: "S", slab1: "S", slab2: "S", column: "C", footing: "F", strip: "SF", stair: "ST", pile: "PF", raft: "RF", truss: "T", purlin: "PU", tension: "TM", comp: "CM", sbeam: "SB", bolts: "J", roof: "RL", seismic: "EQ" };
   /* extra dimension needed to take off quantities */
   E.EXTRA = { slab1: ["w", "Slab width (along the supports)", "m", 3], strip: ["len", "Length of the wall footing", "m", 10], stair: ["w", "Width of the flight", "m", 1.2] };
   function sor(k) { return BOQ.SOR[k]; }
@@ -21,6 +21,7 @@ var EL = (function () {
     function pcc(d, L, B, H) { T.pcc.push({ d: d, n: 1, L: r3(L), B: r3(B), H: r3(H), q: L * B * H }); }
     function bar(mark, desc, dia, n, Lmm) { if (!(n > 0 && Lmm > 0)) return; n = Math.ceil(n); T.bars.push({ mark: mark, desc: desc, dia: dia, n: n, L: Math.round(Lmm), kg: n * Lmm / 1000 * DT.wpm(dia) }); }
     function nOver(len, s) { return Math.floor(len / s) + 1; }
+    if (id === "slab") { var st = res.st || RCC.slabType(p); return st.type === "one" ? E.take("slab1", Object.assign({}, p, { L: st.L, support: st.support }), r, { w: st.w }) : E.take("slab2", Object.assign({}, p, { lx: st.lx, ly: st.ly }), r, x); }
     switch (id) {
       case "beam": {
         var L = p.L, b = p.b / 1000, D = p.D / 1000, bb = res.bars || { n: 2, dia: 12 };

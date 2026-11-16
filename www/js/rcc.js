@@ -179,6 +179,28 @@ RCC.slab1 = function (p) {
   return r;
 };
 
+/* ------------------------------------------------------------ SLAB: one-way or two-way decided from the spans (IS 456 cl 24.4, Annex D) */
+RCC.SLAB_CASES = D.T26.map(function (c, i) { return [String(i + 1), c.name]; }).concat([["11", "11. Cantilever (lx = projection, ly = width)"]]);
+RCC.slabType = function (p) {
+  var c = +p.case_ || 4, a = +p.lx, b = +p.ly;
+  if (c === 11) return { type: "one", support: "cant", L: a, w: b, ratio: b / a, why: "cantilever slab — one-way action over the projection " + a + " m" };
+  var lx = Math.min(a, b), ly = Math.max(a, b), r = ly / lx;
+  if (r > 2) { var both = c === 1 || c === 2 || c === 5;   /* both long edges continuous */
+    return { type: "one", support: both ? "cont" : "ss", L: lx, w: ly, ratio: r, why: "ly/lx = " + U.f(r, 2) + " > 2 — one-way slab spanning the short span lx = " + lx + " m (IS 456 cl 24.4)" + (both ? ", continuous over both long edges" : ", taken as simply supported (a long edge is discontinuous)") }; }
+  return { type: "two", lx: lx, ly: ly, ratio: r, why: "ly/lx = " + U.f(r, 2) + " ≤ 2 — two-way slab, moment coefficients of IS 456 Annex D" + (c === 10 ? " Table 27" : " Table 26") };
+};
+RCC.slabAuto = function (p, one, two) {
+  var t = RCC.slabType(p), r;
+  if (t.type === "one") r = one(Object.assign({}, p, { L: t.L, support: t.support }));
+  else { var q = Object.assign({}, p, { lx: t.lx, ly: t.ly, case_: Math.min(+p.case_ || 4, 10) }); r = two(q); }
+  var cant = t.support === "cant";
+  r.title = "Slab Design — " + (cant ? "cantilever (one-way)" : (t.type === "one" ? "one-way" : "two-way") + " (ly/lx = " + U.f(t.ratio, 2) + ")");
+  r.items.unshift({ k: "n", t: "Slab type decided from the spans: " + t.why + "." });
+  r.summary.unshift(["Slab type", cant ? "Cantilever, projection " + t.L + " m" : (t.type === "one" ? "One-way" : "Two-way") + " · ly/lx = " + U.f(t.ratio, 2)]);
+  r.res = Object.assign({}, r.res || {}, { type: t.type, st: t });
+  return r;
+};
+
 /* ------------------------------------------------------------ TWO-WAY SLAB */
 RCC.slab2 = function (p) {
   var r = new Rep("Two-way Slab Design", "IS 456:2000 Annex D");

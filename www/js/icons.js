@@ -4,6 +4,7 @@ var IC = (function () {
     beam: '<path d="M2 8.5h20v6H2z"/><path d="M4.5 12.6h15" stroke-dasharray="1.6 1.4"/><path d="M5 14.5l-2.5 4h5zM19 14.5l-2.5 4h5z"/>',
     slab1: '<path d="M2.5 11l6-4.5h13l-6 4.5z"/><path d="M2.5 11v3h13v-3M15.5 14l6-4.5V6.5"/><path d="M5 18.5h10" stroke-dasharray="2 1.6"/>',
     slab2: '<rect x="3.5" y="3.5" width="17" height="17" rx="1"/><path d="M12 3.5v17M3.5 12h17"/><path d="M6 6.5l3.5 3M14.5 14.5l3.5 3M18 6.5l-3.5 3M9.5 14.5L6 18" opacity=".6"/>',
+    slab: '<rect x="3.5" y="3.5" width="17" height="17" rx="1"/><path d="M12 3.5v17M3.5 12h17"/><path d="M6 6.5l3.5 3M14.5 14.5l3.5 3M18 6.5l-3.5 3M9.5 14.5L6 18" opacity=".6"/>',
     column: '<path d="M9 2.5h6v17H9z"/><path d="M9 6.5h6M9 10.5h6M9 14.5h6"/><path d="M4.5 21.5h15"/>',
     footing: '<path d="M10 2.5h4v9h-4z"/><path d="M3.5 11.5h17v4.5h-17z"/><path d="M5 14.4h14" stroke-dasharray="1.6 1.4"/><path d="M2.5 19.5h19" opacity=".6"/>',
     strip: '<path d="M8.5 3h7v9.5h-7z"/><path d="M8.5 6.2h7M8.5 9.4h7M12 3v3.2M10.2 6.2v3.2M13.8 6.2v3.2M12 9.4v3.1"/><path d="M4 12.5h16v4H4z"/><path d="M3 19.5h18" opacity=".6"/>',

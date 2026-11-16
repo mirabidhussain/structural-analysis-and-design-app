@@ -19,10 +19,13 @@
       method: meth, b: n("Width b", 230, "mm"), D: n("Overall depth D", 450, "mm"), exp: expo("mild"), cover: n("Clear cover to stirrups", 25, "mm"), stir: bar("Stirrup dia", 8, "tie"), dia: bar("Main bar dia (for d)", 16, "main"),
       L: n("Effective span L", 5, "m"), support: supp, mode: sel("Design forces", [["load", "From factored UDL"], ["direct", "Enter Mu, Vu"]], "load"),
       wu: n("Design UDL w", 30, "kN/m", "LSM: factored 1.5(DL+LL) · WSM: working DL+LL"), Mu: n("M (if direct)", 100, "kNm", "factored (LSM) / working (WSM)"), Vu: n("V (if direct)", 80, "kN"), fck: fck, fy: fy } },
-    { id: "slab1", grp: "RCC", icon: "▭", t: "One-way Slab", d: "ly/lx > 2, cantilever, continuous", code: "IS 456", fn: by(RCC.slab1, WS.slab1), f: {
+    { id: "slab", grp: "RCC", icon: "▦", t: "Slab Design", d: "One-way or two-way decided from lx, ly — Annex D coefficients, cantilever", code: "IS 456 cl 24, Annex D", fn: function (p) { return RCC.slabAuto(p, p.method === "wsm" ? WS.slab1 : RCC.slab1, p.method === "wsm" ? WS.slab2 : RCC.slab2); }, f: {
+      method: meth, lx: n("Span lx", 4, "m", "the app takes the shorter of lx, ly as the short span"), ly: n("Span ly", 5, "m", "ly/lx > 2 → one-way, otherwise two-way"), case_: sel("Edge condition (IS 456 Table 26)", RCC.SLAB_CASES, "4", true),
+      D: n("Thickness D", 150, "mm"), exp: expo("mild"), cover: n("Clear cover", 20, "mm"), dia: bar("Bar dia", 10, "slab"), LL: n("Live load", 3, "kN/m²", "IS 875 Pt 2: residential 2, office 2.5–4"), FF: n("Floor finish", 1, "kN/m²"), fck: fck, fy: fy } },
+    { id: "slab1", grp: "RCC", hidden: true, icon: "▭", t: "One-way Slab", d: "ly/lx > 2, cantilever, continuous", code: "IS 456", fn: by(RCC.slab1, WS.slab1), f: {
       method: meth, L: n("Effective span", 3.0, "m"), D: n("Thickness D", 150, "mm"), exp: expo("mild"), cover: n("Clear cover", 20, "mm"), dia: bar("Bar dia", 10, "slab"),
       LL: n("Live load", 3, "kN/m²", "IS 875 Pt 2: office 2.5-4"), FF: n("Floor finish", 1, "kN/m²"), support: supp, fck: fck, fy: fy } },
-    { id: "slab2", grp: "RCC", icon: "▦", t: "Two-way Slab", d: "Table 26/27 coefficients, 10 edge cases", code: "IS 456 Annex D", fn: by(RCC.slab2, WS.slab2), f: {
+    { id: "slab2", grp: "RCC", hidden: true, icon: "▦", t: "Two-way Slab", d: "Table 26/27 coefficients, 10 edge cases", code: "IS 456 Annex D", fn: by(RCC.slab2, WS.slab2), f: {
       method: meth, lx: n("Short span lx", 4, "m"), ly: n("Long span ly", 5, "m"), case_: sel("Edge condition", D.T26.map(function (c, i) { return [String(i + 1), c.name]; }), "4", true),
       D: n("Thickness D", 150, "mm"), exp: expo("mild"), cover: n("Clear cover", 20, "mm"), dia: bar("Bar dia", 10, "slab"), LL: n("Live load", 3, "kN/m²"), FF: n("Floor finish", 1, "kN/m²"), fck: fck, fy: fy } },
     { id: "column", grp: "RCC", icon: "┃", t: "RCC Column", d: "Axial + biaxial bending, slender", code: "IS 456 cl 39", fn: by(RCC.column, WS.column), f: {
@@ -117,9 +120,9 @@
   var GRP = { RCC: ["RCC design", "IS 456:2000 · IS 13920:2016"], Fdn: ["Foundations", "IS 2911 · IS 2950 · IS 456"], Steel: ["Steel design", "IS 800:2007"], Loads: ["Loads", "IS 875 · IS 1893"] }, homeFilter = "all";
   function home() {
     title.textContent = "IS StructDesign"; back.hidden = true;
-    var h = '<section class="hero"><div class="hero-t"><span class="eyebrow">IS 456 · IS 800 · IS 875 · IS 1893 · IS 13920</span><h2>Design and detail structural members to Indian Standards</h2>' +
-      '<p>Beams, slabs, columns, footings, piles, rafts, stairs and steel members — worked calculations, drawings, bar bending schedules and estimates, all offline.</p><div class="hero-b"><button type="button" class="hbtn pri" id="goDesign">' + IC.svg("beam") + ' Design a member</button><button type="button" class="hbtn" id="goFdn">' + IC.svg("pile") + ' Foundations</button></div></div>' +
-      '<div class="hero-a">' + IC.hero() + '</div></section>';
+    var QA = [["beam", "Beam"], ["slab", "Slab"], ["column", "Column"], ["footing", "Footing"], ["pile", "Piles"], ["estimate", "Estimate"], ["model", "Analysis"], ["aids", "Design aids"]];
+    var h = '<section class="brand" aria-label="IS StructDesign"><div class="brand-art"></div><div class="brand-t"><b>IS StructDesign</b><span>Structural design &amp; detailing to Indian Standards</span></div></section><div class="homebody">' +
+      '<div class="qa">' + QA.map(function (q) { return '<a href="#' + q[0] + '" class="qai"><span class="ic">' + IC.svg(q[0] === "model" ? "frame" : q[0]) + '</span><span>' + q[1] + '</span></a>'; }).join("") + '</div>';
     var projCard = "";
     if (window.PDB) { var h0 = h; h = ""; var pr = PDB.current(), sm = pr.summary, nf = sm ? sm.memberFails + (sm.detailFails || 0) : 0;
       h += '<a class="card wide proj" href="#projects"><span class="ic">' + IC.svg("projects") + '</span><div class="pc"><b>' + esc(pr.name) + ' <small class="stchip">' + esc(pr.status) + '</small></b><small>Current project · ' + PDB.list().length + ' project(s) on this device' + (sm ? ' · last run ' + new Date(sm.date).toLocaleDateString() : ' · not analysed yet') + '</small>' +
@@ -133,7 +136,7 @@
     h += '<div class="chips" id="fchips">' + [["all", "All"], ["RCC", "RCC"], ["Fdn", "Foundations"], ["Steel", "Steel"], ["Loads", "Loads"], ["Ana", "Analysis"], ["Ref", "Reference"]].map(function (c) { return '<button type="button" data-g="' + c[0] + '"' + (homeFilter === c[0] ? ' class="on"' : '') + '>' + c[1] + '</button>'; }).join("") + '</div>';
     ["RCC", "Fdn", "Steel", "Loads"].forEach(function (g) {
       h += '<div class="gsec" data-g="' + g + '"><h2 class="grp"><span>' + GRP[g][0] + '</span><em>' + GRP[g][1] + '</em></h2><div class="grid">';
-      M.filter(function (m) { return m.grp === g; }).forEach(function (m) {
+      M.filter(function (m) { return m.grp === g && !m.hidden; }).forEach(function (m) {
         h += '<a class="card mod g-' + g.toLowerCase() + '" href="#' + m.id + '" data-s="' + esc((m.t + " " + m.d + " " + m.code).toLowerCase()) + '"><span class="ic">' + IC.svg(m.id) + '</span><b>' + m.t + '</b><small>' + m.d + '</small><em>' + m.code + '</em></a>';
       });
       h += '</div></div>';
@@ -142,9 +145,9 @@
       '<a class="card mod g-ana" href="#model" data-s="frame fe finite element analysis 3d building seismic response spectrum pushover model"><span class="ic">' + IC.svg("frame") + '</span><b>Frame & FE analysis</b><small>Whole-building 3D model, seismic, auto design, detailing</small><em>FEA</em></a>' +
       '<a class="card mod g-ana" href="#projects" data-s="projects revisions backup"><span class="ic">' + IC.svg("projects") + '</span><b>Projects</b><small>Saved buildings, revisions, backups</small><em>Offline</em></a>' +
       '<a class="card mod g-ana" href="#report" data-s="calculation report building"><span class="ic">' + IC.svg("report") + '</span><b>Building report</b><small>Calculation report of the analysed building</small><em>PDF</em></a></div></div>';
-    h += '<div class="gsec" data-g="Ref"><h2 class="grp"><span>Reference</span><em>SP 16 · SP 6(1) · IS 456 tables</em></h2><div class="grid"><a class="card mod g-ref" href="#aids" data-s="design aids charts sp 16 interaction column flexure shear development length"><span class="ic">' + IC.svg("aids") + '</span><b>Design aids</b><small>' + (window.AIDS ? AIDS.length : 0) + ' charts: column P–M, flexure, shear, deflection; Ld tables</small><em>SP 16 style</em></a><a class="card mod g-ref" href="#tables" data-s="section tables isa ismb ismc tau"><span class="ic">' + IC.svg("tables") + '</span><b>Section tables</b><small>ISA, ISMB, ISMC properties, τc</small><em>SP 6(1)</em></a>' +
+    h += '<div class="gsec" data-g="Ref"><h2 class="grp"><span>Reference</span><em>SP 16 · SP 6(1) · IS 456 tables</em></h2><div class="grid"><a class="card mod g-ref" href="#aids" data-s="design aids charts sp 16 interaction column flexure shear development length"><span class="ic">' + IC.svg("aids") + '</span><b>Design aids</b><small>' + (window.AIDS ? AIDS.length : 0) + ' charts: column P–M, slabs, flexure, shear, steel buckling, spectra; Ld tables</small><em>SP 16 style</em></a><a class="card mod g-ref" href="#tables" data-s="section tables isa ismb ismc tau"><span class="ic">' + IC.svg("tables") + '</span><b>Section tables</b><small>ISA, ISMB, ISMC properties, τc</small><em>SP 6(1)</em></a>' +
       '<a class="card mod g-ref" href="#about" data-s="about scope codes register"><span class="ic">' + IC.svg("about") + '</span><b>About & scope</b><small>Codes, assumptions, limits</small><em>engine ' + (window.REG ? REG.ENGINE : "") + '</em></a></div></div>';
-    h += '<p class="empty" id="nores" hidden>No module matches your search.</p>';
+    h += '<p class="empty" id="nores" hidden>No module matches your search.</p></div>';
     app.innerHTML = h;
     var q = document.getElementById("q");
     function filt() {
@@ -157,9 +160,7 @@
       document.getElementById("nores").hidden = any;
     }
     q.oninput = filt;
-    function goTo(id) { var el = document.querySelector('.gsec[data-g="' + id + '"]'); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
-    document.getElementById("goDesign").onclick = function () { goTo("RCC"); };
-    document.getElementById("goFdn").onclick = function () { goTo("Fdn"); };
+    var hd = document.querySelector("header"); if (hd) document.documentElement.style.setProperty("--hh", hd.offsetHeight + "px");
     document.querySelectorAll("#fchips button").forEach(function (b) { b.onclick = function () { homeFilter = this.getAttribute("data-g"); document.querySelectorAll("#fchips button").forEach(function (x) { x.classList.toggle("on", x === b); }); filt(); }; });
     filt();
   }
@@ -183,7 +184,7 @@
   function moduleView(m) {
     title.textContent = m.t; back.hidden = false;
     var saved = store(m.id) || {}, h = '<div class="mhead g-' + m.grp.toLowerCase() + '"><span class="mic">' + IC.svg(m.id) + '</span><div><b>' + esc(m.t) + '</b><small>' + esc(m.d) + '</small></div><em class="cchip">' + m.code + '</em></div>' +
-      '<form id="f" class="form" autocomplete="off"><div class="code ftop full"><span>Inputs — leave a field blank to use the value shown in it</span>' + unitSeg() + '</div>';
+      '<form id="f" class="form" autocomplete="off"><div class="code ftop full"><span>Inputs — leave a field blank to use the value shown in it</span>' + unitSeg() + '</div>' + (window.SK && SK.has(m.id) ? '<div class="sketch full" id="sk" aria-label="Live sketch of the inputs"></div>' : '');
     var GH = {}, gOrder = [];
     Object.keys(m.f).forEach(function (k) {
       var g = m.grp === "Loads" ? "Inputs" : grpOf(k, m), hh = h; h = "";
@@ -219,7 +220,8 @@
 
   function defaults(m) { var p = {}; Object.keys(m.f).forEach(function (k) { var f = m.f[k]; p[k] = f.type === "number" || f.num ? parseFloat(f.def) : f.def; }); return p; }
   function validate(m, form) {
-    var p = read(m, form, true), iss = LIM.check(m.id, p), ex = document.getElementById("exist"), exist = !!(ex && ex.checked);
+    var p = read(m, form, true), iss = LIM.check(m.id, p), ex = document.getElementById("exist"), exist = !!(ex && ex.checked), sk = document.getElementById("sk");
+    if (sk) sk.innerHTML = SK.draw(m.id, p);
     form.querySelectorAll(".fld[data-fk]").forEach(function (l) {
       var k = l.getAttribute("data-fk"), mine = iss.filter(function (x) { return x.k === k; }), sm = l.querySelector(".lim");
       sm.hidden = !mine.length; l.classList.toggle("bad", mine.some(function (x) { return x.hard && !exist; }));
@@ -289,7 +291,7 @@
       var ex = EL.EXTRA[m.id], xx = {}; if (ex) xx[ex[0]] = 1;
       var tk = EL.take(m.id, pp, r, xx);
       if (tk.items.length) {
-        var ed1 = mkData([], [{ mark: nextMark(m.id), nos: 1, title: m.t, take: tk }], m.t + " — detailed estimate (JKSOR 2022)"), c1 = ed1.cb, anchor = out.querySelector(".sum") || out.querySelector(".rh");
+        var ed1 = mkData([], [{ mark: nextMark(m.id), nos: 1, title: m.t, take: tk }], m.t + " — detailed estimate (JKSOR 2022)"), c1 = ed1.cb, anchor = out.querySelector(".gov") || out.querySelector(".sum") || out.querySelector(".rh");
         anchor.insertAdjacentHTML("afterend", '<details class="estd noprint" id="estd"><summary>' + IC.svg("estimate") + '<span><b>Detailed estimate</b><small>' + (ex ? 'per 1 m ' + (ex[0] === "len" ? "length" : "width") : '1 no.') + ' · ' + (c1.kg ? (c1.kg).toFixed(0) + ' kg steel · ' : '') + 'JKSOR 2022</small></span><em>' + inr(ed1.model.total) + '</em></summary>' + elemEstHtml(ed1, "detailed") +
           '<div class="btns"><button type="button" class="pri" id="addp2">' + IC.svg("projects") + ' Add to project with the number of elements' + (ex ? ' and the ' + (ex[0] === "len" ? "length" : "width") : '') + '</button></div></details>');
         document.getElementById("addp2").onclick = function () { addSheet(m, r, pp); };
@@ -446,6 +448,9 @@
   function render(r, opt) {
     var ok = r.ok(), h = '<section class="rep"><div class="rh"><div><h3>' + esc(r.title) + '</h3><small>' + esc(r.code) + ' • ' + new Date().toLocaleDateString("en-IN") + '</small></div><span class="badge ' + (ok ? "pass" : "fail") + '">' + (ok ? "ALL CHECKS PASS" : "CHECK FAILS") + '</span></div>';
     if (r.summary.length) h += '<div class="sum">' + r.summary.map(function (s) { return '<div><span>' + esc(s[0]) + '</span><b>' + esc(s[1]) + '</b></div>'; }).join("") + '</div>';
+    if (r.checks.length) { var gv = null, gu = -1, np = r.checks.filter(function (c) { return c.ok; }).length;
+      r.checks.forEach(function (c) { var u = util(c.d); if (!c.ok && (u === null || u <= 1)) u = 1.0001; if (u !== null && u > gu) { gu = u; gv = c; } });
+      h += '<div class="gov ' + (ok ? "pass" : "fail") + '"><div class="gh"><span>' + (gv ? 'Governing check' : 'Checks') + '</span><em>' + np + ' / ' + r.checks.length + ' pass</em></div>' + (gv ? '<b>' + esc(gv.l) + (gv.ref ? ' <i>' + esc(gv.ref) + '</i>' : '') + '</b><div class="ub big"><i style="width:' + Math.min(100, gu * 100).toFixed(1) + '%" class="' + (gu > 1 ? "x" : gu > 0.9 ? "w" : "g") + '"></i><em>' + Math.round(gu * 100) + ' %</em></div>' : '') + '</div>'; }
     if (r.svg) h += '<div class="svg">' + r.svg + '</div>';
     r.items.forEach(function (it) {
       if (it.k === "h") h += '<h4>' + esc(it.t) + '</h4>';
@@ -543,7 +548,7 @@
   }
   back.onclick = function () { if (location.hash) location.hash = ""; };
   /* app chrome: logo, bottom tab bar, light / dark theme */
-  var lg = document.getElementById("logo"); if (lg) lg.innerHTML = IC.logo(30);
+  var lg = document.getElementById("logo"); if (lg) lg.innerHTML = '<img src="logo-mark-128.png" alt="" width="34" height="34">';
   var tb = document.createElement("nav"); tb.className = "tabbar noprint";
   tb.innerHTML = [["home", "#", "home", "Home"], ["projects", "#projects", "projects", "Projects"], ["estimate", "#estimate", "estimate", "Estimate"], ["model", "#model", "frame", "Analysis"], ["report", "#report", "report", "Report"]].map(function (t) { return '<a href="' + t[1] + '" data-t="' + t[0] + '">' + IC.svg(t[2]) + '<span>' + t[3] + '</span></a>'; }).join("");
   document.body.appendChild(tb);

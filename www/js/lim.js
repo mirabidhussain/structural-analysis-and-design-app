@@ -44,6 +44,12 @@ var LIM = (function () {
         if (p.L > 0 && d > 0) { var lim = p.support === "cant" ? Math.min(25 * p.b, 100 * p.b * p.b / d) : Math.min(60 * p.b, 250 * p.b * p.b / d); warn("L", p.L * 1000 > lim, "check lateral stability: clear distance between restraints should not exceed " + f0(lim / 1000) + " m", "IS 456 cl 23.3"); }
         rccGrade(); break;
       }
+      case "slab": {
+        var tt = RCC.slabType(p), q = Object.assign({}, p, tt.type === "one" ? { L: tt.L, support: tt.support } : { lx: tt.lx, ly: tt.ly });
+        out = L.check(tt.type === "one" ? "slab1" : "slab2", q).filter(function (x) { return x.k !== "ly"; }).map(function (x) { if (x.k === "L") x.k = "lx"; return x; });
+        hard("lx", !(p.lx > 0) || !(p.ly > 0), "both spans must be greater than zero", "");
+        break;
+      }
       case "slab1": case "slab2": case "stair": {
         var t = id === "stair" ? p.t : p.D, tk = id === "stair" ? "t" : "D";
         pos([tk, "cover"]);
@@ -149,7 +155,7 @@ var LIM = (function () {
     function gradeLv() { lv("fck", "Concrete grade", "", after(GR, p.fck)); }
     switch (id) {
       case "beam": lv("D", "Overall depth D", "mm", up(p.D, 25, Math.max(900, p.D * 2))); lv("b", "Width b", "mm", after([230, 250, 300, 350, 400, 450, 500, 600], p.b)); lv("dia", "Main bar dia", "mm", after(L.BARS.main, p.dia)); lv("stir", "Stirrup dia", "mm", after([8, 10, 12], p.stir)); gradeLv(); break;
-      case "slab1": case "slab2": lv("D", "Thickness D", "mm", up(p.D, 10, Math.max(300, p.D * 2))); lv("dia", "Bar dia", "mm", after(L.BARS.slab, p.dia)); gradeLv(); break;
+      case "slab": case "slab1": case "slab2": lv("D", "Thickness D", "mm", up(p.D, 10, Math.max(300, p.D * 2))); lv("dia", "Bar dia", "mm", after(L.BARS.slab, p.dia)); gradeLv(); break;
       case "stair": lv("t", "Waist thickness", "mm", up(p.t, 10, Math.max(300, p.t * 2))); lv("dia", "Bar dia", "mm", after(L.BARS.slab, p.dia)); gradeLv(); break;
       case "column": lv("b", "Width b", "mm", up(p.b, 50, Math.max(900, p.b * 2))); lv("D", "Depth D", "mm", up(p.D, 50, Math.max(1200, p.D * 2))); lv("dia", "Main bar dia", "mm", after(L.BARS.col, p.dia)); gradeLv(); lv("pmax", "Max steel %", "%", after([4, 5, 6], p.pmax)); break;
       case "footing": lv("dia", "Bar dia", "mm", after(L.BARS.ftg, p.dia)); gradeLv(); break;

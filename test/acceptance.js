@@ -613,7 +613,7 @@ console.log('\n== O. Units, project elements, design aids');
   const cb = EL.combine([{ mark: 'B1', nos: 4, take: bt }, { mark: 'F1', nos: 6, take: ft }]), tot = 4 * bt.items.reduce((x, q) => x + q.q * q.rate, 0) + 6 * ft.items.reduce((x, q) => x + q.q * q.rate, 0);
   ok('Elements O4: combined estimate = Σ nos × element cost; BBS weight = Σ nos × bars; marks prefixed by the element', Math.abs(cb.sum - tot) < 1e-6 && Math.abs(cb.kg - (4 * bt.bars.reduce((x, q) => x + q.kg, 0) + 6 * ft.bars.reduce((x, q) => x + q.kg, 0))) < 1e-9 && cb.bbs[0].mark === 'B1-a' && cb.items.find(q => /Reinforcement/.test(q.d)).from.join() === 'B1,F1', '₹ ' + Math.round(cb.sum));
   const files = AIDS.map(a => path.join(__dirname, '..', 'www', a.file)), sizes = files.map(f => fs.existsSync(f) ? fs.statSync(f).size : 0);
-  ok('Design aids O5: 36 charts present (rectangular and circular P–M, flexure, τc, kt, kc, doubly reinforced)', AIDS.length === 36 && sizes.every(z => z > 20000) && ['Rectangular columns', 'Circular columns and piles', 'Beams and slabs'].every(g => AIDS.some(a => a.grp === g)), (sizes.reduce((x, y) => x + y, 0) / 1e6).toFixed(2) + ' MB');
+  ok('Design aids O5: 65 charts present (column P–M Fe 415/500/550, slabs, flexure, τc, kt, kc, doubly reinforced, steel, loads)', AIDS.length === 65 && sizes.every(z => z > 20000) && ['Rectangular columns', 'Circular columns and piles', 'Beams and slabs', 'Slabs', 'Steel', 'Loads'].every(g => AIDS.some(a => a.grp === g)), (sizes.reduce((x, y) => x + y, 0) / 1e6).toFixed(2) + ' MB');
   /* independent hand solution: two layers of As/2 at d' = 0.05D, Pu = 0, rectangular stress block 0.36fck·xu at 0.416xu */
   const fck = 25, fy = 415, b = 1000, Dd = 1000, dp = 50, As = 0.1 * fck / 100 * b * Dd, f = (x) => { const esc = 0.0035 * (x - dp) / x, est = 0.0035 * (Dd - dp - x) / x, C = 0.36 * fck * b * x + (RCC.fs(esc, fy) - 0.446 * fck) * As / 2, T = RCC.fs(est, fy) * As / 2; return [C - T, 0.36 * fck * b * x * (Dd / 2 - 0.416 * x) + (RCC.fs(esc, fy) - 0.446 * fck) * As / 2 * (Dd / 2 - dp) + T * (Dd / 2 - dp)]; };
   let lo = 60, hi = 900; for (let k = 0; k < 80; k++) { const mid = (lo + hi) / 2; if (f(mid)[0] > 0) hi = mid; else lo = mid; }
@@ -633,6 +633,18 @@ console.log('\n== P. Detailed estimate in the J&K R&B format');
   ok('Estimate P2: carriage = 0.87 (aggregate) and 0.46 (sand) m³ per m³ of the concrete items, as in the reference format', Math.abs(car[0].qty - 0.87 * conc) < 1e-9 && Math.abs(car[1].qty - 0.46 * conc) < 1e-9);
   const stl = m.items.find(it => it.cat === 'stl'), base = stl.rows.filter(r => !r.sub && r.pct === undefined).reduce((a, r) => a + r.q, 0);
   ok('Estimate P3: steel lines No. × L × kg/m with a 3 % wastage line; totals = Σ amounts; grand total adds contingencies and cess only (JKSOR rates include GST)', Math.abs(stl.qty - base * 1.03) < 1e-9 && Math.abs(m.sub - m.items.reduce((a, it) => a + it.qty * it.rate, 0)) < 1e-6 && Math.abs(m.total - m.sub * 1.04) < 1e-6 && m.gst === 0, '₹ ' + Math.round(m.total));
+})();
+
+console.log('\n== Q. Slab design: one-way or two-way from the spans; sketches');
+(function () {
+  const { SK } = c, f = p => RCC.slabAuto(p, RCC.slab1, RCC.slab2), b = { method: 'lsm', lx: 4, ly: 5, case_: 4, D: 150, exp: 'mild', cover: 20, dia: 10, LL: 3, FF: 1, fck: 20, fy: 500, __defaults: [] };
+  const t1 = RCC.slabType(b), t2 = RCC.slabType(Object.assign({}, b, { ly: 8.1 })), t3 = RCC.slabType(Object.assign({}, b, { lx: 9, ly: 3, case_: 1 })), t4 = RCC.slabType(Object.assign({}, b, { case_: 11, lx: 1.5, ly: 4 })), t5 = RCC.slabType(Object.assign({}, b, { ly: 8 }));
+  ok('Slab Q1: ly/lx ≤ 2 → two-way (8/4 = 2.0 stays two-way); > 2 → one-way over the shorter span; spans entered in either order', t1.type === 'two' && t5.type === 'two' && t2.type === 'one' && t2.L === 4 && t3.type === 'one' && t3.L === 3 && t3.support === 'cont' && t2.support === 'ss');
+  ok('Slab Q2: cantilever option spans the projection', t4.type === 'one' && t4.support === 'cant' && t4.L === 1.5);
+  const r2 = f(b), r2b = RCC.slab2(Object.assign({}, b)), p1 = Object.assign({}, b, { ly: 9 }), r1 = f(p1), r1b = RCC.slab1(Object.assign({}, p1, { L: 4, support: 'ss' }));
+  ok('Slab Q3: results identical to the two-way and one-way routines', r2.checks.length === r2b.checks.length && r2.checks.every((q, i) => q.d === r2b.checks[i].d) && r1.checks.every((q, i) => q.d === r1b.checks[i].d) && /two-way/.test(r2.title) && /one-way/.test(r1.title) && r1.summary[0][0] === 'Slab type');
+  const ids = ['beam', 'slab', 'column', 'footing', 'strip', 'stair'], P = { beam: { b: 230, D: 450, L: 5, support: 'cant', mode: 'load', wu: 30, cover: 25, stir: 8, dia: 16 }, slab: b, column: { b: 300, D: 450, cover: 40, tie: 8, dia: 16, arr: 'two', Pu: 1500, Mux: 60, Muy: 30, L: 3, lex: 3, ley: 3 }, footing: { P: 1000, cb: 300, cd: 450, sbc: 150 }, strip: { w: 150, tw: 350, sbc: 150 }, stair: { R: 150, T: 250, t: 175, L: 3.5 } };
+  ok('Sketch Q4: live input sketches for beam, slab, column, footings and stair draw without missing values', ids.every(id => { const s = SK.draw(id, P[id]); return s.length > 500 && !/NaN|undefined/.test(s); }) && /TWO-WAY/.test(SK.draw('slab', b)) && /ONE-WAY/.test(SK.draw('slab', p1)));
 })();
 
 console.log(`\n${pass} passed, ${fail} failed`);

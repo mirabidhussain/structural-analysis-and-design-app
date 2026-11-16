@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#14284a">
+<meta name="theme-color" content="#121418">
 <title>IS StructDesign</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
@@ -215,6 +215,34 @@ table.ldt td small{color:var(--mut);font-size:10.5px}table.ldt td{text-align:rig
 table.jk tr.sb td{background:color-mix(in srgb,var(--acc) 7%,transparent);font-weight:600;font-size:12px;color:var(--ink);text-align:left}table.jk tr.gt td{text-align:right}table.jk tr.gt td:nth-child(2){text-align:left}table.jk tr.gt.b td{font-weight:700;background:var(--eq)}table.jk td:nth-child(n+3){text-align:right}
 @media (max-width:600px){table.jk.ab th:nth-child(n+3):not(:last-child),table.jk.ab td:nth-child(n+3):not(:last-child){display:none}table.jk tr.gt td[colspan]{display:none}}
 table.jk tr.ih td,table.jk tr.sb td{white-space:normal}table.jk th:nth-child(2){text-align:left}
+/* ===== v3.8 brand: charcoal + gold from the logo ===== */
+:root{--nav:#121418;--nav2:#262a31;--acc:#b5862a;--gold:#d9b25c;--gold2:#a77a22;--rcc:#c7741d}
+:root[data-theme=dark]{--acc:#e0b860;--nav:#0c0d10;--nav2:#1d2026}
+@media (prefers-color-scheme:dark){:root[data-theme=auto]{--acc:#e0b860;--nav:#0c0d10;--nav2:#1d2026}}
+header{background:linear-gradient(135deg,var(--nav) 0%,var(--nav2) 100%);border-bottom:1px solid rgba(217,178,92,.25)}
+header .logo{background:none!important;box-shadow:none!important;width:34px;height:34px;padding:0}header .logo img{display:block;width:34px;height:34px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+header h1{letter-spacing:.01em}
+
+button.pri,.hbtn.pri,a.btnl.pri{background:linear-gradient(180deg,#e2bc66,#b2842a)!important;color:#1d1505!important;border:0!important;box-shadow:0 6px 16px rgba(178,132,42,.35)!important}
+button.pri .ico,a.btnl.pri .ico{color:#1d1505}
+.tabbar a.on{color:var(--acc)}.tabbar a.on .ico{background:color-mix(in srgb,var(--gold) 22%,transparent)}
+.chips button.on,#fchips button.on,#achips button.on{background:var(--nav)!important;color:var(--gold)!important;border-color:var(--nav)!important}
+.seg button.on{color:var(--ink)}
+.brand{position:sticky;top:var(--hh,56px);z-index:0;margin:-14px -14px 0;height:320px;background:radial-gradient(120% 90% at 50% 40%,#2a2e35 0%,#191b20 55%,#111215 100%);overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:flex-start}
+.brand-art{width:100%;height:250px;background:url(brand-banner.jpg) center 42%/auto 300px no-repeat;-webkit-mask-image:radial-gradient(closest-side,#000 72%,transparent 100%);mask-image:radial-gradient(closest-side,#000 72%,transparent 100%)}
+.brand-t{margin-top:-14px;text-align:center;display:flex;flex-direction:column;gap:3px}.brand-t b{font-size:20px;letter-spacing:.08em;text-transform:uppercase;background:linear-gradient(180deg,#f3d58f,#c39436);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700}.brand-t span{font-size:12px;color:#b9b2a0;letter-spacing:.04em}
+.homebody{position:relative;z-index:1;background:var(--bg);margin:-28px -14px 0;padding:16px 14px 4px;border-radius:24px 24px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.35);min-height:60vh}
+.qa{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:2px 0 6px}.qai{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px 9px;border-radius:16px;background:var(--card);border:1px solid var(--line);box-shadow:var(--sh1);text-decoration:none;color:var(--ink);font-size:11.5px;font-weight:600;text-align:center}
+.qai .ic{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#2a2e35,#16181c);color:var(--gold);box-shadow:inset 0 0 0 1px rgba(217,178,92,.35)}.qai .ic .ico{width:21px;height:21px}
+@media (min-width:700px){.brand{height:360px}.brand-art{height:290px;background-size:auto 340px}.qa{grid-template-columns:repeat(8,1fr)}}
+@media print{.brand{display:none}.homebody{margin:0;box-shadow:none}}
+.sketch{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px 8px;box-shadow:var(--sh1)}.skv{display:block;width:100%;height:auto;max-height:230px;font-family:Inter,system-ui,sans-serif}
+.skv .k,.skv .dm,.skv .ld,.skv .sp,.skv .ax,.skv .cnt,.skv .dis,.skv .free,.skv .gnd,.skv .ht{fill:none}.skv .con{fill:color-mix(in srgb,var(--mut) 16%,var(--card));stroke:var(--ink);stroke-width:1.2}.skv .lnk{fill:none;stroke:var(--mut);stroke-width:1;stroke-dasharray:3 2}
+.skv .bar{fill:var(--acc)}.skv .wall{fill:color-mix(in srgb,var(--mut) 30%,var(--card));stroke:var(--ink)}.skv .ht{stroke:var(--mut);stroke-width:.7}.skv .sup{fill:none;stroke:var(--ink);stroke-width:1.3}.skv .supc{fill:none;stroke:var(--ink)}
+.skv .dm{stroke:var(--mut);stroke-width:.9}.skv .ld{stroke:#c0392b;stroke-width:1.2}.skv .ldf{fill:#c0392b}.skv .sp{stroke:var(--acc);stroke-width:1.8}.skv .spf{fill:var(--acc)}.skv .ax{stroke:var(--mut)}.skv .axf{fill:var(--mut)}.skv .kf{fill:var(--ink)}
+.skv .cnt{stroke:var(--ink);stroke-width:3}.skv .dis{stroke:var(--ink);stroke-width:1;stroke-dasharray:5 3}.skv .free{stroke:var(--mut);stroke-width:1;stroke-dasharray:2 3}.skv .gnd{stroke:var(--mut);stroke-width:1.2;stroke-dasharray:6 3}
+.skv .tx,.skv .tl{fill:var(--ink);font-size:11px;font-weight:600}.skv .td{fill:var(--mut);font-size:10.5px;font-weight:600}.skv .ts{fill:var(--mut);font-size:10px}.skv .badge rect{fill:var(--nav)}.skv .tb{fill:var(--gold);font-size:11px;font-weight:700;letter-spacing:.04em}
+.gov{margin:10px 0;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:var(--card);box-shadow:var(--sh1);display:flex;flex-direction:column;gap:6px}.gov.fail{border-color:color-mix(in srgb,var(--no) 45%,transparent)}.gov .gh{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em}.gov .gh em{font-style:normal;text-transform:none;letter-spacing:0}.gov b{font-size:14px}.gov b i{font-style:normal;color:var(--mut);font-weight:400;font-size:12px}.ub.big i{height:9px}.ub.big em{font-size:13px;font-weight:700;color:var(--ink)}
 </style>
 </head>
 <body>
@@ -243,6 +271,7 @@ table.jk tr.ih td,table.jk tr.sb td{white-space:normal}table.jk th:nth-child(2){
 <script src="js/boq.js"></script>
 <script src="js/elem.js"></script>
 <script src="js/est.js"></script>
+<script src="js/sketch.js"></script>
 <script src="js/aids.js"></script>
 <script src="js/auto.js"></script>
 <script src="js/pdb.js"></script>
