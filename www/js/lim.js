@@ -91,7 +91,11 @@ var LIM = (function () {
         if (id === "strip") hard("Dmin", p.Dmin > 0 && p.Dmin < 150, "thickness at the edge of a footing on soil must be at least 150 mm", "IS 456 cl 34.1.2");
         rccGrade(); break;
       }
-      case "pile": {
+      case "pile": case "raft": {
+        var rows = String(p.cols || "").split(/\n/).map(function (l) { return l.trim(); }).filter(function (l) { return l && !/^#/.test(l); }), zero = rows.filter(function (l) { var a = l.split(/[,;\t]+/); return !(parseFloat(a[3]) > 0); }).map(function (l) { return l.split(/[,;\t]+/)[0].trim(); });
+        hard("cols", !rows.length, "enter the columns (or read them from a DXF plan)", "");
+        hard("cols", zero.length > 0, "enter the " + (id === "pile" ? "service load P" : "dead load") + " of " + zero.slice(0, 8).join(", ") + (zero.length > 8 ? " and " + (zero.length - 8) + " more" : "") + " (0 or missing)", "");
+        if (id === "raft") { pos(["sbc", "cb", "cd", "matMesh"]); hard("matT", p.matT > 0 && p.matT < 150, "a raft thinner than 150 mm is below the footing edge minimum", "IS 456 cl 34.1.2"); grade(25, "for moderate exposure (in contact with soil)"); break; }
         pos(["Dp", "Lp", "cb", "cd", "fos", "sp"]);
         hard("pcov", p.pcov < 50, "cover to pile reinforcement must be at least 50 mm", "IS 2911 (Part 1/Sec 2)");
         hard("sp", p.sp < 2.5, "pile spacing must be at least 2.5 × D", "IS 2911 (Part 1/Sec 2)");
@@ -101,11 +105,7 @@ var LIM = (function () {
         warn("edge", p.edge >= 100 && p.edge < 150, "150 mm projection is normal practice", "IS 2911 (Part 1/Sec 2)");
         grade(25, "for piles", "IS 2911"); break;
       }
-      case "raft": {
-        pos(["sbc", "cb", "cd", "matMesh"]);
-        hard("matT", p.matT > 0 && p.matT < 150, "a raft thinner than 150 mm is below the footing edge minimum", "IS 456 cl 34.1.2");
-        grade(25, "for moderate exposure (in contact with soil)"); break;
-      }
+
       case "tension": {
         var d0 = p.db + (p.db <= 14 ? 1 : p.db <= 24 ? 2 : 3);
         if (p.conn === "bolt") {
@@ -114,6 +114,7 @@ var LIM = (function () {
         }
         hard("lmax", p.lmax > 400, "maximum L/r for tension members is 400", "IS 800 Table 3"); break;
       }
+      case "truss": hard("dxf", p.src === "dxf" && !p.dxf, "choose the truss elevation DXF file, or set Geometry to Generator", ""); break;
       case "comp": hard("lmax", p.lmax > 250, "maximum KL/r for compression members is 250 (180 for dead + imposed loads)", "IS 800 Table 3"); warn("lmax", p.lmax > 180 && p.lmax <= 250, "KL/r above 180 is allowed only for members resisting wind or earthquake forces", "IS 800 Table 3"); break;
       case "bolts": {
         var h0 = p.db + (p.db <= 14 ? 1 : p.db <= 24 ? 2 : 3), tt = p.tw_thk, smin = tt <= 10 ? 3 : tt <= 20 ? 5 : tt <= 32 ? 6 : 8;

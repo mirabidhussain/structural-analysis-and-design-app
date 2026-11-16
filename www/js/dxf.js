@@ -6,7 +6,7 @@ DXF.UNITS = { 0: null, 1: 0.0254, 2: 0.3048, 4: 0.001, 5: 0.01, 6: 1, 14: 0.1 };
 DXF.parse = function (text) {
   var L = text.split(/\r?\n/), pairs = [];
   for (var i = 0; i + 1 < L.length; i += 2) pairs.push([parseInt(L[i].trim(), 10), L[i + 1].trim()]);
-  var units = null, ents = [], warn = [], layers = {}, skipped = {}, sec = null, cur = null, poly = null;
+  var units = null, ents = [], warn = [], layers = {}, skipped = {}, sec = null, cur = null, poly = null, texts = [];
   function num(v) { var x = parseFloat(v); return isFinite(x) ? x : 0; }
   function flush() {
     if (!cur) return;
@@ -19,7 +19,8 @@ DXF.parse = function (text) {
     else if (e.t === "LWPOLYLINE") addPoly(e.layer, e.v.map(function (v) { return [v[0], v[1], e.elev || 0]; }), !!(e.f & 1));
     else if (e.t === "3DFACE") { var p = [[e.x, e.y, e.z], [e.x1, e.y1, e.z1], [e.x2, e.y2, e.z2], [e.x3, e.y3, e.z3]]; ents.push({ k: "face", layer: e.layer, p: dedupe(p) }); }
     else if (e.t === "SOLID") { var s = [[e.x, e.y, e.z], [e.x1, e.y1, e.z1], [e.x3, e.y3, e.z3], [e.x2, e.y2, e.z2]]; ents.push({ k: "face", layer: e.layer, p: dedupe(s) }); }
-    else if (e.t === "POINT" || e.t === "CIRCLE") ents.push({ k: "point", layer: e.layer, p: [[e.x, e.y, e.z]] });
+    else if (e.t === "POINT" || e.t === "CIRCLE") ents.push({ k: "point", layer: e.layer, p: [[e.x, e.y, e.z]], r: e.t === "CIRCLE" ? e.r || 0 : 0 });
+    else if (e.t === "TEXT" || e.t === "MTEXT") { layers[e.layer]--; if (!layers[e.layer]) delete layers[e.layer]; var tx = String(e.s || "").replace(/\\P/g, " ").replace(/\\[A-Za-z][^;]*;/g, "").replace(/[{}]/g, "").trim(); if (tx) texts.push({ k: "text", layer: e.layer, p: [[e.x, e.y, e.z]], t: tx }); }
   }
   function dedupe(p) { var o = []; p.forEach(function (q) { if (!o.some(function (r) { return Math.hypot(r[0] - q[0], r[1] - q[1], r[2] - q[2]) < 1e-9; })) o.push(q); }); return o; }
   function addPoly(layer, v, closed) {
@@ -31,7 +32,7 @@ DXF.parse = function (text) {
     if (p.mesh) { p.faces.forEach(function (f) { var q = f.filter(function (i) { return i; }).map(function (i) { return p.v[Math.abs(i) - 1]; }).filter(Boolean); if (q.length >= 3) ents.push({ k: "face", layer: p.layer, p: dedupe(q) }); }); return; }
     addPoly(p.layer, p.v, p.closed);
   }
-  var ENT = { LINE: 1, LWPOLYLINE: 1, POLYLINE: 1, VERTEX: 1, SEQEND: 1, "3DFACE": 1, SOLID: 1, POINT: 1, CIRCLE: 1 };
+  var ENT = { LINE: 1, LWPOLYLINE: 1, POLYLINE: 1, VERTEX: 1, SEQEND: 1, "3DFACE": 1, SOLID: 1, POINT: 1, CIRCLE: 1, TEXT: 1, MTEXT: 1 };
   var lastVar = null;
   pairs.forEach(function (pr) {
     var c = pr[0], v = pr[1];
@@ -50,6 +51,9 @@ DXF.parse = function (text) {
     if (!cur) return;
     switch (c) {
       case 8: cur.layer = v; break;
+      case 1: if (cur.t === "TEXT" || cur.t === "MTEXT") cur.s = (cur.s || "") + v; break;
+      case 3: if (cur.t === "MTEXT") cur.s = (cur.s || "") + v; break;
+      case 40: cur.r = num(v); break;
       case 10: if (cur.t === "LWPOLYLINE") cur.v.push([num(v), 0]); else cur.x = num(v); break;
       case 20: if (cur.t === "LWPOLYLINE") cur.v[cur.v.length - 1][1] = num(v); else cur.y = num(v); break;
       case 30: cur.z = num(v); break;
@@ -65,7 +69,7 @@ DXF.parse = function (text) {
   flush();
   Object.keys(skipped).forEach(function (k) { warn.push(skipped[k] + " " + k + " entit" + (skipped[k] > 1 ? "ies" : "y") + " ignored" + (k === "INSERT" ? " (explode blocks before export)" : k === "ARC" ? " (curved members not supported)" : "")); });
   if (!ents.length) warn.push("No LINE / POLYLINE / 3DFACE entities found in the ENTITIES section.");
-  return { units: units, ents: ents, layers: layers, warn: warn };
+  return { units: units, ents: ents, layers: layers, warn: warn, texts: texts };
 };
 
 /* default role from layer name */
@@ -226,3 +230,127 @@ DXF.write = function (m) {
 };
 
 if (typeof module !== "undefined") module.exports = DXF;
+
+/* ---------- roof truss from a 2D elevation (X horizontal, Y up) ---------- */
+/* layers: TOP / RAFTER → top chord, BOT / TIE / BOTTOM → bottom chord, WEB / DIAG / VERT → web; otherwise found from the outline */
+DXF.truss = function (text, opt) {
+  opt = opt || {};
+  var dx = DXF.parse(text), sc = opt.scale || DXF.UNITS[dx.units] || null, warn = dx.warn.slice();
+  var segs = [];
+  dx.ents.forEach(function (e) {
+    if (DXF.guessRole(e.layer) === "ignore") return;
+    if (e.k === "line") segs.push({ a: e.p[0], b: e.p[1], layer: e.layer });
+    else if (e.k === "poly") for (var i = 0; i + 1 < e.p.length + (e.closed ? 1 : 0); i++) segs.push({ a: e.p[i], b: e.p[(i + 1) % e.p.length], layer: e.layer });
+  });
+  if (segs.length < 3) throw new Error("No truss lines found — draw the members as LINEs or polylines in an elevation (X horizontal, Y up)");
+  if (!sc) { var ext = 0; segs.forEach(function (q) { ext = Math.max(ext, Math.abs(q.a[0] - q.b[0])); }); sc = ext > 200 ? 0.001 : 1; warn.push("Drawing units not set in the file — taken as " + (sc === 0.001 ? "millimetres" : "metres")); }
+  var N = [], tol = 0.005;
+  function nd(p) { var x = p[0] * sc, y = p[1] * sc; for (var i = 0; i < N.length; i++) if (Math.hypot(N[i].x - x, N[i].y - y) < tol) return i; N.push({ x: x, y: y }); return N.length - 1; }
+  segs.forEach(function (q) { q.i = nd(q.a); q.j = nd(q.b); });
+  /* split members at nodes lying on them (chords drawn as one line) */
+  var M = [], seen = {};
+  segs.forEach(function (q) {
+    if (q.i === q.j) return;
+    var A = N[q.i], B = N[q.j], L = Math.hypot(B.x - A.x, B.y - A.y), on = [];
+    N.forEach(function (P, k) { if (k === q.i || k === q.j) return; var t = ((P.x - A.x) * (B.x - A.x) + (P.y - A.y) * (B.y - A.y)) / (L * L), d = Math.abs((B.x - A.x) * (A.y - P.y) - (A.x - P.x) * (B.y - A.y)) / L; if (t > 1e-6 && t < 1 - 1e-6 && d < tol) on.push([t, k]); });
+    on.sort(function (u, v) { return u[0] - v[0]; });
+    var chain = [q.i].concat(on.map(function (o) { return o[1]; }), [q.j]);
+    for (var c = 0; c + 1 < chain.length; c++) { var a = chain[c], b = chain[c + 1], key = Math.min(a, b) + "-" + Math.max(a, b); if (!seen[key]) { seen[key] = 1; M.push({ i: a, j: b, layer: q.layer }); } }
+  });
+  var minY = Infinity, minX = Infinity, maxX = -Infinity;
+  N.forEach(function (n) { minY = Math.min(minY, n.y); minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x); });
+  /* supports: lowest nodes at the two ends (or points on a SUPPORT layer) */
+  var supL = null, supR = null;
+  dx.ents.forEach(function (e) { if (e.k === "point" && /SUPP|BEAR|BASE|FIX|PIN/i.test(e.layer)) { var k = nd(e.p[0]); if (supL === null || N[k].x < N[supL].x) supL = k; if (supR === null || N[k].x > N[supR].x) supR = k; } });
+  if (supL === null || supL === supR) {
+    var ends = N.map(function (n, k) { return k; }).filter(function (k) { return Math.abs(N[k].x - minX) < 0.05 || Math.abs(N[k].x - maxX) < 0.05; });
+    var lo = function (side) { var c = ends.filter(function (k) { return side ? Math.abs(N[k].x - maxX) < 0.05 : Math.abs(N[k].x - minX) < 0.05; }); c.sort(function (u, v) { return N[u].y - N[v].y; }); return c[0]; };
+    supL = lo(false); supR = lo(true);
+  }
+  var adj = N.map(function () { return []; });
+  M.forEach(function (m, k) { adj[m.i].push([m.j, k]); adj[m.j].push([m.i, k]); });
+  function walk(upper) {
+    var path = [supL], used = [], cur = supL, guard = 0;
+    while (cur !== supR && guard++ < 500) {
+      var best = null, ba = upper ? -Infinity : Infinity;
+      adj[cur].forEach(function (q) { var o = N[q[0]], dxx = o.x - N[cur].x; if (dxx <= 1e-6) return; var ang = Math.atan2(o.y - N[cur].y, dxx); if (upper ? ang > ba : ang < ba) { ba = ang; best = q; } });
+      if (!best) return null;
+      used.push(best[1]); path.push(best[0]); cur = best[0];
+    }
+    return cur === supR ? { path: path, used: used } : null;
+  }
+  var up = walk(true), dn = walk(false);
+  if (!up || !dn) throw new Error("Could not trace the chords from support to support — check that the members meet at common joints");
+  M.forEach(function (m, k) {
+    var L = m.layer.toUpperCase();
+    m.g = /TOP|RAFT|UPPER/.test(L) ? "top" : /BOT|TIE|LOWER/.test(L) ? "bot" : /WEB|DIAG|VERT|STRUT/.test(L) ? "web" : up.used.indexOf(k) >= 0 ? "top" : dn.used.indexOf(k) >= 0 ? "bot" : "web";
+  });
+  var x0 = N[supL].x, y0 = N[supL].y, top = [], bot = [];
+  var G = { N: N.map(function (n) { return { x: n.x - x0, y: n.y - y0, kind: "b" }; }), M: M.map(function (m) { return { i: m.i, j: m.j, g: m.g }; }) };
+  up.path.forEach(function (k) { G.N[k].kind = "t"; top.push(k); }); dn.path.forEach(function (k) { bot.push(k); });
+  G.top = top; G.bot = bot; G.sup = [supL, supR]; G.span = N[supR].x - x0;
+  G.h = Math.max.apply(null, top.map(function (k) { return G.N[k].y; }));
+  if (Math.abs(N[supR].y - y0) > 0.01) warn.push("Supports at different levels — the span is measured horizontally");
+  G.slope = Math.atan2(G.h, G.span / 2) * 180 / Math.PI; G.warn = warn;
+  return G;
+};
+
+/* ---------- column layout from a plan: rectangles / circles / points on column layers, marks from nearby text ---------- */
+DXF.columns = function (text, opt) {
+  opt = opt || {};
+  var dx = DXF.parse(text), sc = opt.scale || DXF.UNITS[dx.units] || null, warn = dx.warn.slice(), cand = [];
+  var colLay = function (l) { return /COL|PILLAR|PIER/i.test(l); }, anyCol = dx.ents.some(function (e) { return colLay(e.layer); });
+  dx.ents.forEach(function (e) {
+    if (anyCol && !colLay(e.layer)) return;
+    if (!anyCol && DXF.guessRole(e.layer) === "ignore") return;
+    if (e.k === "poly" && e.closed && e.p.length >= 3 && e.p.length <= 8) {
+      var xs = e.p.map(function (q) { return q[0]; }), ys = e.p.map(function (q) { return q[1]; }), b = Math.max.apply(null, xs) - Math.min.apply(null, xs), d = Math.max.apply(null, ys) - Math.min.apply(null, ys);
+      cand.push({ x: (Math.max.apply(null, xs) + Math.min.apply(null, xs)) / 2, y: (Math.max.apply(null, ys) + Math.min.apply(null, ys)) / 2, b: b, d: d, layer: e.layer });
+    } else if (e.k === "point") cand.push({ x: e.p[0][0], y: e.p[0][1], b: e.r ? 2 * e.r : 0, d: e.r ? 2 * e.r : 0, circ: !!e.r, layer: e.layer });
+  });
+  if (!cand.length) throw new Error("No columns found — draw each column as a closed rectangle (or a circle / point) on a layer named COLUMN");
+  if (!sc) { var big = cand.some(function (q) { return Math.abs(q.x) > 300 || Math.abs(q.y) > 300 || q.b > 50; }); sc = big ? 0.001 : 1; warn.push("Drawing units not set in the file — taken as " + (big ? "millimetres" : "metres")); }
+  /* merge duplicates (e.g. a rectangle and a point at the same column) */
+  var cols = [];
+  cand.forEach(function (q) { var x = q.x * sc, y = q.y * sc, b = q.b * sc * 1000, d = q.d * sc * 1000; var o = cols.filter(function (c) { return Math.hypot(c.x - x, c.y - y) < 0.05; })[0]; if (o) { if (b > o.b) { o.b = b; o.d = d; } } else cols.push({ x: x, y: y, b: b, d: d, circ: q.circ }); });
+  var minX = Math.min.apply(null, cols.map(function (c) { return c.x; })), minY = Math.min.apply(null, cols.map(function (c) { return c.y; }));
+  cols.forEach(function (c) { c.x = Math.round((c.x - minX) * 1000) / 1000; c.y = Math.round((c.y - minY) * 1000) / 1000; });
+  /* marks: nearest text like C1, C-12, P3 within 1.5 m of the column */
+  var tx = (dx.texts || []).filter(function (t) { return /^[A-Za-z]{1,3}[-\s]?\d+[A-Za-z]?$/.test(t.t.trim()); }).map(function (t) { return { x: Math.round((t.p[0][0] * sc - minX) * 1000) / 1000, y: Math.round((t.p[0][1] * sc - minY) * 1000) / 1000, t: t.t.trim().replace(/\s+/g, "").toUpperCase() }; });
+  var taken = {};
+  cols.forEach(function (c) { var best = null, bd = 1.5; tx.forEach(function (t) { var d = Math.hypot(t.x - c.x, t.y - c.y); if (d < bd && !taken[t.t]) { bd = d; best = t; } }); if (best) { c.mark = best.t; taken[best.t] = 1; } });
+  cols.sort(function (a, b) { return Math.abs(a.y - b.y) > 0.05 ? a.y - b.y : a.x - b.x; });
+  var n = 1; cols.forEach(function (c) { if (!c.mark) { while (taken["C" + n]) n++; c.mark = "C" + n; taken[c.mark] = 1; } });
+  var sizes = {}; cols.forEach(function (c) { if (c.b > 0) { var k = Math.round(c.b) + "x" + Math.round(c.d); sizes[k] = (sizes[k] || 0) + 1; } });
+  var common = Object.keys(sizes).sort(function (a, b) { return sizes[b] - sizes[a]; })[0];
+  return { cols: cols, size: common ? common.split("x").map(Number) : null, warn: warn, texts: tx.length };
+};
+
+/* ---------- sample drawings (also used by the tests) ---------- */
+(function () {
+function hdr(units) { return ["0", "SECTION", "2", "HEADER", "9", "$INSUNITS", "70", String(units), "0", "ENDSEC", "0", "SECTION", "2", "ENTITIES"]; }
+function line(l, a, b) { return ["0", "LINE", "8", l, "10", a[0], "20", a[1], "30", 0, "11", b[0], "21", b[1], "31", 0].map(String); }
+function rectp(l, x, y, b, d) { return ["0", "LWPOLYLINE", "8", l, "90", "4", "70", "1", "10", x - b / 2, "20", y - d / 2, "10", x + b / 2, "20", y - d / 2, "10", x + b / 2, "20", y + d / 2, "10", x - b / 2, "20", y + d / 2].map(String); }
+function text(l, x, y, t) { return ["0", "TEXT", "8", l, "10", x, "20", y, "30", 0, "40", 250, "1", t].map(String); }
+function circle(l, x, y, r) { return ["0", "CIRCLE", "8", l, "10", x, "20", y, "30", 0, "40", r].map(String); }
+function end(a) { return a.concat(["0", "ENDSEC", "0", "EOF"]).join("\n"); }
+/* Pratt truss elevation in mm: chords drawn as single long lines (split at the joints by the reader) */
+DXF.sampleTruss = function (span, slope, n, opt) {
+  opt = opt || {}; var t = Math.tan(slope * Math.PI / 180), nn = 2 * n, p = span / nn, a = hdr(4), S = span * 1000;
+  var top = []; for (var i = 0; i <= nn; i++) top.push([i * p * 1000, Math.min(i, nn - i) * p * t * 1000]);
+  a = a.concat(line(opt.layers ? "BOTTOM" : "TRUSS", [0, 0], [S, 0]));
+  a = a.concat(line(opt.layers ? "TOP" : "TRUSS", top[0], top[n]), line(opt.layers ? "TOP" : "TRUSS", top[n], top[nn]));
+  for (i = 1; i < nn; i++) a = a.concat(line(opt.layers ? "WEB" : "TRUSS", [i * p * 1000, 0], top[i]));
+  for (i = 1; i < n; i++) { a = a.concat(line(opt.layers ? "WEB" : "TRUSS", top[i], [(i + 1) * p * 1000, 0]), line(opt.layers ? "WEB" : "TRUSS", top[nn - i], [(nn - i - 1) * p * 1000, 0])); }
+  a = a.concat(line("DIMENSIONS", [0, -800], [S, -800]));
+  return end(a);
+};
+/* column plan in mm: rectangles on COLUMN with marks; one circle column */
+DXF.samplePlan = function (xs, ys, b, d, opt) {
+  opt = opt || {}; var a = hdr(4), k = 1;
+  ys.forEach(function (y) { xs.forEach(function (x) { var X = x * 1000 + (opt.dx || 0), Y = y * 1000 + (opt.dy || 0); a = a.concat(rectp("COLUMN", X, Y, b, d)); if (!opt.nomarks) a = a.concat(text("COL-TEXT", X + 300, Y + 300, "C" + k)); k++; }); });
+  if (opt.circle) a = a.concat(circle("COLUMN", opt.circle[0] * 1000, opt.circle[1] * 1000, 250));
+  a = a.concat(line("GRID", [-2000, 0], [50000, 0]));
+  return end(a);
+};
+})();

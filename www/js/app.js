@@ -6,6 +6,8 @@
   var fck25 = Object.assign({}, fck, { def: "25" });
   function bar(label, def, set, pre) { return { type: "select", label: label, opts: LIM.BARS[set].map(function (d) { return [String(d), (pre || "") + d + " mm"]; }), def: String(def), num: true, unit: "mm" }; }
   function expo(def) { return { type: "select", label: "Exposure condition", opts: LIM.EXPO_OPTS, def: def, help: "IS 456 Table 3 — sets the minimum cover (Table 16) and grade (Table 5)" }; }
+  var DUN = { type: "select", label: "DXF drawing units", opts: [["auto", "Auto (from the file)"], ["mm", "Millimetres"], ["cm", "Centimetres"], ["m", "Metres"], ["ft", "Feet"], ["in", "Inches"]], def: "auto" };
+  function dxfF(label, fill, help) { return { type: "dxf", label: label, fill: fill, help: help, def: "" }; }
   var meth = { type: "select", label: "Design method", opts: [["lsm", "Limit state method (default)"], ["wsm", "Working stress method (Annex B)"]], def: "lsm", help: "Loads: factored for LSM, working (service) for WSM" };
   function by(l, w) { return function (p) { return p.method === "wsm" ? w(p) : l(p); }; }
   function sel(label, opts, def, num) { return { type: "select", label: label, opts: opts, def: def, num: !!num }; }
@@ -38,6 +40,7 @@
       cb: n("Column width b", 300, "mm"), cd: n("Column depth D", 450, "mm"), shape: sel("Shape", [["rect", "Rectangular (equal projections)"], ["sq", "Square"]], "rect"),
       exp: expo("moderate"), cover: n("Clear cover", 50, "mm", "IS 456 cl 26.4.2.2: ≥ 50 mm"), dia: bar("Bar dia", 12, "ftg"), fck: fck25, fy: fy } },
     { id: "pile", grp: "Fdn", icon: "⦿", t: "Pile Foundation", d: "Pile capacity, groups, caps, pile bars, drawings, BOQ", code: "IS 2911 / IS 456", fn: FD.pile, f: {
+      dxf: dxfF("Column layout from a DXF plan (optional)", "pile", "Columns as closed rectangles, circles or points on a COLUMN layer; marks taken from nearby text (C1, C2…). Fills the table below — then enter the loads."), dunits: DUN,
       cols: { type: "text", label: "Columns: mark, x (m), y (m), P (kN), Mx, My (kNm), Hx, Hy (kN) — service loads, one per line", def: "C1, 0, 0, 1800, 40, 30, 35, 25\nC2, 6, 0, 2600, 20, 60, 40, 30\nC3, 0, 5, 2200, 50, 20, 30, 35\nC4, 6, 5, 3200, 30, 40, 45, 40" },
       cb: n("Column size along X", 450, "mm"), cd: n("Column size along Y", 450, "mm"),
       ptype: sel("Pile type", [["bored", "Bored cast-in-situ (IS 2911 Pt 1/Sec 2)"], ["driven", "Driven cast-in-situ (IS 2911 Pt 1/Sec 1)"]], "bored"),
@@ -51,6 +54,7 @@
       capT: n("Cap thickness (0 = smallest that passes)", 0, "mm"), pcov: n("Cover to pile bars", 75, "mm", "IS 2911: ≥ 50"), lf: n("Load factor for design", 1.5, ""),
       zone: sel("Seismic zone (confinement links at the pile top)", [["2", "II"], ["3", "III"], ["4", "IV"], ["5", "V"]], "4", true), fck: fck25, fy: fy } },
     { id: "raft", grp: "Fdn", icon: "▭", t: "Raft Foundation", d: "Plate on soil springs, punching, mesh + extra bars, drawings, BOQ", code: "IS 2950 / IS 456", fn: FD.raft, f: {
+      dxf: dxfF("Column layout from a DXF plan (optional)", "raft", "Columns as closed rectangles, circles or points on a COLUMN layer; marks taken from nearby text. Fills the table below — then enter the loads."), dunits: DUN,
       cols: { type: "text", label: "Columns: mark, x (m), y (m), P dead (kN), P live (kN), Mx, My (kNm) — one per line", def: "C1, 0, 0, 600, 200, 0, 0\nC2, 5, 0, 900, 300, 0, 0\nC3, 10, 0, 600, 200, 0, 0\nC4, 0, 5, 900, 300, 0, 0\nC5, 5, 5, 1300, 450, 0, 0\nC6, 10, 5, 900, 300, 0, 0" },
       cb: n("Column size along X", 450, "mm"), cd: n("Column size along Y", 450, "mm"), sbc: n("Safe bearing capacity (net)", 200, "kN/m²"), ks: n("Modulus of subgrade reaction ks (0 = 120 × SBC)", 0, "kN/m³"),
       Df: n("Founding depth", 1.5, "m"), matT: n("Raft thickness (0 = smallest that passes)", 0, "mm"), matOff: n("Projection beyond the outer column faces", 0.5, "m"),
@@ -63,7 +67,8 @@
       FF: n("Finishes", 1, "kN/m²"), support: sel("End condition", [["ss", "Simply supported"], ["cont", "Continuous / monolithic"]], "ss"), exp: expo("mild"), cover: n("Clear cover", 20, "mm"), dia: bar("Bar dia", 10, "slab"), fck: fck, fy: fy } },
 
     { id: "truss", grp: "Steel", icon: "△", t: "Roof Truss", d: "Geometry, IS 875 loads, analysis & design", code: "IS 800 / 875", fn: TR.design, f: {
-      type: sel("Truss type", [["pratt", "Pratt"], ["howe", "Howe"], ["fink", "Fink (W, 4 panels)"]], "pratt"), span: n("Span (c/c bearing)", 9.65, "m"), slope: n("Roof slope", 30, "deg"),
+      src: sel("Geometry", [["gen", "Generator"], ["dxf", "Import DXF"]], "gen"), dxf: dxfF("Truss elevation DXF (when importing)", null, "Members as LINEs or polylines in an elevation, X horizontal, Y up, joints where members meet; layers TOP / BOTTOM / WEB optional (otherwise the chords are traced from the outline); supports at the lowest end joints."), dunits: DUN,
+      type: sel("Truss type (generator)", [["pratt", "Pratt"], ["howe", "Howe"], ["fink", "Fink (W, 4 panels)"]], "pratt"), span: n("Span (c/c bearing)", 9.65, "m"), slope: n("Roof slope", 30, "deg"),
       n: n("Panels per half (Pratt/Howe)", 3, ""), spacing: n("Truss spacing", 2.4, "m"), sheet: n("Sheeting + fixings", 0.08, "kN/m²", "0.5 mm CGI ≈ 0.05-0.08"),
       purl: n("Purlins (on slope)", 0.06, "kN/m²"), s0: n("Ground snow load s0", 1.5, "kN/m²", "Kashmir valley 1.5-2.5; confirm locally"),
       vb: sel("Basic wind speed (place)", places, "Srinagar"), vbc: n("Custom Vb (if Custom)", 39, "m/s"), k1: n("k1 (risk coefficient)", 1.0, ""), terrain: sel("Terrain category", [["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"]], "2", true),
@@ -165,9 +170,10 @@
     filt();
   }
 
-  var GORD = ["Design method", "Geometry", "Loads", "Soil", "Materials", "Reinforcement & cover", "Connection", "Limits", "Inputs", "Other inputs"];
-  var GICON = { "Design method": "about", "Geometry": "frame", "Loads": "roof", "Soil": "pile", "Materials": "tables", "Reinforcement & cover": "column", "Connection": "bolts", "Limits": "about", "Inputs": "about", "Other inputs": "about" };
+  var GORD = ["Import from DXF", "Design method", "Geometry", "Loads", "Soil", "Materials", "Reinforcement & cover", "Connection", "Limits", "Inputs", "Other inputs"];
+  var GICON = { "Import from DXF": "frame", "Design method": "about", "Geometry": "frame", "Loads": "roof", "Soil": "pile", "Materials": "tables", "Reinforcement & cover": "column", "Connection": "bolts", "Limits": "about", "Inputs": "about", "Other inputs": "about" };
   var GK = {
+    "Import from DXF": ["src", "dxf", "dunits"],
     "Design method": ["method", "mode"],
     "Materials": ["fck", "fy", "fu", "exp", "grade", "bgrade"],
     "Reinforcement & cover": ["cover", "stir", "dia", "tie", "pmax", "arr", "pcov"],
@@ -195,6 +201,7 @@
       if (segOk) h += '<span class="seg fseg">' + f.opts.map(function (o) { return '<button type="button" data-sv="' + esc(o[0]) + '"' + (String(v) === o[0] ? ' class="on"' : '') + '>' + esc(o[1]) + '</button>'; }).join("") + '</span>';
       if (f.type === "select") h += '<select name="' + k + '"' + (segOk ? ' hidden' : '') + '>' + f.opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(v) === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '</select>';
       else if (f.type === "text") h += '<textarea name="' + k + '" rows="4" placeholder="' + esc(f.def) + '">' + esc(v) + '</textarea>';
+      else if (f.type === "dxf") h += '<span class="dxfin"><label class="dxfbtn">' + IC.svg("frame") + '<span>' + (v ? 'Replace DXF file' : 'Choose DXF file') + '</span><input type="file" accept=".dxf,.DXF,application/dxf,text/plain,*/*" data-dxf="' + k + '"></label><textarea name="' + k + '" hidden>' + esc(v) + '</textarea><small class="dxfst" data-st="' + k + '">' + (v ? 'Loaded: ' + esc(saved[k + "__name"] || "drawing.dxf") + ' (' + Math.max(1, Math.round(v.length / 1024)) + ' kB)' : 'No file chosen') + '</small>' + (v ? '<button type="button" class="dxfclr" data-clr="' + k + '">Remove</button>' : '') + '<button type="button" class="dxfclr" data-smp="' + (f.fill ? "plan" : "truss") + '">Sample DXF</button></span>';
       else { var shown = UN.show(v, f.unit); h += '<span class="inw"><input name="' + k + '" type="number" step="any" inputmode="decimal" placeholder="' + esc(UN.show(f.def, f.unit)) + '" value="' + esc(shown) + '" data-si="' + esc(v) + '" data-shown="' + esc(shown) + '">' + (f.unit ? '<em class="u">' + esc(UN.label(f.unit)) + '</em>' : '') + '</span>'; }
       if (f.help) h += '<small>' + f.help + '</small>';
       h += '<small class="lim" hidden></small></label>';
@@ -208,6 +215,35 @@
     app.innerHTML = h;
     var form = document.getElementById("f");
     form.onsubmit = function (e) { e.preventDefault(); run(m, form); };
+    form.querySelectorAll("[data-dxf]").forEach(function (inp) { inp.onchange = function () {
+      var k = inp.getAttribute("data-dxf"), fl = inp.files && inp.files[0]; if (!fl) return;
+      if (fl.size > 4e6) return toast("DXF over 4 MB — purge unused layers and blocks, then try again");
+      var rd = new FileReader(); rd.onload = function () {
+        var txt = String(rd.result), f = m.f[k], st = form.querySelector('[data-st="' + k + '"]');
+        if (!/SECTION/.test(txt.slice(0, 5000))) { st.textContent = "Not an ASCII DXF — save the drawing as DXF (not DWG / binary)"; return; }
+        form.elements[k].value = txt; form.elements[k].setAttribute("data-name", fl.name); st.textContent = "Loaded: " + fl.name + " (" + Math.max(1, Math.round(txt.length / 1024)) + " kB)";
+        try {
+          if (f.fill) {
+            var sc = { mm: 0.001, cm: 0.01, m: 1, ft: 0.3048, "in": 0.0254 }[form.elements.dunits ? form.elements.dunits.value : "auto"] || null, res = DXF.columns(txt, { scale: sc });
+            var old = {}; String(form.elements.cols.value || m.f.cols.def || "").split(/\n/).forEach(function (l) { var a = l.split(/[,;\t]+/).map(function (x) { return x.trim(); }); if (a[0]) old[a[0].toUpperCase()] = a.slice(3); });
+            var nl = f.fill === "pile" ? 5 : 4;
+            form.elements.cols.value = res.cols.map(function (c) { var ld = old[c.mark] || []; while (ld.length < nl) ld.push("0"); return [c.mark, c.x, c.y].concat(ld.slice(0, nl)).join(", "); }).join("\n");
+            if (res.size && form.elements.cb && form.elements.cd) { [["cb", res.size[0]], ["cd", res.size[1]]].forEach(function (q) { var el = form.elements[q[0]], sh = UN.show(q[1], "mm"); el.value = sh; el.setAttribute("data-si", q[1]); el.setAttribute("data-shown", sh); }); }
+            var miss = res.cols.filter(function (c) { return !old[c.mark]; }).length;
+            st.textContent += " — " + res.cols.length + " columns read" + (res.size ? ", size " + res.size[0] + " × " + res.size[1] + " mm" : "") + (miss ? "; enter the loads of " + miss + " new column(s) in the table" : "") + (res.warn.length ? " · " + res.warn.join("; ") : "");
+            toast(res.cols.length + " columns read from " + fl.name);
+          } else {
+            var g = DXF.truss(txt, { scale: { mm: 0.001, cm: 0.01, m: 1, ft: 0.3048, "in": 0.0254 }[form.elements.dunits.value] || null });
+            if (form.elements.src) { form.elements.src.value = "dxf"; var sg = form.elements.src.parentNode.querySelectorAll(".fseg button"); sg.forEach(function (x) { x.classList.toggle("on", x.getAttribute("data-sv") === "dxf"); }); }
+            st.textContent += " — " + g.N.length + " joints, " + g.M.length + " members, span " + U.f(g.span, 2) + " m, rise " + U.f(g.h, 2) + " m" + (g.warn.length ? " · " + g.warn.join("; ") : "");
+            toast("Truss read from " + fl.name);
+          }
+        } catch (e) { st.textContent = "Could not read the drawing: " + (e.message || e); }
+        validate(m, form);
+      }; rd.readAsText(fl);
+    }; });
+    form.querySelectorAll("[data-smp]").forEach(function (b) { b.onclick = function () { var t = b.getAttribute("data-smp") === "plan" ? DXF.samplePlan([0, 6, 12], [0, 5, 10], 450, 450) : DXF.sampleTruss(12, 25, 3, { layers: true }); saveText(b.getAttribute("data-smp") === "plan" ? "sample-column-plan.dxf" : "sample-truss.dxf", t); toast("Sample saved — open it in AutoCAD to see the layers"); }; });
+    form.querySelectorAll("[data-clr]").forEach(function (b) { b.onclick = function () { var k = b.getAttribute("data-clr"); form.elements[k].value = ""; form.querySelector('[data-st="' + k + '"]').textContent = "No file chosen"; b.remove(); if (form.elements.src) { form.elements.src.value = "gen"; form.elements.src.parentNode.querySelectorAll(".fseg button").forEach(function (x) { x.classList.toggle("on", x.getAttribute("data-sv") === "gen"); }); } }; });
     form.querySelectorAll(".fseg button").forEach(function (b) { b.onclick = function () { var sel = b.parentNode.parentNode.querySelector("select"); sel.value = b.getAttribute("data-sv"); b.parentNode.querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x === b); }); sel.dispatchEvent(new Event("change", { bubbles: true })); }; });
     try { var rc = JSON.parse(localStorage.getItem("isd_recent") || "[]").filter(function (x) { return x !== m.id; }); rc.unshift(m.id); localStorage.setItem("isd_recent", JSON.stringify(rc.slice(0, 6))); } catch (e) {}
     bindUnitSeg(form, function (s, before) { if (before) read(m, form); else moduleView(m); });
@@ -222,6 +258,7 @@
   function validate(m, form) {
     var p = read(m, form, true), iss = LIM.check(m.id, p), ex = document.getElementById("exist"), exist = !!(ex && ex.checked), sk = document.getElementById("sk");
     if (sk) sk.innerHTML = SK.draw(m.id, p);
+    if (m.id === "truss") ["type", "span", "slope", "n"].forEach(function (k) { var l = form.querySelector('.fld[data-fk="' + k + '"]'); if (l) l.hidden = p.src === "dxf"; });
     form.querySelectorAll(".fld[data-fk]").forEach(function (l) {
       var k = l.getAttribute("data-fk"), mine = iss.filter(function (x) { return x.k === k; }), sm = l.querySelector(".lim");
       sm.hidden = !mine.length; l.classList.toggle("bad", mine.some(function (x) { return x.hard && !exist; }));
@@ -236,6 +273,7 @@
     Object.keys(m.f).forEach(function (k) {
       var f = m.f[k], v = raw[k] === undefined || raw[k] === null ? "" : String(raw[k]).trim();
       if (f.type === "select") { if (!f.opts.some(function (o) { return o[0] === v; })) v = f.def; p[k] = f.num ? parseFloat(v) : v; return; }
+      if (f.type === "dxf") { p[k] = v; return; }
       if (v === "") { v = String(f.def); defs.push(f.label.replace(/<[^>]+>/g, "")); }
       if (f.type === "number") { var n = parseFloat(v); p[k] = isFinite(n) ? n : parseFloat(f.def); } else p[k] = v;
     });
@@ -253,6 +291,7 @@
     var p = {}, raw = {}, defs = [];
     Object.keys(m.f).forEach(function (k) {
       var f = m.f[k], el = form.elements[k], v = String(el.value).trim(); raw[k] = v;
+      if (f.type === "dxf") { p[k] = v; return; }
       if (f.type !== "select" && v === "") { v = String(f.def); defs.push(f.label.replace(/<[^>]+>/g, "") + (f.type === "number" ? " = " + UN.show(f.def, f.unit) + (f.unit ? " " + UN.label(f.unit) : "") : "")); if (f.type === "number") { p[k] = parseFloat(f.def); return; } }
       if (f.type === "number") { var n = el.getAttribute("data-shown") === v && el.getAttribute("data-si") !== "" ? parseFloat(el.getAttribute("data-si")) : UN.toSI(parseFloat(v), f.unit); if (!isFinite(n)) { n = parseFloat(f.def); defs.push(f.label); raw[k] = ""; } else raw[k] = String(n); p[k] = n; }
       else if (f.type === "select") p[k] = f.num ? parseFloat(v) : v;
@@ -260,6 +299,7 @@
     });
     post(m, p);
     if (noStore) return p;
+    Object.keys(m.f).forEach(function (k) { if (m.f[k].type === "dxf" && form.elements[k]) raw[k + "__name"] = form.elements[k].getAttribute("data-name") || (store(m.id) || {})[k + "__name"] || ""; });
     var ex = document.getElementById("exist"); raw.__exist = !!(ex && ex.checked);
     raw.__ran = true; store(m.id, raw);
     p.__defaults = defs;

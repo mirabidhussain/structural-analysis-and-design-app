@@ -88,11 +88,17 @@ TR.loads = function (g, sp, wg, wLeft, wRight) {
 
 TR.design = function (p) {
   var r = new Rep("Roof Truss Analysis & Design", "IS 875 / IS 800:2007");
-  var g = TR.geometry(p.type, p.span, p.slope, p.n);
+  var fromDxf = p.src === "dxf";
+  if (fromDxf) {
+    if (!p.dxf) throw new Error("Choose the truss elevation DXF file (or switch the geometry source to the generator)");
+    var g = DXF.truss(p.dxf, { scale: { mm: 0.001, cm: 0.01, m: 1, ft: 0.3048, "in": 0.0254 }[p.dunits] || null });
+    p = Object.assign({}, p, { span: Math.round(g.span * 1000) / 1000, slope: Math.round(g.slope * 10) / 10 });
+  } else var g = TR.geometry(p.type, p.span, p.slope, p.n);
   var ld = LD.roof({ span: p.span, slope: p.slope, sheet: p.sheet, purl: p.purl, s0: p.s0, vb: p.vb, k1: p.k1, terrain: p.terrain, h: p.h, k3: 1, k4: 1, kd: 0.9, ka: 1, kc: 0.9, hw: p.hw, cpi: p.cpi });
   var sp = p.spacing;
   r.h("1. Geometry & loads");
-  r.row("Truss", { pratt: "Pratt", howe: "Howe", fink: "Fink (W)" }[p.type] + ", span " + p.span + " m, rise " + U.f(g.h, 3) + " m (" + p.slope + "°), spacing " + sp + " m", "");
+  r.row("Truss", (fromDxf ? "From the DXF drawing (" + g.N.length + " joints, " + g.M.length + " members: " + ["top", "bot", "web"].map(function (k) { return g.M.filter(function (m) { return m.g === k; }).length + " " + { top: "top chord", bot: "bottom chord", web: "web" }[k]; }).join(", ") + ")" : { pratt: "Pratt", howe: "Howe", fink: "Fink (W)" }[p.type]) + ", span " + p.span + " m, rise " + U.f(g.h, 3) + " m (" + p.slope + "°" + (fromDxf ? " average" : "") + "), spacing " + sp + " m", "");
+  if (fromDxf && g.warn.length) r.note(g.warn.join("; "));
   r.row("DL / LL(snow) on plan", U.f(ld.DLplan, 3) + " / " + U.f(ld.LLs, 3), "kN/m²", "IS 875 Pt 1, 2, 4");
   r.row("Wind pd ; Cpe windward / leeward", U.f(ld.pd, 3) + " ; " + U.f(ld.cpeW, 2) + " / " + U.f(ld.cpeL, 2), "kN/m²", "IS 875 Pt 3");
   var cases = {
@@ -103,6 +109,7 @@ TR.design = function (p) {
     WLd: TR.solve(g, TR.loads(g, sp, 0, ld.wW_dn, ld.wL_dn)),
     WLd2: TR.solve(g, TR.loads(g, sp, 0, ld.wL_dn, ld.wW_dn))
   };
+  if (cases.DL.f.some(function (v) { return !isFinite(v); })) throw new Error("The truss is unstable (a mechanism) — check that every joint is connected and the members meet at common points");
   var combos = [["1.5(DL+LL)", { DL: 1.5, LL: 1.5 }]];
   ["WLu", "WLu2", "WLd", "WLd2"].forEach(function (w) {
     var tag = w.indexOf("u") >= 0 ? "suction" : "pressure", side = w.slice(-1) === "2" ? "R" : "L";
@@ -165,7 +172,7 @@ TR.design = function (p) {
   r.check("All members adequate", !fail, fail ? "increase sizes / reduce span" : "", "IS 800 cl 6, 7");
   var wt2 = wt * 1.10;
   r.row("Truss steel weight (+10% gussets/connections)", U.f(wt2, 1), "kg per truss");
-  r.sum("Truss", { pratt: "Pratt", howe: "Howe", fink: "Fink" }[p.type] + " " + p.span + " m @ " + p.slope + "°");
+  r.sum("Truss", (fromDxf ? "From DXF" : { pratt: "Pratt", howe: "Howe", fink: "Fink" }[p.type]) + " " + p.span + " m @ " + p.slope + "°");
   if (chosen.top) r.sum("Top chord", "2-" + chosen.top.s.name);
   if (chosen.bot) r.sum("Bottom chord", "2-" + chosen.bot.s.name);
   r.sum("Weight / truss", U.f(wt2, 1) + " kg");

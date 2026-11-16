@@ -57,6 +57,21 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   const fx2 = await pg.evaluate(() => ({ pass: !!document.querySelector('#out .badge.pass'), D: document.querySelector('#f [name=D]').value }));
   ok('Failed design shows changes that pass; Apply fills the input and the design passes', fx1.fail && fx2.pass, fx1.t + ' → D ' + fx2.D);
   await pg.evaluate(() => { document.getElementById('rst').click(); });
+  /* DXF import in the truss and foundation modules */
+  const DG = require('./dxfgen.js');
+  await pg.evaluate(() => { location.hash = '#truss'; }); await pg.waitForSelector('#f [data-dxf=dxf]');
+  await pg.setInputFiles('#f [data-dxf=dxf]', { name: 'truss.dxf', mimeType: 'text/plain', buffer: Buffer.from(DG.truss(12, 25, 3)) }); await pg.waitForTimeout(600);
+  const tst = await pg.evaluate(() => ({ st: document.querySelector('[data-st=dxf]').textContent, src: document.querySelector('#f [name=src]').value }));
+  await pg.click('button.pri'); await pg.waitForSelector('#out .rep'); await pg.waitForTimeout(300);
+  const tr = await pg.evaluate(() => ({ pass: !!document.querySelector('#out .badge.pass'), txt: /From the DXF drawing \(12 joints, 21 members/.test(document.querySelector('#out').textContent) }));
+  ok('Roof truss imported from a DXF elevation, analysed and designed', /12 joints, 21 members, span 12\.00/.test(tst.st) && tst.src === 'dxf' && tr.pass && tr.txt, tst.st);
+  await pg.evaluate(() => document.getElementById('rst').click());
+  await pg.evaluate(() => { location.hash = '#pile'; }); await pg.waitForSelector('#f [data-dxf=dxf]');
+  await pg.setInputFiles('#f [data-dxf=dxf]', { name: 'plan.dxf', mimeType: 'text/plain', buffer: Buffer.from(DG.plan([0, 6, 9], [0, 5], 450, 450)) }); await pg.waitForTimeout(600);
+  const pv = await pg.evaluate(() => ({ st: document.querySelector('[data-st=dxf]').textContent, rows: document.querySelector('#f [name=cols]').value.split('\n').length, lim: document.querySelector('.fld[data-fk=cols] .lim').textContent }));
+  await pg.click('button.pri'); await pg.waitForTimeout(300); const blocked = await pg.evaluate(() => !!document.querySelector('#out .err'));
+  ok('Pile foundation: columns read from a DXF plan keep the loads of matching marks; new columns must get loads before the design runs', /6 columns read/.test(pv.st) && /enter the loads of 2 new/.test(pv.st) && pv.rows === 6 && /C5, C6/.test(pv.lim) && blocked, pv.lim);
+  await pg.evaluate(() => document.getElementById('rst').click());
   /* v3.8: brand banner, slab module, live sketches, governing check */
   await pg.evaluate(() => { location.hash = ''; }); await pg.waitForTimeout(300);
   const br = await pg.evaluate(() => ({ brand: !!document.querySelector('.brand .brand-art'), sticky: getComputedStyle(document.querySelector('.brand')).position, logo: !!document.querySelector('header .logo img'), qa: document.querySelectorAll('.qa .qai').length, slab: !!document.querySelector('.card[href="#slab"]') && !document.querySelector('.card[href="#slab1"]') }));

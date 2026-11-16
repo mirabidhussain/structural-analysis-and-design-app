@@ -10,7 +10,7 @@ root = pathlib.Path(__file__).resolve().parent.parent
 outd = root / "www" / "aids"; outd.mkdir(exist_ok=True)
 for f in outd.glob("*.png"): f.unlink()
 A = json.load(open(sys.argv[1]))
-ENGINE = "3.8"
+ENGINE = "3.9"
 INK, MUT, GRID, ACC, BLUE = "#13233f", "#5b6b82", "#d9e1ec", "#e8762b", "#1f4e99"
 for ttf in ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]:
     try: font_manager.fontManager.addfont(ttf)
