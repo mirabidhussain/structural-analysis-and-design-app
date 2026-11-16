@@ -42,7 +42,7 @@ var SU = (function () {
 
   /* ---------- form helpers ---------- */
   /* blank input = default (shown as greyed placeholder) */
-  function num(k, label, unit, help) { return '<label class="fld"><span>' + label + '</span><span class="inw"><input data-k="' + k + '" type="number" step="any" inputmode="decimal" placeholder="' + esc(dflt(k)) + '" value="' + (given(k) ? esc(UV[k]) : "") + '">' + (unit ? '<em class="u">' + unit + '</em>' : '') + '</span>' + (help ? '<small>' + help + '</small>' : '') + '</label>'; }
+  function num(k, label, unit, help) { var sh = given(k) ? UN.show(UV[k], unit) : ""; return '<label class="fld"><span>' + label + '</span><span class="inw"><input data-k="' + k + '" data-u="' + esc(unit || "") + '" data-shown="' + esc(sh) + '" type="number" step="any" inputmode="decimal" placeholder="' + esc(UN.show(dflt(k), unit)) + '" value="' + esc(sh) + '">' + (unit ? '<em class="u">' + esc(UN.label(unit)) + '</em>' : '') + '</span>' + (help ? '<small>' + help + '</small>' : '') + '</label>'; }
   function txt(k, label, help) { return '<label class="fld"><span>' + label + '</span><input data-k="' + k + '" placeholder="' + esc(dflt(k)) + '" value="' + (given(k) ? esc(UV[k]) : "") + '"><small>' + (help ? help + ' · ' : '') + 'default ' + esc(dtxt(k)) + '</small></label>'; }
   function area(k, label, help, ph) { return '<label class="fld full"><span>' + label + '</span><textarea data-k="' + k + '" rows="3" placeholder="' + esc(ph) + '">' + (given(k) ? esc(UV[k]) : "") + '</textarea><small>' + help + '</small></label>'; }
   function sel(k, label, opts) { return '<label class="fld"><span>' + label + '</span><select data-k="' + k + '">' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(P[k]) === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + (String(dflt(k)) === String(o[0]) ? " (default)" : "") + '</option>'; }).join("") + '</select></label>'; }
@@ -57,7 +57,7 @@ var SU = (function () {
       if (el.tagName === "SELECT") { if (String(v) === String(dflt(k)) && !given(k)) return; UV[k] = isNaN(+v) || v === "" ? v : +v; return; }
       v = String(v).trim();
       if (v === "") { delete UV[k]; return; }
-      if (el.type === "number") { var n = parseFloat(v); if (!isFinite(n) || n < 0) { delete UV[k]; BAD.push(k); el.value = ""; } else UV[k] = n; }
+      if (el.type === "number") { if (el.getAttribute("data-shown") === v && given(k)) return; var n = parseFloat(v); if (!isFinite(n) || n < 0) { delete UV[k]; BAD.push(k); el.value = ""; } else UV[k] = UN.toSI(n, el.getAttribute("data-u") || ""); }
       else UV[k] = v;
     });
     save();
@@ -81,6 +81,7 @@ var SU = (function () {
     title.textContent = "Frame & FE Analysis"; back.hidden = false;
     var pr = typeof PDB !== "undefined" ? PDB.current() : null;
     var h = (pr ? '<div class="projbar"><a href="#projects">▤ ' + esc(pr.name) + '</a><span class="stchip st' + ["Concept", "Design", "For check", "Checked", "Issued", "On hold"].indexOf(pr.status) + '">' + esc(pr.status) + '</span></div>' : '') + '<div class="code-note">Stiffness matrix (displacement) method for frames · 4-node flat-shell FEA for slabs, plates & walls · Linear static, P-Delta and pushover · DXF input</div>';
+    h += '<div class="ftop fu"><span>Input units</span><span class="seg useg">' + ["si", "mks", "fps"].map(function (u) { return '<button type="button" data-u="' + u + '"' + (u === UN.sys() ? ' class="on"' : '') + '>' + UN.SYS[u].short + '</button>'; }).join("") + '</span></div>' + (UN.active() ? '<div class="note">' + esc(UN.note()) + ' Grid spacings, storey heights and section sizes stay in m and mm.</div>' : '');
     h += panel("p1", "1 · Geometry", srcForm(), true);
     h += panel("p2", "2 · Materials & sections", propForm());
     h += panel("p3", "3 · Loads (IS 875, IS 1893)", loadForm());
@@ -88,6 +89,7 @@ var SU = (function () {
     h += panel("p4", "4 · Analyse", anaForm(), true);
     h += '<div id="mstat"></div><div id="viewer"></div><div id="results"></div>';
     app.innerHTML = h;
+    app.querySelectorAll(".fu .useg button").forEach(function (bt) { bt.onclick = function () { var u = bt.getAttribute("data-u"); if (u === UN.sys()) return; grab(app); save(); UN.set(u); view(app, title, back); }; });
     app.querySelectorAll(".pnl > h3").forEach(function (hd) { hd.onclick = function () { hd.parentNode.classList.toggle("open"); }; });
     app.addEventListener("change", function (e) { if (e.target.getAttribute && e.target.getAttribute("data-k")) { grab(app); if (e.target.getAttribute("data-k") === "src") { $("srcbox").innerHTML = srcInner(); bindSrc(); } if (e.target.getAttribute("data-k") === "mat") matDefaults(app); } });
     bindSrc();

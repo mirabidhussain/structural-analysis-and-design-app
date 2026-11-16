@@ -175,7 +175,7 @@ RCC.slab1 = function (p) {
   r.sum("Thickness", Dd + " mm (d = " + U.f(d, 0) + ")");
   r.sum("Main steel", main.text);
   r.sum("Distribution", dist.text);
-  r.res = { Mu: Mu, Ast: Ast, main: main };
+  r.res = { Mu: Mu, Ast: Ast, main: main, dist: dist, D: Dd };
   return r;
 };
 
@@ -232,6 +232,7 @@ RCC.slab2 = function (p) {
   }
   r.sum("Slab", Dd + " mm, " + cs.name);
   Object.keys(sumAst).forEach(function (k) { r.sum(k, sumAst[k].text); });
+  r.res = { sp: sumAst, D: Dd, lx: lx, ly: p.ly };
   return r;
 };
 
@@ -338,7 +339,7 @@ RCC.column = function (p) {
   r.sum("Column", b + " × " + Dd + " mm");
   r.sum("Main bars", nb + " nos " + p.dia + " mm φ");
   r.sum("Ties", td + " mm @ " + ts + " c/c");
-  r.res = found;
+  r.res = Object.assign({}, found, { nb: nb, td: td, ts: ts });
   return r;
 };
 
@@ -412,7 +413,7 @@ RCC.footing = function (p) {
   r.sum("Footing", U.f(Lf, 2) + " × " + U.f(Bf, 2) + " m, D = " + Dtot + " mm");
   r.sum("Steel (long)", s1.text);
   r.sum("Steel (short)", s2.text);
-  r.res = { L: Lf, B: Bf, D: Dtot, d: d };
+  r.res = { L: Lf, B: Bf, D: Dtot, d: d, s1: s1, s2: s2 };
   return r;
 };
 
@@ -454,6 +455,7 @@ RCC.strip = function (p) {
   r.sum("Footing", "B = " + U.f(B, 2) + " m, D = " + Dt + " mm");
   r.sum("Main bars", main.text);
   r.sum("Distribution", dist.text);
+  r.res = { B: B, D: Dt, main: main, dist: dist };
   return r;
 };
 
@@ -482,6 +484,7 @@ RCC.stair = function (p) {
   r.check("Deflection L/d ≤ basic × kt", L * 1000 / d <= basic * kt, U.f(L * 1000 / d, 1) + " ≤ " + U.f(basic * kt, 1), "cl 23.2.1 / 33.3");
   r.sum("Waist", t + " mm, R/T = " + R_ + "/" + T + " mm");
   r.sum("Main", main.text); r.sum("Distribution", dist.text);
+  r.res = { main: main, dist: dist, t: t };
   return r;
 };
 

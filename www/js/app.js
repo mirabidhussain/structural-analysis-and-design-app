@@ -124,7 +124,12 @@
     if (window.PDB) { var h0 = h; h = ""; var pr = PDB.current(), sm = pr.summary, nf = sm ? sm.memberFails + (sm.detailFails || 0) : 0;
       h += '<a class="card wide proj" href="#projects"><span class="ic">' + IC.svg("projects") + '</span><div class="pc"><b>' + esc(pr.name) + ' <small class="stchip">' + esc(pr.status) + '</small></b><small>Current project · ' + PDB.list().length + ' project(s) on this device' + (sm ? ' · last run ' + new Date(sm.date).toLocaleDateString() : ' · not analysed yet') + '</small>' +
         (sm ? '<div class="kpis"><span class="' + (nf ? "bad" : "good") + '">' + (nf ? nf + " checks fail" : "All checks pass") + '</span>' + (sm.cost ? '<span>₹ ' + Math.round(sm.cost).toLocaleString("en-IN") + '</span>' : '') + (sm.steel_t ? '<span>' + sm.steel_t.toFixed(1) + ' t steel</span>' : '') + '</div>' : '') + '</div>' + IC.svg("chev", "go") + '</a>'; projCard = h; h = h0; }
+    if (window.PDB && PDB.current()) { var el0 = PDB.current().elements || [];
+      h += '<a class="pbar" href="#elements">' + IC.svg("projects") + '<span><b>' + esc(PDB.current().name) + '</b> · ' + (el0.length ? el0.length + ' designed element(s) · ' + "₹ " + Math.round(el0.reduce(function (a, e) { return a + (e.cost || 0); }, 0)).toLocaleString("en-IN") : 'no designed elements yet — use <i>Add to project</i> under a result') + '</span>' + IC.svg("chev", "go") + '</a>'; }
     h += '<label class="search">' + IC.svg("search") + '<input id="q" type="search" placeholder="Search — beam, footing, truss, seismic…" autocomplete="off"></label>';
+    var rec = []; try { rec = JSON.parse(localStorage.getItem("isd_recent") || "[]"); } catch (e) {}
+    rec = rec.map(modById).filter(Boolean).slice(0, 4);
+    if (rec.length) h += '<div class="recent"><span>Recent</span>' + rec.map(function (m) { return '<a href="#' + m.id + '" class="rchip g-' + m.grp.toLowerCase() + '"><span class="ic">' + IC.svg(m.id) + '</span>' + esc(m.t) + '</a>'; }).join("") + '</div>';
     h += '<div class="chips" id="fchips">' + [["all", "All"], ["RCC", "RCC"], ["Fdn", "Foundations"], ["Steel", "Steel"], ["Loads", "Loads"], ["Ana", "Analysis"], ["Ref", "Reference"]].map(function (c) { return '<button type="button" data-g="' + c[0] + '"' + (homeFilter === c[0] ? ' class="on"' : '') + '>' + c[1] + '</button>'; }).join("") + '</div>';
     ["RCC", "Fdn", "Steel", "Loads"].forEach(function (g) {
       h += '<div class="gsec" data-g="' + g + '"><h2 class="grp"><span>' + GRP[g][0] + '</span><em>' + GRP[g][1] + '</em></h2><div class="grid">';
@@ -137,7 +142,7 @@
       '<a class="card mod g-ana" href="#model" data-s="frame fe finite element analysis 3d building seismic response spectrum pushover model"><span class="ic">' + IC.svg("frame") + '</span><b>Frame & FE analysis</b><small>Whole-building 3D model, seismic, auto design, detailing</small><em>FEA</em></a>' +
       '<a class="card mod g-ana" href="#projects" data-s="projects revisions backup"><span class="ic">' + IC.svg("projects") + '</span><b>Projects</b><small>Saved buildings, revisions, backups</small><em>Offline</em></a>' +
       '<a class="card mod g-ana" href="#report" data-s="calculation report building"><span class="ic">' + IC.svg("report") + '</span><b>Building report</b><small>Calculation report of the analysed building</small><em>PDF</em></a></div></div>';
-    h += '<div class="gsec" data-g="Ref"><h2 class="grp"><span>Reference</span><em>SP 6(1) · IS 456 tables</em></h2><div class="grid"><a class="card mod g-ref" href="#tables" data-s="section tables isa ismb ismc tau"><span class="ic">' + IC.svg("tables") + '</span><b>Section tables</b><small>ISA, ISMB, ISMC properties, τc</small><em>SP 6(1)</em></a>' +
+    h += '<div class="gsec" data-g="Ref"><h2 class="grp"><span>Reference</span><em>SP 16 · SP 6(1) · IS 456 tables</em></h2><div class="grid"><a class="card mod g-ref" href="#aids" data-s="design aids charts sp 16 interaction column flexure shear development length"><span class="ic">' + IC.svg("aids") + '</span><b>Design aids</b><small>' + (window.AIDS ? AIDS.length : 0) + ' charts: column P–M, flexure, shear, deflection; Ld tables</small><em>SP 16 style</em></a><a class="card mod g-ref" href="#tables" data-s="section tables isa ismb ismc tau"><span class="ic">' + IC.svg("tables") + '</span><b>Section tables</b><small>ISA, ISMB, ISMC properties, τc</small><em>SP 6(1)</em></a>' +
       '<a class="card mod g-ref" href="#about" data-s="about scope codes register"><span class="ic">' + IC.svg("about") + '</span><b>About & scope</b><small>Codes, assumptions, limits</small><em>engine ' + (window.REG ? REG.ENGINE : "") + '</em></a></div></div>';
     h += '<p class="empty" id="nores" hidden>No module matches your search.</p>';
     app.innerHTML = h;
@@ -159,26 +164,52 @@
     filt();
   }
 
+  var GORD = ["Design method", "Geometry", "Loads", "Soil", "Materials", "Reinforcement & cover", "Connection", "Limits", "Inputs", "Other inputs"];
+  var GICON = { "Design method": "about", "Geometry": "frame", "Loads": "roof", "Soil": "pile", "Materials": "tables", "Reinforcement & cover": "column", "Connection": "bolts", "Limits": "about", "Inputs": "about", "Other inputs": "about" };
+  var GK = {
+    "Design method": ["method", "mode"],
+    "Materials": ["fck", "fy", "fu", "exp", "grade", "bgrade"],
+    "Reinforcement & cover": ["cover", "stir", "dia", "tie", "pmax", "arr", "pcov"],
+    "Loads": ["wu", "Mu", "Vu", "Pu", "Mux", "Muy", "P", "Mx", "w", "LL", "FF", "sw", "Tu", "Fw", "DL", "WL", "WLup", "sheet", "purl", "s0", "vb", "vbc", "k1", "terrain", "cpi", "extra", "cols", "lf", "seis", "nsf", "zone", "hw"],
+    "Soil": ["soil", "sbc", "ks", "Qg", "Qupg", "K", "fos", "nh", "ylim", "setLim", "head", "Df"],
+    "Connection": ["db", "nb", "pitch", "e", "g", "conn", "Lw", "tg", "nn", "ns", "s", "tw_thk", "field", "t", "gap"],
+    "Limits": ["lmax", "dl"]
+  };
+  function grpOf(k, m) {
+    if (m.id === "stair" && k === "t") return "Geometry";
+    for (var g in GK) if (GK[g].indexOf(k) >= 0) return g;
+    return "Geometry";
+  }
   function moduleView(m) {
     title.textContent = m.t; back.hidden = false;
     var saved = store(m.id) || {}, h = '<div class="mhead g-' + m.grp.toLowerCase() + '"><span class="mic">' + IC.svg(m.id) + '</span><div><b>' + esc(m.t) + '</b><small>' + esc(m.d) + '</small></div><em class="cchip">' + m.code + '</em></div>' +
-      '<form id="f" class="form" autocomplete="off"><div class="code">Inputs — leave a field blank to use the value shown in it</div>';
+      '<form id="f" class="form" autocomplete="off"><div class="code ftop full"><span>Inputs — leave a field blank to use the value shown in it</span>' + unitSeg() + '</div>';
+    var GH = {}, gOrder = [];
     Object.keys(m.f).forEach(function (k) {
+      var g = m.grp === "Loads" ? "Inputs" : grpOf(k, m), hh = h; h = "";
       var f = m.f[k], v = saved[k] !== undefined && saved[k] !== "" ? saved[k] : (f.type === "select" ? f.def : "");
       if (f.type === "select" && !f.opts.some(function (o) { return o[0] === String(v); })) v = f.num && isFinite(parseFloat(v)) ? f.opts.reduce(function (a, o) { return Math.abs(+o[0] - v) < Math.abs(+a - v) ? o[0] : a; }, f.opts[0][0]) : f.def;
       h += '<label class="fld" data-fk="' + k + '"><span>' + f.label + '</span>';
-      if (f.type === "select") h += '<select name="' + k + '">' + f.opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(v) === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '</select>';
+      var segOk = f.type === "select" && f.opts.length >= 2 && f.opts.length <= 3 && !f.unit && f.opts.every(function (o) { return o[1].length <= 26; });
+      if (segOk) h += '<span class="seg fseg">' + f.opts.map(function (o) { return '<button type="button" data-sv="' + esc(o[0]) + '"' + (String(v) === o[0] ? ' class="on"' : '') + '>' + esc(o[1]) + '</button>'; }).join("") + '</span>';
+      if (f.type === "select") h += '<select name="' + k + '"' + (segOk ? ' hidden' : '') + '>' + f.opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(v) === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '</select>';
       else if (f.type === "text") h += '<textarea name="' + k + '" rows="4" placeholder="' + esc(f.def) + '">' + esc(v) + '</textarea>';
-      else h += '<span class="inw"><input name="' + k + '" type="number" step="any" inputmode="decimal" placeholder="' + esc(f.def) + '" value="' + esc(v) + '">' + (f.unit ? '<em class="u">' + f.unit + '</em>' : '') + '</span>';
+      else { var shown = UN.show(v, f.unit); h += '<span class="inw"><input name="' + k + '" type="number" step="any" inputmode="decimal" placeholder="' + esc(UN.show(f.def, f.unit)) + '" value="' + esc(shown) + '" data-si="' + esc(v) + '" data-shown="' + esc(shown) + '">' + (f.unit ? '<em class="u">' + esc(UN.label(f.unit)) + '</em>' : '') + '</span>'; }
       if (f.help) h += '<small>' + f.help + '</small>';
       h += '<small class="lim" hidden></small></label>';
+      if (!GH[g]) { GH[g] = ""; gOrder.push(g); } GH[g] += h; h = hh;
     });
+    gOrder.sort(function (a, b) { return GORD.indexOf(a) - GORD.indexOf(b); });
+    gOrder.forEach(function (g) { h += '<details class="fgrp full" open><summary>' + IC.svg(GICON[g] || "about") + '<span>' + g + '</span></summary><div class="fgrid">' + GH[g] + '</div></details>'; });
     if (LIM.check(m.id, defaults(m)).length || ["RCC", "Fdn"].indexOf(m.grp) >= 0 || /tension|comp|bolts/.test(m.id))
       h += '<label class="fld ck full"><span><input type="checkbox" id="exist"' + (saved.__exist ? " checked" : "") + '> Checking an existing structure — allow inputs outside the code limits (they are flagged in the report)</span></label>';
     h += '<div class="btns sticky"><button type="submit" class="pri">' + IC.svg("play") + ' Calculate</button><button type="button" id="rst">Reset</button></div></form><div id="out"></div>';
     app.innerHTML = h;
     var form = document.getElementById("f");
     form.onsubmit = function (e) { e.preventDefault(); run(m, form); };
+    form.querySelectorAll(".fseg button").forEach(function (b) { b.onclick = function () { var sel = b.parentNode.parentNode.querySelector("select"); sel.value = b.getAttribute("data-sv"); b.parentNode.querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x === b); }); sel.dispatchEvent(new Event("change", { bubbles: true })); }; });
+    try { var rc = JSON.parse(localStorage.getItem("isd_recent") || "[]").filter(function (x) { return x !== m.id; }); rc.unshift(m.id); localStorage.setItem("isd_recent", JSON.stringify(rc.slice(0, 6))); } catch (e) {}
+    bindUnitSeg(form, function (s, before) { if (before) read(m, form); else moduleView(m); });
     var vt; form.addEventListener("input", function () { clearTimeout(vt); vt = setTimeout(function () { validate(m, form); }, 250); });
     form.addEventListener("change", function () { validate(m, form); });
     validate(m, form);
@@ -197,21 +228,35 @@
     });
     return { p: p, iss: iss, exist: exist };
   }
-  function read(m, form, noStore) {
-    var p = {}, raw = {}, defs = [];
+  /* stored inputs (SI strings) → design parameters */
+  function parse(m, raw) {
+    var p = {}, defs = [];
     Object.keys(m.f).forEach(function (k) {
-      var f = m.f[k], el = form.elements[k], v = String(el.value).trim(); raw[k] = v;
-      if (f.type !== "select" && v === "") { v = String(f.def); defs.push(f.label.replace(/<[^>]+>/g, "") + (f.type === "number" ? " = " + f.def + (f.unit ? " " + f.unit : "") : "")); }
-      if (f.type === "number") { var n = parseFloat(v); if (!isFinite(n)) { n = parseFloat(f.def); defs.push(f.label); } p[k] = n; }
-      else if (f.type === "select") p[k] = f.num ? parseFloat(v) : v;
-      else p[k] = v;
+      var f = m.f[k], v = raw[k] === undefined || raw[k] === null ? "" : String(raw[k]).trim();
+      if (f.type === "select") { if (!f.opts.some(function (o) { return o[0] === v; })) v = f.def; p[k] = f.num ? parseFloat(v) : v; return; }
+      if (v === "") { v = String(f.def); defs.push(f.label.replace(/<[^>]+>/g, "")); }
+      if (f.type === "number") { var n = parseFloat(v); p[k] = isFinite(n) ? n : parseFloat(f.def); } else p[k] = v;
     });
+    post(m, p); p.__defaults = defs; return p;
+  }
+  function post(m, p) {
     if (p.vb !== undefined) p.vb = p.vb === "Custom" ? p.vbc : D.vb[p.vb];
     if (m.id === "seismic") p.floors = String(p.floors).split(/\n/).map(function (l) { var a = l.split(","); return a.length >= 3 ? { name: a[0].trim(), w: parseFloat(a[1]), h: parseFloat(a[2]) } : null; }).filter(Boolean);
     if (m.id === "sbeam") { p.lat = !!p.lat; p.destab = !!p.destab; }
     if (m.id === "purlin") p.sag = !!p.sag;
     if (m.id === "comp" && !p.Ly) p.Ly = p.L;
     if (m.id === "slab2") p.case_ = parseInt(p.case_, 10);
+  }
+  function read(m, form, noStore) {
+    var p = {}, raw = {}, defs = [];
+    Object.keys(m.f).forEach(function (k) {
+      var f = m.f[k], el = form.elements[k], v = String(el.value).trim(); raw[k] = v;
+      if (f.type !== "select" && v === "") { v = String(f.def); defs.push(f.label.replace(/<[^>]+>/g, "") + (f.type === "number" ? " = " + UN.show(f.def, f.unit) + (f.unit ? " " + UN.label(f.unit) : "") : "")); if (f.type === "number") { p[k] = parseFloat(f.def); return; } }
+      if (f.type === "number") { var n = el.getAttribute("data-shown") === v && el.getAttribute("data-si") !== "" ? parseFloat(el.getAttribute("data-si")) : UN.toSI(parseFloat(v), f.unit); if (!isFinite(n)) { n = parseFloat(f.def); defs.push(f.label); raw[k] = ""; } else raw[k] = String(n); p[k] = n; }
+      else if (f.type === "select") p[k] = f.num ? parseFloat(v) : v;
+      else p[k] = v;
+    });
+    post(m, p);
     if (noStore) return p;
     var ex = document.getElementById("exist"); raw.__exist = !!(ex && ex.checked);
     raw.__ran = true; store(m.id, raw);
@@ -231,6 +276,7 @@
     var pp = read(m, form);
     out.innerHTML = render(r); out.__rep = r;
     if (pp.__defaults.length) out.querySelector(".rh").insertAdjacentHTML("afterend", '<div class="note">Blank inputs taken at default: ' + esc(pp.__defaults.join(" · ")) + '</div>');
+    if (UN.active()) out.querySelector(".rh").insertAdjacentHTML("afterend", '<div class="note">' + esc(UN.note()) + '</div>');
     if (vd.iss.length) out.querySelector(".rh").insertAdjacentHTML("afterend", '<div class="note limn"><b>' + (hardI.length ? "Existing structure — inputs outside the code limits:" : "Code notes on the inputs:") + '</b> ' + vd.iss.map(function (x) { return esc(fl(m, x.k) + ": " + x.msg + (x.ref ? " (" + x.ref + ")" : "")); }).join("<br>") + '</div>');
     if (!r.ok()) fixBox(m, form, pp, out);
     var pdf = document.getElementById("pdf");
@@ -238,10 +284,89 @@
     pdf.onclick = function () { if (window.AndroidBridge && AndroidBridge.print) AndroidBridge.print(m.t); else window.print(); };
     document.getElementById("share").onclick = function () { share(r); };
     if (r.dxf) document.getElementById("dxf").onclick = function () { saveText(r.dxfName || (m.id + ".dxf"), r.dxf); };
+    document.getElementById("addp").onclick = function () { addSheet(m, r, pp); };
     document.getElementById("xls").onclick = function () { toast("Preparing Excel…"); RX.save(RX.fromRep(r, m, read(m, form)), m.id + "-design.xlsx", function (ok) { if (!ok) toast("Excel export not available here"); }); };
     if (!quiet) out.scrollIntoView({ behavior: "smooth" });
   }
 
+  function unitSeg() { var c = UN.sys(); return '<span class="seg useg" role="group" aria-label="Units">' + ["si", "mks", "fps"].map(function (s) { return '<button type="button" data-u="' + s + '"' + (s === c ? ' class="on"' : '') + '>' + UN.SYS[s].short + '</button>'; }).join("") + '</span>'; }
+  function bindUnitSeg(root, after) { root.querySelectorAll(".useg button").forEach(function (b) { b.onclick = function () { var s = b.getAttribute("data-u"); if (s === UN.sys()) return; if (after) after(s, true); UN.set(s); if (after) after(s); toast("Input units: " + UN.SYS[s].name); }; }); }
+  /* ---------- project elements ---------- */
+  var editEl = null;
+  function elems() { return window.PDB && PDB.current() ? (PDB.current().elements || []) : []; }
+  function nextMark(id) { var pre = EL.PREFIX[id] || "E", n = 1, ms = elems().map(function (e) { return e.mark; }); while (ms.indexOf(pre + n) >= 0) n++; return pre + n; }
+  function addSheet(m, r, p) {
+    if (!window.PDB) return toast("Projects are not available here");
+    var box = document.getElementById("addsheet"), list = elems(), ed = editEl && list.filter(function (e) { return e.id === editEl.id; })[0], ex = EL.EXTRA[m.id];
+    box.innerHTML = '<div class="sheet"><b>' + (ed ? 'Update ' + esc(ed.mark) : 'Add to ' + esc(PDB.current().name)) + '</b>' +
+      '<div class="sgrid"><label class="fld"><span>Mark</span><input id="aMark" value="' + esc(ed ? ed.mark : nextMark(m.id)) + '"></label><label class="fld"><span>Number of identical elements</span><input id="aNos" type="number" min="1" step="1" inputmode="numeric" value="' + (ed ? ed.nos : 1) + '"></label>' +
+      (ex ? '<label class="fld"><span>' + ex[1] + '</span><span class="inw"><input id="aX" type="number" step="any" inputmode="decimal" value="' + esc(UN.show(ed && ed.x && ed.x[ex[0]] || ex[3], ex[2])) + '"><em class="u">' + UN.label(ex[2]) + '</em></span></label>' : '') + '</div>' +
+      (r.ok() ? '' : '<div class="note">This design has failing checks — it will be listed as failing in the project.</div>') +
+      '<div class="btns"><button type="button" class="pri" id="aSave">' + (ed ? "Update" : "Add") + '</button>' + (ed ? '<button type="button" id="aNew">Add as new</button>' : '') + '<button type="button" id="aCan">Cancel</button></div></div>';
+    function save(asNew) {
+      var mark = document.getElementById("aMark").value.trim() || nextMark(m.id), nos = Math.max(1, Math.round(+document.getElementById("aNos").value || 1)), x = {};
+      if (ex) { var xv = parseFloat(document.getElementById("aX").value); x[ex[0]] = isFinite(xv) && xv > 0 ? UN.toSI(xv, ex[2]) : ex[3]; }
+      var dup = elems().filter(function (e) { return e.mark === mark && (asNew || !ed || e.id !== ed.id); })[0];
+      if (dup) return toast("Mark " + mark + " is already used in this project");
+      var t = EL.take(m.id, p, r, x), cost = t.items.reduce(function (a, q) { return a + q.q * (q.rate || 0); }, 0) * nos;
+      var el = { id: ed && !asNew ? ed.id : "e" + Date.now().toString(36), mod: m.id, title: m.t, mark: mark, nos: nos, x: x, inputs: store(m.id) || {}, ok: r.ok(), sum: r.summary.slice(0, 4), cost: cost, kg: t.bars.reduce(function (a, q) { return a + q.kg; }, 0) * nos, units: UN.sys(), date: new Date().toISOString() };
+      var arr = elems().slice();
+      if (ed && !asNew) arr = arr.map(function (e) { return e.id === ed.id ? el : e; }); else arr.push(el);
+      PDB.update(PDB.current().id, { elements: arr }, (ed && !asNew ? "Element updated: " : "Element added: ") + mark + " (" + m.t + ")");
+      editEl = { id: el.id, mod: m.id };
+      box.innerHTML = '<div class="sheet ok">' + IC.svg("check") + ' <span>' + esc(mark) + ' ' + (ed && !asNew ? 'updated' : 'added') + ' — ' + arr.length + ' element(s) in ' + esc(PDB.current().name) + '</span><a href="#elements" class="btnl">View project ›</a></div>';
+      var ab = document.getElementById("addp"); if (ab) ab.innerHTML = IC.svg("projects") + " Update " + esc(mark) + " in project";
+    }
+    document.getElementById("aSave").onclick = function () { save(false); };
+    if (ed) document.getElementById("aNew").onclick = function () { save(true); };
+    document.getElementById("aCan").onclick = function () { box.innerHTML = ""; };
+    box.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  function modById(id) { return M.filter(function (x) { return x.id === id; })[0]; }
+  function runEl(e) { var m = modById(e.mod); if (!m) return null; try { var p = parse(m, e.inputs || {}), r = m.fn(p); return { m: m, p: p, r: r, t: EL.take(m.id, p, r, e.x) }; } catch (er) { return null; } }
+  function inr(v) { return "₹ " + Math.round(v).toLocaleString("en-IN"); }
+  function elementsView() {
+    title.textContent = "Project elements"; back.hidden = false;
+    var pr = PDB.current(), list = elems(), tab = elementsView.tab || "sched";
+    var h = '<div class="mhead g-ana"><span class="mic">' + IC.svg("projects") + '</span><div><b>' + esc(pr.name) + '</b><small>Individually designed elements · ' + list.length + ' element(s)</small></div><a class="cchip" href="#projects">Project ›</a></div>';
+    if (!list.length) { app.innerHTML = h + '<div class="rep"><p>No elements yet. Design a beam, slab, column, footing, pile group or steel member and tap <b>Add to project</b> under the result.</p><div class="btns"><a class="btnl pri" href="#">Design a member ›</a></div></div>'; return; }
+    var runs = list.map(function (e) { return { e: e, x: runEl(e) }; }), okRuns = runs.filter(function (q) { return q.x; });
+    var cb = EL.combine(okRuns.map(function (q) { return { mark: q.e.mark, nos: q.e.nos, take: q.x.t }; })), nf = okRuns.filter(function (q) { return !q.x.r.ok(); }).length;
+    h += '<div class="sum"><div><span>Elements</span><b>' + list.length + ' types · ' + list.reduce(function (a, e) { return a + e.nos; }, 0) + ' nos</b></div><div><span>Checks</span><b class="' + (nf ? "bad" : "good") + '">' + (nf ? nf + " failing" : "All pass") + '</b></div><div><span>Reinforcement</span><b>' + (cb.kg / 1000).toFixed(2) + ' t</b></div><div><span>Estimate (JKSOR 2022, excl. GST)</span><b>' + inr(cb.sum) + '</b></div></div>';
+    h += '<div class="elist">' + runs.map(function (q) {
+      var e = q.e, ok = q.x ? q.x.r.ok() : e.ok, sm = (q.x ? q.x.r.summary : e.sum).slice(0, 3);
+      return '<div class="ecard"><div class="eh"><span class="emk">' + esc(e.mark) + '</span><div><b>' + esc(e.title) + (e.nos > 1 ? ' × ' + e.nos : '') + '</b><small>' + sm.map(function (s) { return esc(s[0] + ": " + s[1]); }).join(" · ") + '</small></div><span class="badge ' + (ok ? "pass" : "fail") + '">' + (ok ? "PASS" : "FAIL") + '</span></div>' +
+        '<div class="eb"><button type="button" data-eo="' + e.id + '">Open</button><button type="button" data-er="' + e.id + '">Remove</button></div></div>';
+    }).join("") + '</div>';
+    h += '<span class="seg etabs">' + [["sched", "Schedule"], ["bbs", "Bar bending schedule"], ["est", "Estimate"]].map(function (t) { return '<button type="button" data-t="' + t[0] + '"' + (tab === t[0] ? ' class="on"' : '') + '>' + t[1] + '</button>'; }).join("") + '</span>';
+    function tb(head, rows, cls) { return '<div class="tw"><table class="etb ' + (cls || "") + '"><tr>' + head.map(function (x) { return '<th>' + x + '</th>'; }).join("") + '</tr>' + rows.map(function (r) { return '<tr>' + r.map(function (x) { return '<td>' + x + '</td>'; }).join("") + '</tr>'; }).join("") + '</table></div>'; }
+    var body = "";
+    if (tab === "sched") body = '<h4>Schedule of elements</h4>' + tb(["Mark", "Element", "Nos", "Size & reinforcement", "Status"], runs.map(function (q) { var e = q.e, sm = q.x ? q.x.r.summary : e.sum; return ["<b>" + esc(e.mark) + "</b>", esc(e.title), String(e.nos), sm.map(function (s) { return esc(s[0] + ": " + s[1]); }).join("<br>"), q.x && q.x.r.ok() ? '<span class="okt">pass</span>' : '<span class="bad">fail</span>']; }));
+    else if (tab === "bbs") body = '<h4>Bar bending schedule (IS 2502)</h4>' + tb(["Bar mark", "Description", "Dia (mm)", "No.", "Cut length (m)", "Weight (kg)"], cb.bbs.map(function (q) { return ["<b>" + esc(q.mark) + "</b>", esc(q.desc), String(q.dia), String(q.n), (q.L / 1000).toFixed(2), q.kg.toFixed(1)]; }).concat([["", "<b>Total</b>", "", "", "", "<b>" + cb.kg.toFixed(1) + "</b>"]])) +
+      '<h4>Steel by diameter</h4>' + tb(["Dia (mm)", "Weight (kg)", "Weight + 3 % (kg)"], Object.keys(cb.byDia).sort(function (a, b) { return a - b; }).map(function (d) { return [d, cb.byDia[d].toFixed(1), (cb.byDia[d] * 1.03).toFixed(1)]; })) + '<div class="note">Cut lengths: span + Ld/3 anchorage at each support (IS 456 cl 26.2.3.3), 50φ laps in columns, stirrups and ties 2(a + b) + 20φ hooks. Pile and raft schedules are taken from their own designs.</div>';
+    else body = '<h4>Detailed measurement</h4>' + tb(["Element", "Description", "No.", "L (m)", "B (m)", "D/H (m)", "Qty"], cb.meas.map(function (q) { return ["<b>" + esc(q.el) + "</b>", esc(q.d), String(q.n), String(q.L), String(q.B), String(q.H), q.q.toFixed(3)]; })) +
+      '<h4>Abstract of cost (JKSOR 2022)</h4>' + tb(["Item", "Description", "Qty", "Unit", "Rate (₹)", "Amount (₹)"], cb.items.map(function (q, i) { return [String(i + 1), esc(q.d) + ' <i>[' + esc(q.sor) + ']</i><br><small>' + esc(q.from.join(", ")) + '</small>', q.q.toFixed(2), q.u, (q.rate || 0).toFixed(2), Math.round(q.q * (q.rate || 0)).toLocaleString("en-IN")]; }).concat([["", "<b>Total (excluding GST, cess and contingencies)</b>", "", "", "", "<b>" + Math.round(cb.sum).toLocaleString("en-IN") + "</b>"]])) +
+      '<div class="note">Quantities of individually designed elements; excavation, backfill and finishes of the building are not included (use the whole-building estimate in Frame & FE analysis for those).</div>';
+    h += '<div class="rep">' + body + '</div>';
+    h += '<div class="btns noprint"><button type="button" class="pri" id="eRep">Combined calculation report (print / PDF)</button><button type="button" id="eCsv">Estimate CSV</button></div><div id="eAll"></div>';
+    app.innerHTML = h;
+    app.querySelectorAll(".etabs button").forEach(function (b) { b.onclick = function () { elementsView.tab = b.getAttribute("data-t"); elementsView(); }; });
+    app.querySelectorAll("[data-eo]").forEach(function (b) { b.onclick = function () { var e = list.filter(function (q) { return q.id === b.getAttribute("data-eo"); })[0]; var inp = Object.assign({}, e.inputs, { __ran: true }); store(e.mod, inp); editEl = { id: e.id, mod: e.mod }; location.hash = "#" + e.mod; }; });
+    app.querySelectorAll("[data-er]").forEach(function (b) { b.onclick = function () {
+      if (b.getAttribute("data-arm") !== "1") { b.setAttribute("data-arm", "1"); b.textContent = "Tap again to remove"; setTimeout(function () { b.removeAttribute("data-arm"); b.textContent = "Remove"; }, 3000); return; }
+      var id = b.getAttribute("data-er"), e = list.filter(function (q) { return q.id === id; })[0];
+      PDB.update(pr.id, { elements: list.filter(function (q) { return q.id !== id; }) }, "Element removed: " + e.mark); toast("Removed " + e.mark); elementsView(); }; });
+    document.getElementById("eRep").onclick = function () {
+      var all = '<div class="rep"><h3>' + esc(pr.name) + ' — calculation report of the designed elements</h3><small>' + esc([pr.jobNo, pr.client, pr.site].filter(Boolean).join(" · ")) + ' · ' + new Date().toLocaleDateString("en-IN") + ' · engine ' + REG.ENGINE + '</small>' + document.querySelector(".rep").outerHTML.replace(/^<div class="rep">|<\/div>$/g, "") + '</div>';
+      all += okRuns.map(function (q) { return '<div class="pbrk"></div><h3 class="elh">' + esc(q.e.mark) + (q.e.nos > 1 ? ' (' + q.e.nos + ' nos)' : '') + ' — ' + esc(q.e.title) + '</h3>' + render(q.x.r, { bare: true }); }).join("");
+      document.getElementById("eAll").innerHTML = all;
+      setTimeout(function () { if (window.AndroidBridge && AndroidBridge.print) AndroidBridge.print(pr.name + " elements"); else if (window.self === window.top) window.print(); else { toast("Report below — use your browser's print to save a PDF"); document.getElementById("eAll").scrollIntoView({ behavior: "smooth" }); } }, 200);
+    };
+    document.getElementById("eCsv").onclick = function () {
+      var rows = [["Item", "Description", "SOR", "Qty", "Unit", "Rate", "Amount"]].concat(cb.items.map(function (q, i) { return [i + 1, q.d, q.sor, q.q.toFixed(3), q.u, q.rate, Math.round(q.q * (q.rate || 0))]; }), [["", "Total", "", "", "", "", Math.round(cb.sum)]], [[]], [["Element", "Description", "No.", "L", "B", "H", "Qty"]], cb.meas.map(function (q) { return [q.el, q.d, q.n, q.L, q.B, q.H, q.q.toFixed(3)]; }));
+      saveText((pr.name || "project").replace(/[^\w\- ]+/g, "_") + "-elements-estimate.csv", rows.map(function (r) { return r.map(function (x) { x = String(x === undefined ? "" : x); return /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(","); }).join("\n"));
+    };
+  }
   function fl(m, k) { return m.f[k] ? m.f[k].label.replace(/<[^>]+>/g, "") : k; }
   function fixBox(m, form, p, out) {
     var rh = out.querySelector(".rh"); if (!rh) return;
@@ -257,12 +382,21 @@
       box.innerHTML = h;
       box.querySelectorAll("button[data-i]").forEach(function (b) { b.onclick = function () {
         var set = fx.list[+b.getAttribute("data-i")].set;
-        Object.keys(set).forEach(function (k) { var el = form.elements[k], v = set[k]; if (!el) return; el.value = v === true ? "1" : v === false ? "" : String(v); });
+        Object.keys(set).forEach(function (k) { var el = form.elements[k], v = set[k], f = m.f[k]; if (!el) return; if (f && f.type === "number") { var sh = UN.show(v, f.unit); el.value = sh; el.setAttribute("data-si", v); el.setAttribute("data-shown", sh); } else el.value = v === true ? "1" : v === false ? "" : String(v); });
         run(m, form); toast("Applied: " + fx.list[+b.getAttribute("data-i")].text);
       }; });
     }, 30);
   }
-  function render(r) {
+  /* utilisation from a check's text "a ≤ b …" or "a ≥ b" (the limit is the value after "=" if present) */
+  function util(d) {
+    var t = String(d || ""), m = /(-?\d[\d,]*\.?\d*)[^≤≥<>]*?([≤≥<>])(.*)$/.exec(t); if (!m) return null;
+    var a = parseFloat(m[1].replace(/,/g, "")), nums = (m[3].match(/-?\d[\d,]*\.?\d*/g) || []).map(function (x) { return parseFloat(x.replace(/,/g, "")); }), b = nums.length ? nums[0] : NaN;
+    if (/=/.test(m[3])) { var eq = m[3].split("=").pop().match(/-?\d[\d,]*\.?\d*/); if (eq) b = parseFloat(eq[0].replace(/,/g, "")); }
+    if (!(isFinite(a) && isFinite(b)) || a < 0 || b <= 0) return null;
+    var u = m[2] === "≥" || m[2] === ">" ? (a > 0 ? b / a : null) : a / b;
+    return u !== null && u >= 0 && u < 5 ? u : null;
+  }
+  function render(r, opt) {
     var ok = r.ok(), h = '<section class="rep"><div class="rh"><div><h3>' + esc(r.title) + '</h3><small>' + esc(r.code) + ' • ' + new Date().toLocaleDateString("en-IN") + '</small></div><span class="badge ' + (ok ? "pass" : "fail") + '">' + (ok ? "ALL CHECKS PASS" : "CHECK FAILS") + '</span></div>';
     if (r.summary.length) h += '<div class="sum">' + r.summary.map(function (s) { return '<div><span>' + esc(s[0]) + '</span><b>' + esc(s[1]) + '</b></div>'; }).join("") + '</div>';
     if (r.svg) h += '<div class="svg">' + r.svg + '</div>';
@@ -272,11 +406,13 @@
       else if (it.k === "e") h += '<div class="eq">' + esc(it.t) + (it.ref ? ' <i>[' + esc(it.ref) + ']</i>' : '') + '</div>';
       else if (it.k === "n") h += '<div class="note">' + esc(it.t) + '</div>';
       else if (it.k === "x") h += '<div class="err">' + esc(it.t) + '</div>';
-      else if (it.k === "c") h += '<div class="chk ' + (it.c.ok ? "ok" : "no") + '"><span>' + (it.c.ok ? "✔" : "✘") + ' ' + esc(it.c.l) + (it.c.ref ? ' <i>' + esc(it.c.ref) + '</i>' : '') + '</span><b>' + esc(it.c.d) + '</b></div>';
+      else if (it.k === "c") { var ur = util(it.c.d); h += '<div class="chk ' + (it.c.ok ? "ok" : "no") + '"><span>' + (it.c.ok ? "✔" : "✘") + ' ' + esc(it.c.l) + (it.c.ref ? ' <i>' + esc(it.c.ref) + '</i>' : '') + '</span><b>' + esc(it.c.d) + '</b>' + (ur !== null ? '<div class="ub" title="utilisation"><i style="width:' + Math.min(100, ur * 100).toFixed(1) + '%" class="' + (ur > 1 ? "x" : ur > 0.9 ? "w" : "g") + '"></i><em>' + Math.round(ur * 100) + ' %</em></div>' : '') + '</div>'; }
       else if (it.k === "t") h += '<div class="tw"><table><tr>' + it.head.map(function (x) { return '<th>' + esc(x) + '</th>'; }).join("") + '</tr>' + it.rows.map(function (rw) { return '<tr>' + rw.map(function (x) { return '<td>' + esc(x) + '</td>'; }).join("") + '</tr>'; }).join("") + '</table></div>';
     });
     h += '<div class="disc">Design aid based on IS codes — results must be checked and approved by a qualified structural engineer.</div>';
-    h += '<div class="btns noprint"><button id="pdf" class="pri">Print / Save PDF</button><button id="xls">Excel (.xlsx)</button>' + (r.dxf ? '<button id="dxf">Drawings (.dxf)</button>' : '') + '<button id="share">Share</button></div></section>';
+    if (opt && opt.bare) return h + '</section>';
+    var ed = editEl && PDB.current() && (PDB.current().elements || []).filter(function (e) { return e.id === editEl.id; })[0];
+    h += '<div class="btns noprint"><button id="addp" class="pri">' + IC.svg("projects") + ' ' + (ed ? 'Update ' + esc(ed.mark) + ' in project' : 'Add to project') + '</button><button id="pdf">Print / Save PDF</button><button id="xls">Excel (.xlsx)</button>' + (r.dxf ? '<button id="dxf">Drawings (.dxf)</button>' : '') + '<button id="share">Share</button></div><div id="addsheet"></div></section>';
     return h;
   }
 
@@ -293,6 +429,35 @@
   function toast(msg) {
     var d = document.createElement("div"); d.className = "toast"; d.textContent = msg; document.body.appendChild(d);
     setTimeout(function () { d.remove(); }, 2200);
+  }
+  function aidsView() {
+    title.textContent = "Design aids"; back.hidden = false;
+    var list = window.AIDS || [], gs = [], g = aidsView.g || "all";
+    list.forEach(function (a) { if (gs.indexOf(a.grp) < 0) gs.push(a.grp); });
+    var h = '<div class="mhead g-ref"><span class="mic">' + IC.svg("aids") + '</span><div><b>Design aids</b><small>Charts in the style of SP 16, drawn from this app\'s IS 456 engine · tap a chart to zoom</small></div><em class="cchip">SP 16 style</em></div>';
+    h += '<div class="chips" id="achips">' + [["all", "All"]].concat(gs.map(function (x) { return [x, x]; })).concat([["Ld", "Development length"]]).map(function (c) { return '<button type="button" data-g="' + esc(c[0]) + '"' + (g === c[0] ? ' class="on"' : '') + '>' + esc(c[1]) + '</button>'; }).join("") + '</div>';
+    if (g === "Ld") {
+      var dias = [8, 10, 12, 16, 20, 25, 28, 32], grades = [20, 25, 30, 35, 40];
+      h += '<div class="rep"><h4>Development length Ld in tension (mm) — IS 456 cl 26.2.1, deformed bars (τbd + 60 %)</h4>' + [415, 500].map(function (fy) {
+        return '<div class="tw"><table class="etb ldt"><tr><th>Fe ' + fy + ' · bar φ</th>' + grades.map(function (c) { return '<th>M' + c + '</th>'; }).join("") + '</tr>' + dias.map(function (d) { return '<tr><td><b>' + d + ' mm</b></td>' + grades.map(function (c) { var L = RCC.Ld(d, fy, c); return '<td>' + Math.ceil(L / 10) * 10 + '<small> (' + Math.round(L / d) + 'φ)</small></td>'; }).join("") + '</tr>'; }).join("") + '</table></div>';
+      }).join("") + '<div class="note">In compression Ld is 25 % less (τbd + 25 %). Lap length in tension ≥ Ld or 30φ (cl 26.2.5.1); in flexural tension 2Ld for bars over 36 mm is not permitted. Values are rounded up to 10 mm.</div></div>';
+    }
+    if (g !== "Ld") {
+      h += '<div class="agrid">' + list.filter(function (a) { return g === "all" || a.grp === g; }).map(function (a) { return '<button type="button" class="acard" data-a="' + esc(a.id) + '"><img loading="lazy" src="' + a.file + '" alt="' + esc(a.title) + '"><b>' + esc(a.title) + '</b><small>' + esc(a.grp) + '</small></button>'; }).join("") + '</div>';
+      h += '<div class="note">How to read the column charts: compute Pu/(fck·b·D) and Mu/(fck·b·D²) for the section, read p/fck at the point, then p = (p/fck) × fck gives the steel % (bars as named on the chart, d\' = cover to the bar centre). For biaxial bending use cl 39.6 with Mux1, Muy1 from the charts. Each chart is drawn from the same strain-compatibility routine that designs the columns and piles in this app.</div>';
+    }
+    app.innerHTML = h;
+    app.querySelectorAll("#achips button").forEach(function (b) { b.onclick = function () { aidsView.g = b.getAttribute("data-g"); aidsView(); }; });
+    app.querySelectorAll(".acard").forEach(function (b) { b.onclick = function () { var a = list.filter(function (x) { return x.id === b.getAttribute("data-a"); })[0]; zoom(a); }; });
+  }
+  function zoom(a) {
+    var z = 1, d = document.createElement("div"); d.className = "zoomv";
+    d.innerHTML = '<div class="zt"><b>' + esc(a.title) + '</b><span><button type="button" data-z="-">−</button><button type="button" data-z="+">+</button><button type="button" data-z="x">✕</button></span></div><div class="zs"><img src="' + a.file + '" alt=""></div>';
+    document.body.appendChild(d);
+    var img = d.querySelector("img");
+    function setZ(v) { z = Math.max(1, Math.min(4, v)); img.style.width = (z * 100) + "%"; }
+    d.querySelectorAll("[data-z]").forEach(function (b) { b.onclick = function () { var k = b.getAttribute("data-z"); if (k === "x") { d.remove(); history.replaceState(null, "", location.href); } else setZ(z + (k === "+" ? 0.5 : -0.5)); }; });
+    img.ondblclick = function () { setZ(z > 1 ? 1 : 2.5); };
   }
   function tables() {
     title.textContent = "Section tables"; back.hidden = false;
@@ -312,7 +477,7 @@
       '<li>Design: IS 456 (limit state or working stress), IS 800, with worked calculations</li><li>Loads & durability: snow (IS 875 Pt 4), pattern imposed load, imposed-load reduction, covers for exposure and fire (IS 456 Table 16/16A)</li><li>Automatic design & detailing: storey-wise enlargement until every check passes</li>' +
       '<li>Detailing: IS 13920 beams, columns, joints, strong column–weak beam, shear walls, slabs, isolated footings; bar bending schedule (IS 2502)</li><li>Mat (raft) foundations: plate on compression-only soil springs, punching, one-way shear, flexure, settlement (IS 2950, IS 456, IS 1904)</li>' +
       '<li>Outputs: Excel with live formulas, calculation report (print/PDF), drawing set DXF, STAAD.Pro input, BOQ of the whole building priced with JKSOR 2022 (with contingencies, cess and GST) and reinforcement schedules</li>' +
-      '<li>Projects: offline database with revisions, backups and an engineering verification mode with reviewer sign-off; engineering assistant</li><li>Standalone modules for beams, slabs, columns, footings, stairs, steel members, connections, trusses and loads</li></ul>' +
+      '<li>Projects: offline database with revisions, backups and an engineering verification mode with reviewer sign-off; engineering assistant</li><li>Standalone modules for beams, slabs, columns, footings, piles, rafts, stairs, steel members, connections, trusses and loads — input units SI / MKS / FPS, code limits on inputs, fix suggestions, and project elements with schedule, bar bending schedule and estimate</li><li>Design aids: SP 16 style charts and development-length tables</li></ul>' +
       '<h4>Not covered</h4><ul><li>Time-history analysis, combined footings, piled raft, beam-slab raft, consolidation settlement, full soil–structure interaction</li><li>Deflection and crack width in the frame design (use the beam and slab modules)</li><li>Full building wind pressure-coefficient workflow</li></ul>' +
       (window.REG ? REG.html(esc) : '') +
       '<h4>Important</h4><p>Results are for design assistance. Every design must be checked, and drawings signed, by a qualified structural engineer.</p></div>';
@@ -322,9 +487,10 @@
     var id = (location.hash || "").replace(/^#\/?/, "");
     var m = M.filter(function (x) { return x.id === id; })[0];
     var ctx = window.SU ? SU.ctx() : null;
-    if (m) moduleView(m); else if (id === "model" && window.SU) SU.view(app, title, back); else if (id === "projects" && window.PRO) PRO.projectsView(app, title, back, ctx); else if (id === "report" && window.RPT) RPT.view(app, title, back, ctx);
-    else if (id === "tables") tables(); else if (id === "about") about(); else home();
-    var tab = m ? "" : id === "model" ? "model" : id === "projects" ? "projects" : id === "report" ? "report" : id === "about" || id === "tables" ? "about" : id ? "" : "home";
+    if ((!m && id !== "elements") || (m && editEl && editEl.mod !== m.id)) editEl = null;
+    if (id === "elements" && window.PDB) elementsView(); else if (m) moduleView(m); else if (id === "model" && window.SU) SU.view(app, title, back); else if (id === "projects" && window.PRO) PRO.projectsView(app, title, back, ctx); else if (id === "report" && window.RPT) RPT.view(app, title, back, ctx);
+    else if (id === "tables") tables(); else if (id === "aids") aidsView(); else if (id === "about") about(); else home();
+    var tab = m ? "" : id === "model" ? "model" : id === "projects" || id === "elements" ? "projects" : id === "report" ? "report" : id === "about" || id === "tables" || id === "aids" ? "about" : id ? "" : "home";
     document.querySelectorAll(".tabbar a").forEach(function (a) { a.classList.toggle("on", a.getAttribute("data-t") === tab); });
     window.scrollTo(0, 0);
   }

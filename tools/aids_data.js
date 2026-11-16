@@ -1,0 +1,50 @@
+/* Design-aid data from the app's own IS 456 engine (strain compatibility, cl 38-40): node tools/aids_data.js > /tmp/aids.json */
+const c = require('../test/load.js'), { RCC, FD } = c;
+const out = { rect: [], circ: [], flex: [], tauc: [], kt: [], kc: [], dbl: [] };
+const PF = [0, 0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.20, 0.22, 0.24, 0.26];
+function rectCurve(pf, dD, fy, arr) {
+  const fck = 25, b = 1000, D = 1000, dc = dD * D, As = pf * fck / 100 * b * D, lay = RCC.colLayers(D, dc, As, arr), pts = [];
+  for (let i = 0; i <= 260; i++) {
+    const xu = D * Math.pow(10, -2 + 4 * i / 260);   /* 0.01D .. 100D */
+    const pm = RCC.colPM(b, D, lay, xu, fck, fy), P = pm.P * 1e3 / (fck * b * D), M = pm.M * 1e6 / (fck * b * D * D);
+    if (P >= -0.02) pts.push([+M.toFixed(5), +P.toFixed(5)]);
+  }
+  return pts;
+}
+for (const fy of [415, 500]) for (const arr of ['two', 'four']) for (const dD of [0.05, 0.10, 0.15, 0.20])
+  out.rect.push({ fy, arr, dD, curves: PF.map(pf => ({ pf, pts: rectCurve(pf, dD, fy, arr) })) });
+for (const fy of [415, 500]) for (const dD of [0.05, 0.10, 0.15, 0.20]) {
+  const fck = 25, D = 1000, nb = 12, curves = [];
+  for (const pf of PF) {
+    const As = pf * fck / 100 * Math.PI * D * D / 4, dia = pf ? Math.sqrt(4 * As / (nb * Math.PI)) : 0.001, dc = dD * D - dia / 2;
+    const top = FD.circCap(D, dc, nb, dia, fck, fy, 0), Pmax = top.Pmax, pts = [];
+    for (let i = 0; i <= 120; i++) { const Pu = Pmax * i / 120 * 0.9999, r = FD.circCap(D, dc, nb, dia, fck, fy, Pu); if (r.ok) pts.push([+(r.M * 1e6 / (fck * D * D * D)).toFixed(5), +(Pu * 1e3 / (fck * D * D)).toFixed(5)]); }
+    pts.push([0, +(Pmax * 1e3 / (fck * D * D)).toFixed(5)]);
+    curves.push({ pf, pts });
+  }
+  out.circ.push({ fy, dD, curves });
+}
+/* singly reinforced flexure, Annex G-1.1(b): Mu/bd² vs pt */
+for (const fy of [250, 415, 500]) {
+  const xl = fy === 250 ? 0.53 : fy === 415 ? 0.48 : 0.46, set = [];
+  for (const fck of [20, 25, 30, 35, 40]) {
+    const ptl = 41.61 * xl * fck / fy * 100 / 100, pts = [];
+    for (let i = 0; i <= 100; i++) { const pt = 0.1 + (ptl - 0.1) * i / 100, R = 0.87 * fy * pt / 100 * (1 - (pt / 100) * fy / fck); pts.push([+pt.toFixed(4), +R.toFixed(4)]); }
+    set.push({ fck, ptl, Rlim: 0.36 * fck * xl * (1 - 0.416 * xl), pts });
+  }
+  out.flex.push({ fy, set });
+}
+for (const fck of [15, 20, 25, 30, 35, 40]) { const pts = []; for (let i = 0; i <= 120; i++) { const pt = 0.15 + 2.85 * i / 120; pts.push([+pt.toFixed(3), +RCC.tauc(fck, pt).toFixed(4)]); } out.tauc.push({ fck, pts }); }
+for (const fs of [120, 145, 190, 240, 290]) { const pts = []; for (let i = 0; i <= 120; i++) { const pt = 0.1 + 2.9 * i / 120; pts.push([+pt.toFixed(3), +RCC.kt(pt, fs).toFixed(4)]); } out.kt.push({ fs, pts }); }
+for (let i = 0; i <= 60; i++) { const pc = 3 * i / 60; out.kc.push([+pc.toFixed(3), +Math.min(1.5, 1 + pc / (3 + pc)).toFixed(4)]); }
+/* doubly reinforced: Mu/bd² beyond the limit → pt and pc, for d'/d */
+for (const fy of [415, 500]) for (const fck of [20, 25, 30]) {
+  const xl = fy === 415 ? 0.48 : 0.46, Rl = 0.36 * fck * xl * (1 - 0.416 * xl), ptl = 0.36 * fck * xl / (0.87 * fy) * 100, lines = [];
+  for (const dd of [0.05, 0.10, 0.15, 0.20]) {
+    const esc = 0.0035 * (xl - dd) / xl, fsc = Math.min(RCC.fs(esc, fy), 0.87 * fy) - 0.446 * fck, pts = [];
+    for (let i = 0; i <= 80; i++) { const R = Rl + (Rl * 0.9) * i / 80, Mx = (R - Rl), pc = Mx / (fsc * (1 - dd)) * 100, pt = ptl + pc * fsc / (0.87 * fy); pts.push([+R.toFixed(4), +pt.toFixed(4), +pc.toFixed(4)]); }
+    lines.push({ dd, fsc, pts });
+  }
+  out.dbl.push({ fy, fck, Rl, ptl, lines });
+}
+console.log(JSON.stringify(out));

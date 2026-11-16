@@ -461,7 +461,7 @@ FD.raft = function (p) {
   var dws = MAT.draw(mt, cf);
   r.svg = '<div class="dwgs"><div class="dwgt">Net soil pressure under DL+LL (kN/m²)</div><div class="tw">' + MAT.heat(mt, function (q) { return q.qG; }, "kN/m²", 520) + '</div>' + dws.map(function (d) { return '<div class="dwgt">' + d.title + '</div><div class="tw">' + DT.svg(d, { maxW: 680, maxH: 560 }) + '</div>'; }).join("") + '</div>';
   r.dxf = DT.dxf([{ title: "RAFT FOUNDATION", dws: dws }]); r.dxfName = "raft-foundation.dxf";
-  r.mat = mt;
+  r.mat = mt; r.est = { items: it, sum: sum };
   return r;
 };
 if (typeof module !== "undefined") module.exports = FD;

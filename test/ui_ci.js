@@ -57,6 +57,37 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   const fx2 = await pg.evaluate(() => ({ pass: !!document.querySelector('#out .badge.pass'), D: document.querySelector('#f [name=D]').value }));
   ok('Failed design shows changes that pass; Apply fills the input and the design passes', fx1.fail && fx2.pass, fx1.t + ' → D ' + fx2.D);
   await pg.evaluate(() => { document.getElementById('rst').click(); });
+  /* v3.7: grouped inputs, units, project elements, design aids */
+  await pg.evaluate(() => { location.hash = '#beam'; }); await pg.waitForSelector('#f');
+  ok('Inputs grouped into sections with segmented choices', await pg.evaluate(() => document.querySelectorAll('#f details.fgrp').length >= 4 && !!document.querySelector('#f .fseg button.on')));
+  await pg.click('button.pri'); await pg.waitForTimeout(300);
+  const siSum = await pg.evaluate(() => document.querySelector('#out .sum').textContent);
+  ok('Checks show utilisation bars', await pg.evaluate(() => document.querySelectorAll('#out .chk .ub').length >= 3));
+  await pg.click('.useg [data-u=fps]'); await pg.waitForTimeout(300);
+  const fv = await pg.evaluate(() => ({ D: document.querySelector('#f [name=D]').placeholder, u: document.querySelector('.fld[data-fk=D] .u').textContent, w: document.querySelector('.fld[data-fk=wu] .u').textContent }));
+  await pg.click('button.pri'); await pg.waitForTimeout(300);
+  const fpsSum = await pg.evaluate(() => document.querySelector('#out .sum').textContent);
+  await pg.fill('#f [name=D]', '20'); await pg.click('button.pri'); await pg.waitForTimeout(300);
+  const d20 = await pg.evaluate(() => document.querySelector('#out .sum').textContent);
+  await pg.click('.useg [data-u=si]'); await pg.waitForTimeout(300);
+  ok('Units switch: FPS shows inches and kip/ft, gives the same design, 20 in is stored as 508 mm', fv.D === '17.717' && fv.u === 'in' && fv.w === 'kip/ft' && fpsSum === siSum && /508 mm/.test(d20) && await pg.evaluate(() => document.querySelector('#f [name=D]').value === '508'), JSON.stringify(fv));
+  await pg.evaluate(() => document.getElementById('rst').click());
+  for (const [id, nos] of [['beam', 4], ['footing', 6]]) {
+    await pg.evaluate(i => { location.hash = '#' + i; }, id); await pg.waitForSelector('#f'); await pg.click('button.pri'); await pg.waitForSelector('#addp');
+    await pg.click('#addp'); await pg.waitForSelector('#aSave'); await pg.fill('#aNos', String(nos)); await pg.click('#aSave'); await pg.waitForTimeout(300);
+  }
+  await pg.evaluate(() => { location.hash = '#elements'; }); await pg.waitForSelector('.ecard', { timeout: 60000 });
+  const ev = await pg.evaluate(() => ({ n: document.querySelectorAll('.ecard').length, marks: [...document.querySelectorAll('.emk')].map(x => x.textContent).join(','), est: document.querySelector('.sum').textContent }));
+  await pg.click('.etabs [data-t=bbs]'); await pg.waitForTimeout(500); const bbsRows = await pg.evaluate(() => document.querySelectorAll('.rep table.etb tr').length);
+  await pg.click('.etabs [data-t=est]'); await pg.waitForTimeout(500); const estOk = await pg.evaluate(() => /Abstract of cost/.test(document.querySelector('.rep').textContent) && /5\.34\.1/.test(document.querySelector('.rep').textContent));
+  ok('Add to project: elements listed with schedule, bar bending schedule and JKSOR estimate', ev.n === 2 && ev.marks === 'B1,F1' && /₹/.test(ev.est) && bbsRows >= 6 && estOk, JSON.stringify(ev));
+  await pg.click('[data-eo]'); await pg.waitForSelector('#addp', { timeout: 30000 });
+  ok('Opening an element restores its inputs and offers Update', await pg.evaluate(() => /Update B1/.test(document.getElementById('addp').textContent)));
+  await pg.evaluate(() => { location.hash = '#aids'; }); await pg.waitForSelector('.acard img'); await pg.waitForTimeout(800);
+  const av = await pg.evaluate(() => ({ n: document.querySelectorAll('.acard').length, loaded: [...document.querySelectorAll('.acard img')].filter(i => i.complete && i.naturalWidth > 1000).length, ld: !!document.querySelector('table.ldt') }));
+  await pg.click('.acard'); await pg.waitForSelector('.zoomv img'); const zv = await pg.evaluate(() => document.querySelector('.zoomv img').naturalWidth > 1000); await pg.click('.zoomv [data-z=x]');
+  await pg.click('#achips [data-g=Ld]'); await pg.waitForTimeout(200); av.ld = await pg.evaluate(() => document.querySelectorAll('table.ldt').length === 2);
+  ok('Design aids: 36 charts load offline, zoom viewer, development-length tables', av.n === 36 && av.loaded >= 2 && av.ld && zv, JSON.stringify(av));
   await pg.evaluate(() => { location.hash = '#model'; }); await pg.waitForTimeout(300);
   await pg.click('#bAna'); await pg.waitForSelector('#results .rh', { timeout: 60000 });
   ok('Frame & FE analysis (linear) runs on the default 3D model', await pg.$('#results table.basis') !== null);

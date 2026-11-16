@@ -600,5 +600,27 @@ console.log('\n== N. Input limits and fix suggestions');
   ok('Fixes N8: failing column — suggestions pass', !RCC.column(fc).ok() && fxc.list.length >= 1 && fxc.list.every(s => RCC.column(Object.assign({}, fc, s.set)).ok()), fxc.list.map(s => s.text).join('; '));
 })();
 
+console.log('\n== O. Units, project elements, design aids');
+(function () {
+  const { UN, EL, AIDS, FD } = c, fs = require('fs'), path = require('path');
+  ok('Units O1: FPS and MKS factors — 1 in = 25.4 mm, 1 kip = 4.448 kN, 1 kip·ft = 1.356 kNm, 1 psi = 0.006895 N/mm², 1 t = 9.807 kN', Math.abs(UN.toSI(1, 'mm', 'fps') - 25.4) < 1e-9 && Math.abs(UN.toSI(1, 'kN', 'fps') - 4.4482216) < 1e-6 && Math.abs(UN.toSI(1, 'kNm', 'fps') - 1.3558179) < 1e-6 && Math.abs(UN.toSI(1, 'N/mm²', 'fps') - 0.0068948) < 1e-6 && Math.abs(UN.toSI(1, 'kN', 'mks') - 9.80665) < 1e-9 && Math.abs(UN.toSI(1, 'kN/m²', 'fps') - 0.04788026) < 1e-7);
+  ok('Units O1: display → SI round trip within 0.01 %; units without a conversion unchanged', [[450, 'mm'], [30, 'kN/m'], [3, 'kN/m²'], [25, 'N/mm²'], [1500, 'kN']].every(([v, u]) => ['fps', 'mks'].every(sy => Math.abs(UN.toSI(+UN.show(v, u, sy), u, sy) / v - 1) < 1e-4)) && UN.show(30, 'deg', 'fps') === '30' && UN.label('mm', 'mks') === 'mm');
+  const bp = { method: 'lsm', b: 230, D: 450, exp: 'mild', cover: 25, stir: 8, dia: 16, L: 5, support: 'ss', mode: 'load', wu: 30, Mu: 100, Vu: 80, fck: 20, fy: 500, __defaults: [] }, br = RCC.beam(bp), bt = EL.take('beam', bp, br, {});
+  const anc = d => Math.round(RCC.Ld(d, 500, 20) / 3 / 10) * 10, bb = br.res.bars, a = bt.bars.find(q => q.mark === 'a'), st = bt.bars.find(q => q.mark === 'c');
+  ok('Elements O2: beam take-off — concrete b·D·L, bottom bars span + Ld/3 each end, stirrups ⌊L/sv⌋ + 1 of 2(a + b) + 20φ, weight n·L·φ²/162', Math.abs(bt.conc[0].q - 0.23 * 0.45 * 5) < 1e-12 && a.n === bb.n && a.L === 5000 + 2 * anc(bb.dia) && st.n === Math.floor(5000 / br.res.sv) + 1 && st.L === 2 * (230 - 50 + 450 - 50) + 160 && Math.abs(a.kg - a.n * a.L / 1000 * bb.dia * bb.dia / 162) < 1e-9, bt.bars.map(q => q.mark + ' ' + q.n + '-' + q.dia + 'φ × ' + q.L).join(', '));
+  const fp = { P: 1000, Mx: 0, sbc: 150, sw: 10, cb: 300, cd: 450, shape: 'rect', exp: 'moderate', cover: 50, dia: 12, fck: 25, fy: 500, __defaults: [] }, fr = RCC.footing(fp), ft = EL.take('footing', fp, fr, {});
+  ok('Elements O3: footing — concrete L·B·D, PCC (L + 0.2)(B + 0.2)·0.1, bars across both directions, M25 at the foundation rate 5.34.1', Math.abs(ft.conc[0].q - fr.res.L * fr.res.B * fr.res.D / 1000) < 1e-12 && Math.abs(ft.pcc[0].q - (fr.res.L + 0.2) * (fr.res.B + 0.2) * 0.1) < 1e-12 && ft.bars.length === 2 && ft.items.some(q => q.sor === '5.34.1' && q.rate === 8021.10));
+  const cb = EL.combine([{ mark: 'B1', nos: 4, take: bt }, { mark: 'F1', nos: 6, take: ft }]), tot = 4 * bt.items.reduce((x, q) => x + q.q * q.rate, 0) + 6 * ft.items.reduce((x, q) => x + q.q * q.rate, 0);
+  ok('Elements O4: combined estimate = Σ nos × element cost; BBS weight = Σ nos × bars; marks prefixed by the element', Math.abs(cb.sum - tot) < 1e-6 && Math.abs(cb.kg - (4 * bt.bars.reduce((x, q) => x + q.kg, 0) + 6 * ft.bars.reduce((x, q) => x + q.kg, 0))) < 1e-9 && cb.bbs[0].mark === 'B1-a' && cb.items.find(q => /Reinforcement/.test(q.d)).from.join() === 'B1,F1', '₹ ' + Math.round(cb.sum));
+  const files = AIDS.map(a => path.join(__dirname, '..', 'www', a.file)), sizes = files.map(f => fs.existsSync(f) ? fs.statSync(f).size : 0);
+  ok('Design aids O5: 36 charts present (rectangular and circular P–M, flexure, τc, kt, kc, doubly reinforced)', AIDS.length === 36 && sizes.every(z => z > 20000) && ['Rectangular columns', 'Circular columns and piles', 'Beams and slabs'].every(g => AIDS.some(a => a.grp === g)), (sizes.reduce((x, y) => x + y, 0) / 1e6).toFixed(2) + ' MB');
+  /* independent hand solution: two layers of As/2 at d' = 0.05D, Pu = 0, rectangular stress block 0.36fck·xu at 0.416xu */
+  const fck = 25, fy = 415, b = 1000, Dd = 1000, dp = 50, As = 0.1 * fck / 100 * b * Dd, f = (x) => { const esc = 0.0035 * (x - dp) / x, est = 0.0035 * (Dd - dp - x) / x, C = 0.36 * fck * b * x + (RCC.fs(esc, fy) - 0.446 * fck) * As / 2, T = RCC.fs(est, fy) * As / 2; return [C - T, 0.36 * fck * b * x * (Dd / 2 - 0.416 * x) + (RCC.fs(esc, fy) - 0.446 * fck) * As / 2 * (Dd / 2 - dp) + T * (Dd / 2 - dp)]; };
+  let lo = 60, hi = 900; for (let k = 0; k < 80; k++) { const mid = (lo + hi) / 2; if (f(mid)[0] > 0) hi = mid; else lo = mid; }
+  const Mh = f((lo + hi) / 2)[1] / (fck * b * Dd * Dd), M0 = RCC.colMcap(b, Dd, As, 0, fck, fy, dp, 'two') * 1e6 / (fck * b * Dd * Dd);
+  const cm = [0.04, 0.1, 0.16].map(pf => { const A2 = pf * 25 / 100 * Math.PI * 1e6 / 4, dia = Math.sqrt(4 * A2 / (12 * Math.PI)); return FD.circCap(1000, 50 - dia / 2, 12, dia, 25, 415, 0).M; });
+  ok('Design aids O6: chart routine at Pu = 0 (p/fck 0.10, d\'/D 0.05, Fe 415) equals a hand strain-compatibility solution within 1 %; circular capacity grows with p', Math.abs(M0 / Mh - 1) < 0.01 && cm[0] < cm[1] && cm[1] < cm[2], M0.toFixed(4) + ' vs ' + Mh.toFixed(4));
+})();
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;
