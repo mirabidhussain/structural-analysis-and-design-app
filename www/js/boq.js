@@ -45,108 +45,121 @@ BOQ.ITEMS = [
   ["atr", "Anti-termite pre-construction treatment (not in JKSOR — enter a market rate)", "m²", null]
 ];
 BOQ.run = function (m, S, p) {
-  var dt = S.det && !S.det.err ? S.det : null, q = {}, br = {}, lv = MD.floorLevels(m), ts = (p.tSlab || 150) / 1000, Df = p.Df > 0 ? p.Df : 1.5;
+  var dt = S.det && !S.det.err ? S.det : null, R = {}, lv = MD.floorLevels(m), ts = (p.tSlab || 150) / 1000, Df = p.Df > 0 ? p.Df : 1.5;
   var mT = (p.mT > 0 ? +p.mT : 230) / 1000, open = Math.min(Math.max(p.mOpen >= 0 ? +p.mOpen : 15, 0), 90) / 100, pH = p.plinthH >= 0 ? +p.plinthH : 0.45, parH = p.parH >= 0 ? +p.parH : 1.0;
-  BOQ.ITEMS.forEach(function (it) { q[it[0]] = 0; br[it[0]] = []; });
-  function add(k, v, how) { if (!(v > 0)) return; q[k] += v; if (how) br[k].push([how, v]); }
-  /* columns: element lengths, less the slab thickness at each floor they reach */
-  var vc = 0, fc = 0;
+  BOQ.ITEMS.forEach(function (it) { R[it[0]] = []; });
+  /* measurement rows (detailed estimate): quantity = No. × L × B × D/H for the dimensions given; pct rows add a percentage of the rows above */
+  function row(k, d, n, L, B, H) { var r = { d: d, n: n, L: L, B: B, H: H }; r.q = n * (L === undefined ? 1 : L) * (B === undefined ? 1 : B) * (H === undefined ? 1 : H); if (r.q !== 0 && isFinite(r.q)) R[k].push(r); return r; }
+  function qrow(k, d, q, src) { if (q > 0) R[k].push({ d: d, q: q, src: src }); }
+  function pct(k, d, pc) { var sum = 0; R[k].forEach(function (r) { sum += r.q; }); if (sum > 0 && pc) R[k].push({ d: d, pct: pc, q: sum * pc / 100 }); }
+  function grp(list, key) { var g = {}, o = []; list.forEach(function (x) { var k = key(x); if (!g[k]) { g[k] = { n: 0, x: x, names: [] }; o.push(k); } g[k].n++; if (x.name) g[k].names.push(x.name); }); return o.map(function (k) { return g[k]; }); }
+  function f2(v) { return (Math.round(v * 100) / 100).toFixed(2); }
+  function names(a) { return a.length ? " (" + (a.length > 4 ? a.slice(0, 4).join(", ") + " …" : a.join(", ")) + ")" : ""; }
+  /* columns: floor to floor less the slab at each floor they reach, grouped by size and height */
+  var cl = [];
   m.frames.forEach(function (e) {
     if (e.type !== "column" || e.sec.kind !== "rcc") return;
-    var A = m.nodes[e.n1], B = m.nodes[e.n2], zt = Math.max(A.z, B.z), b = e.sec.b / 1000, D = e.sec.D / 1000, top = lv.some(function (l) { return l > 0 && Math.abs(l - zt) < 0.005; });
-    var L = e.L - (top ? ts : 0); vc += b * D * L; fc += 2 * (b + D) * L;
+    var A = m.nodes[e.n1], B = m.nodes[e.n2], zt = Math.max(A.z, B.z), zb = Math.min(A.z, B.z), top = lv.some(function (l) { return l > 0 && Math.abs(l - zt) < 0.005; });
+    cl.push({ b: e.sec.b / 1000, D: e.sec.D / 1000, h: e.L - (top ? ts : 0), zb: zb, zt: zt });
   });
-  add("rcc", vc, "Columns floor to floor less slab thickness"); add("fwc", fc, "Columns, four faces");
-  m.frames.forEach(function (e) { if (e.sec.kind === "steel") q.sst += e.sec.A * e.L * 7850; });
-  if (q.sst) br.sst.push(["Σ A × L × 7850 kg/m³", q.sst]);
+  grp(cl, function (c) { return [c.b, c.D, c.h.toFixed(4), c.zb.toFixed(2)].join("|"); }).forEach(function (G) {
+    var c = G.x, t = "Columns " + Math.round(c.b * 1000) + "×" + Math.round(c.D * 1000) + ", +" + c.zb.toFixed(2) + " to +" + c.zt.toFixed(2);
+    row("rcc", t, G.n, c.b, c.D, c.h); row("fwc", t + " — girth 2(b + D)", G.n, 2 * (c.b + c.D), undefined, c.h);
+  });
+  var stl = []; m.frames.forEach(function (e) { if (e.sec.kind === "steel") stl.push({ s: e.sec, L: e.L }); });
+  grp(stl, function (q) { return q.s.name + "|" + q.L.toFixed(3); }).forEach(function (G) { row("sst", (G.x.s.name || "Section") + " × " + G.x.L.toFixed(2) + " m — A × 7850 kg/m³", G.n, G.x.L, G.x.s.A, 7850); });
   /* beams: below the slab, between column faces */
   var bls = dt && dt.beams ? dt.beams : [], g = dt ? dt.g : null;
   function levOf(bl) { return g ? g.lev(bl.z) : -1; }
   function clear(bl) { var L = 0; bl.spans.forEach(function (sp) { L += sp.Lc / 1000; }); return L; }
-  bls.forEach(function (bl) {
-    var b = bl.b / 1000, hs = Math.max(bl.D / 1000 - ts, 0), L = clear(bl);
-    [bl.cantL, bl.cantR].forEach(function (c) { if (c) L += (c.fR - c.fL) / 1000; });
-    q.rcb += b * hs * L; q.fwb += (2 * hs + b) * L;
+  grp(bls.map(function (bl) { var L = clear(bl); [bl.cantL, bl.cantR].forEach(function (c) { if (c) L += (c.fR - c.fL) / 1000; }); return { name: bl.name, b: bl.b / 1000, hs: Math.max(bl.D / 1000 - ts, 0), L: L }; }),
+    function (q) { return [q.b, q.hs.toFixed(4), q.L.toFixed(4)].join("|"); }).forEach(function (G) {
+    var q = G.x; row("rcb", "Beams " + Math.round(q.b * 1000) + " wide, below slab" + names(G.names), G.n, q.L, q.b, q.hs);
+    row("fwb", "Beams" + names(G.names) + " — sides + soffit (2(D − t) + b)", G.n, q.L, 2 * q.hs + q.b);
   });
-  if (q.rcb) { br.rcb.push([bls.length + " beam lines, b × (D − t) × clear length", q.rcb]); br.fwb.push(["Sides below slab + soffit", q.fwb]); }
-  /* slabs */
-  var slabA = [];
+  /* slabs, grouped panels of each floor */
+  var slabs = [];
   if (dt && dt.slabs) dt.slabs.forEach(function (fl) {
-    var A = 0, Ac = 0, V = 0;
-    fl.panels.forEach(function (P) { A += P.Lx * P.Ly / 1e6; V += P.Lx * P.Ly / 1e6 * P.t / 1000; Ac += Math.max(P.Lx - P.bw, 0) * Math.max(P.Ly - P.bw, 0) / 1e6; });
-    slabA.push({ z: fl.z, A: A, Ac: Ac });
-    add("rcs", V, fl.name + ": " + A.toFixed(2) + " m²"); add("fws", Ac, fl.name + ": soffit between beams");
     var i = -1; lv.forEach(function (z, j) { if (Math.abs(z - fl.z) < 0.01) i = j; });
-    var h = i > 0 ? lv[i] - lv[i - 1] : 0, ex = h > 3.5 ? Math.ceil(h - 3.5 - 1e-9) : 0;
-    if (ex) add("fwh", Ac * ex, fl.name + ": storey " + h.toFixed(2) + " m → " + ex + " extra metre" + (ex > 1 ? "s" : ""));
+    var h = i > 0 ? lv[i] - lv[i - 1] : 0, ex = h > 3.5 ? Math.ceil(h - 3.5 - 1e-9) : 0, gp = grp(fl.panels, function (P) { return [P.Lx, P.Ly, P.t, P.bw].join("|"); });
+    slabs.push({ z: fl.z, name: fl.name, gp: gp, roof: i === lv.length - 1 });
+    gp.forEach(function (G) {
+      var P = G.x, Lx = P.Lx / 1000, Ly = P.Ly / 1000, cx = Math.max(P.Lx - P.bw, 0) / 1000, cy = Math.max(P.Ly - P.bw, 0) / 1000, t = fl.name + " panels " + P.Lx + "×" + P.Ly;
+      row("rcs", t, G.n, Lx, Ly, P.t / 1000); row("fws", t + " — soffit between beams", G.n, cx, cy);
+      if (ex) row("fwh", t + " — storey " + h.toFixed(2) + " m, " + ex + " extra metre" + (ex > 1 ? "s" : ""), G.n, cx, cy, ex);
+    });
   });
-  /* walls */
+  /* walls: between end columns, storey height less the slab */
   if (dt && dt.walls) dt.walls.forEach(function (w) {
     var t = w.t / 1000, Lw = w.Lw / 1000;
-    w.endCols.forEach(function (nm) { var c = dt.cols.filter(function (c0) { return c0.name === nm; })[0]; if (c) Lw -= (w.ax[0] ? c.st[0].D : c.st[0].b) / 2000; });   /* end columns measured with the columns */
-    w.storeys.forEach(function (st) { var h = st.h / 1000 - ts; q.rcw += Lw * t * h; q.fww += 2 * Lw * h; });
+    w.endCols.forEach(function (nm) { var c = dt.cols.filter(function (c0) { return c0.name === nm; })[0]; if (c) Lw -= (w.ax[0] ? c.st[0].D : c.st[0].b) / 2000; });
+    w.storeys.forEach(function (st, i) { var h = st.h / 1000 - ts; row("rcw", (w.name || "Wall") + " storey " + (i + 1), 1, Lw, t, h); row("fww", (w.name || "Wall") + " storey " + (i + 1) + " — both faces", 2, Lw, undefined, h); });
   });
-  /* footings, PCC, excavation (first 1.5 m + extra lift), necks, backfill */
-  var nf = 0;
-  if (dt && dt.foot) dt.foot.forEach(function (ft) {
-    var Lx = ft.Lx / 1000, Ly = ft.Ly / 1000, D = ft.D / 1000, a = ft.a / 1000, bc = ft.bc / 1000, neck = Math.max(Df - D, 0);
-    var vf = Lx * Ly * D, vp = (Lx + 0.2) * (Ly + 0.2) * 0.1, ax = (Lx + 0.8) * (Ly + 0.8), dep = Df + 0.1, ve = ax * dep, vn = a * bc * neck;
-    q.rcf += vf; q.fwf += 2 * (Lx + Ly) * D; q.pcc += vp; q.exc += ax * Math.min(dep, 1.5); q.exl += ax * Math.max(dep - 1.5, 0);
-    q.rcn += vn; q.fwc += 2 * (a + bc) * neck; q.bfl += ve - vf - vp - vn; nf++;
-  });
-  if (nf) {
-    br.exc.push([nf + " pits (L + 0.8) × (B + 0.8) × min(depth, 1.5 m)", q.exc]); if (q.exl) br.exl.push([nf + " pits, depth " + (Df + 0.1).toFixed(2) + " m − 1.5 m", q.exl]);
-    br.rcf.push([nf + " footings L × B × D", q.rcf]); br.rcn.push([nf + " necks over " + Df + " m founding depth", q.rcn]); br.pcc.push([nf + " beds (L + 0.2) × (B + 0.2) × 0.1", q.pcc]);
-    br.bfl.push(["Excavation − footing − PCC − neck", q.bfl]); br.fwf.push([nf + " footings, four sides 2(L + B) × D", q.fwf]);
+  /* isolated footings: groups of equal size */
+  var dep = Df + 0.1;
+  if (dt && dt.foot && dt.foot.length) {
+    var fg = grp(dt.foot, function (ft) { return [ft.Lx, ft.Ly, ft.D, ft.a, ft.bc].join("|"); }), ex1 = [], ded = [];
+    fg.forEach(function (G) {
+      var ft = G.x, Lx = ft.Lx / 1000, Ly = ft.Ly / 1000, D = ft.D / 1000, a = ft.a / 1000, bc = ft.bc / 1000, neck = Math.max(Df - D, 0), t = "Footings " + ft.Lx + "×" + ft.Ly + names(G.names);
+      row("exc", t + " — pit (L + 0.8)(B + 0.8)", G.n, Lx + 0.8, Ly + 0.8, Math.min(dep, 1.5));
+      if (dep > 1.5) row("exl", t + " — below 1.5 m", G.n, Lx + 0.8, Ly + 0.8, dep - 1.5);
+      row("pcc", t + " — bed (L + 0.2)(B + 0.2)", G.n, Lx + 0.2, Ly + 0.2, 0.1);
+      row("rcf", t, G.n, Lx, Ly, D); row("fwf", t + " — sides 2(L + B)", G.n, 2 * (Lx + Ly), undefined, D);
+      if (neck > 0) { row("rcn", "Necks " + ft.a + "×" + ft.bc + names(G.names), G.n, a, bc, neck); row("fwc", "Necks " + ft.a + "×" + ft.bc + " — girth 2(a + b)", G.n, 2 * (a + bc), undefined, neck); }
+      ex1.push([t, G.n, Lx + 0.8, Ly + 0.8, dep]); ded.push(["Deduct footings " + ft.Lx + "×" + ft.Ly, -G.n, Lx, Ly, D], ["Deduct PCC", -G.n, Lx + 0.2, Ly + 0.2, 0.1]); if (neck > 0) ded.push(["Deduct necks", -G.n, a, bc, neck]);
+    });
+    ex1.forEach(function (r) { row("bfl", r[0] + " — excavated volume", r[1], r[2], r[3], r[4]); }); ded.forEach(function (r) { row("bfl", r[0], r[1], r[2], r[3], r[4]); });
   }
   if (dt && dt.mat) {
-    var mt = dt.mat, Lm = mt.L, Bm = mt.B, Tm = mt.T / 1000, neckH = Math.max(Df - Tm, 0), dep = Df + 0.1, ax = (Lm + 0.6) * (Bm + 0.6), vm = Lm * Bm * Tm, vp = (Lm + 0.2) * (Bm + 0.2) * 0.1, vn = 0, fn = 0;
-    mt.sups.forEach(function (s0) { if (s0.rcc) { vn += s0.a * s0.b * neckH; fn += 2 * (s0.a + s0.b) * neckH; } });
-    add("rcf", vm, "Mat " + Lm.toFixed(2) + " × " + Bm.toFixed(2) + " × " + Tm.toFixed(2) + " m"); add("fwf", 2 * (Lm + Bm) * Tm, "Mat edges 2(L + B) × t");
-    add("pcc", vp, "Under the mat (L + 0.2)(B + 0.2) × 0.1"); add("exc", ax * Math.min(dep, 1.5), "Mat pit (L + 0.6)(B + 0.6) × min(depth, 1.5 m)"); add("exl", ax * Math.max(dep - 1.5, 0), "Mat pit, depth below 1.5 m");
-    add("rcn", vn, "Column necks from the mat to the plinth, " + neckH.toFixed(2) + " m"); add("fwc", fn, "Necks, four faces"); add("bfl", ax * dep - vm - vp - vn, "Excavation − mat − PCC − necks");
+    var mt = dt.mat, Lm = mt.L, Bm = mt.B, Tm = mt.T / 1000, neckH = Math.max(Df - Tm, 0);
+    row("exc", "Mat pit (L + 0.6)(B + 0.6)", 1, Lm + 0.6, Bm + 0.6, Math.min(dep, 1.5)); if (dep > 1.5) row("exl", "Mat pit below 1.5 m", 1, Lm + 0.6, Bm + 0.6, dep - 1.5);
+    row("pcc", "Under the mat (L + 0.2)(B + 0.2)", 1, Lm + 0.2, Bm + 0.2, 0.1); row("rcf", "Mat " + f2(Lm) + " × " + f2(Bm) + " m", 1, Lm, Bm, Tm); row("fwf", "Mat edges 2(L + B)", 1, 2 * (Lm + Bm), undefined, Tm);
+    var nk = grp(mt.sups.filter(function (s0) { return s0.rcc; }), function (s0) { return s0.a + "|" + s0.b; });
+    row("bfl", "Mat pit — excavated volume", 1, Lm + 0.6, Bm + 0.6, dep); row("bfl", "Deduct mat", -1, Lm, Bm, Tm); row("bfl", "Deduct PCC", -1, Lm + 0.2, Bm + 0.2, 0.1);
+    if (neckH > 0) nk.forEach(function (G) { var a = G.x.a, b = G.x.b; row("rcn", "Necks " + Math.round(a * 1000) + "×" + Math.round(b * 1000) + " from the mat to the plinth", G.n, a, b, neckH); row("fwc", "Necks — girth 2(a + b)", G.n, 2 * (a + b), undefined, neckH); row("bfl", "Deduct necks", -G.n, a, b, neckH); });
   }
-  /* masonry: storey s on the level s−1 beams (storey 1 on the plinth, layout of level 1); perimeter lines are external */
-  var xs = g ? g.xs : [], ys = g ? g.ys : [], ext = 0, int = 0, aE = 0, aI = 0, L1 = 0, perim = 0, Hb = lv[lv.length - 1] - lv[0], top = lv.length - 1;
-  function onEdge(bl) {
-    if (m.twoD) return true;
-    var v = bl.ux ? bl.xy[0].y : bl.xy[0].x, a = bl.ux ? ys : xs;
-    return a.length > 0 && (Math.abs(v - a[0]) < 0.01 || Math.abs(v - a[a.length - 1]) < 0.01);
-  }
+  /* masonry: storey s on the level s−1 beams (storey 1 on the plinth, layout of level 1); perimeter lines external */
+  var xs = g ? g.xs : [], ys = g ? g.ys : [], L1 = 0, perim = 0, Hb = lv[lv.length - 1] - lv[0], top = lv.length - 1, st = [];
+  function onEdge(bl) { if (m.twoD) return true; var v = bl.ux ? bl.xy[0].y : bl.xy[0].x, a = bl.ux ? ys : xs; return a.length > 0 && (Math.abs(v - a[0]) < 0.01 || Math.abs(v - a[a.length - 1]) < 0.01); }
   if ((+p.wall || 0) > 0 && g) for (var s = 1; s <= top; s++) {
-    var ref = s === 1 ? 1 : s - 1, Dmax = bls.filter(function (bl) { return levOf(bl) === s; }).reduce(function (a, bl) { return Math.max(a, bl.D / 1000); }, ts), h = lv[s] - lv[s - 1] - Dmax;
-    bls.filter(function (bl) { return levOf(bl) === ref; }).forEach(function (bl) {
-      var L = clear(bl), e = onEdge(bl);
-      if (e) { ext += L * h; aE += L * h; if (s === 1) perim += L; } else { int += L * h; aI += L * h; }
-      if (s === 1) L1 += L;
-    });
+    var ref = s === 1 ? 1 : s - 1, Dmax = bls.filter(function (bl) { return levOf(bl) === s; }).reduce(function (a, bl) { return Math.max(a, bl.D / 1000); }, ts), h = lv[s] - lv[s - 1] - Dmax, e = 0, i = 0;
+    bls.filter(function (bl) { return levOf(bl) === ref; }).forEach(function (bl) { var L = clear(bl); if (onEdge(bl)) { e += L; if (s === 1) perim += L; } else i += L; if (s === 1) L1 += L; });
+    st.push({ s: s, h: h, e: e, i: i });
   }
   var parL = bls.filter(function (bl) { return levOf(bl) === top && onEdge(bl); }).reduce(function (a, bl) { return a + clear(bl); }, 0);
   if ((+p.parapet || 0) <= 0 && !(p.parH > 0)) parL = 0;
-  add("mss", (ext + int) * mT * (1 - open), "Walls under the beams, " + Math.round(mT * 1000) + " mm, less " + Math.round(open * 100) + " % openings");
-  add("mss", parL * parH * mT, "Parapet " + parL.toFixed(1) + " m × " + parH + " m");
-  add("msp", L1 * pH * mT, "Plinth walls " + L1.toFixed(1) + " m × " + pH + " m");
-  add("dpc", L1 * mT, "Over the plinth walls");
-  add("pli", (2 * aI + aE) * (1 - open), "Both faces of internal walls + inner face of external walls, less openings");
-  add("ple", (perim > 0 ? perim * (Hb + pH) : aE) * (1 - open), "External face " + (perim > 0 ? perim.toFixed(1) + " m × " + (Hb + pH).toFixed(2) + " m" : "") + ", less openings");
-  add("ple", 2 * parL * parH, "Parapet, both faces");
+  st.forEach(function (q) { row("mss", "Storey " + q.s + " external walls (clear lengths between columns)", 1, q.e, mT, q.h); row("mss", "Storey " + q.s + " internal walls", 1, q.i, mT, q.h); });
+  pct("mss", "Deduct doors & windows " + Math.round(open * 100) + " %", -open * 100);
+  row("mss", "Parapet", 1, parL, mT, parH);
+  row("msp", "Plinth walls", 1, L1, mT, pH); row("dpc", "Over the plinth walls", 1, L1, mT);
+  st.forEach(function (q) { row("pli", "Storey " + q.s + " internal walls, both faces", 2, q.i, undefined, q.h); row("pli", "Storey " + q.s + " external walls, inner face", 1, q.e, undefined, q.h); });
+  pct("pli", "Deduct openings " + Math.round(open * 100) + " %", -open * 100);
+  if (perim > 0) row("ple", "External face, plinth to roof", 1, perim, undefined, Hb + pH); else st.forEach(function (q) { row("ple", "Storey " + q.s + " external walls", 1, q.e, undefined, q.h); });
+  pct("ple", "Deduct openings " + Math.round(open * 100) + " %", -open * 100);
+  row("ple", "Parapet, both faces", 2, parL, undefined, parH);
   /* floors, ceilings, plinth */
-  slabA.sort(function (a, b) { return a.z - b.z; });
-  slabA.forEach(function (sa) { add("plc", sa.Ac, "Ceiling under the slab at +" + sa.z.toFixed(2)); if (Math.abs(sa.z - lv[top]) > 0.01) add("flr", sa.Ac, "Floor at +" + sa.z.toFixed(2)); });
-  var gf = slabA.length ? slabA[0].Ac : 0;
-  if (gf) { add("flr", gf, "Ground floor (first-floor layout)"); add("gfb", gf * 0.1, "Ground floor, 100 mm"); add("pfl", gf * Math.max(pH - 0.15, 0), "Plinth filling " + Math.max(pH - 0.15, 0).toFixed(2) + " m deep"); }
-  var foot = xs.length > 1 && ys.length > 1 && !m.twoD ? (xs[xs.length - 1] - xs[0] + 0.4) * (ys[ys.length - 1] - ys[0] + 0.4) : gf;
-  add("atr", foot, "Plinth area");
+  slabs.sort(function (a, b) { return a.z - b.z; });
+  slabs.forEach(function (sl) { sl.gp.forEach(function (G) { var P = G.x, cx = Math.max(P.Lx - P.bw, 0) / 1000, cy = Math.max(P.Ly - P.bw, 0) / 1000; row("plc", "Ceiling under " + sl.name + ", panels " + P.Lx + "×" + P.Ly, G.n, cx, cy); if (!sl.roof) row("flr", "Floor at +" + sl.z.toFixed(2) + ", panels " + P.Lx + "×" + P.Ly, G.n, cx, cy); }); });
+  var gf = 0;
+  if (slabs.length) slabs[0].gp.forEach(function (G) {
+    var P = G.x, cx = Math.max(P.Lx - P.bw, 0) / 1000, cy = Math.max(P.Ly - P.bw, 0) / 1000; gf += G.n * cx * cy;
+    row("flr", "Ground floor (first-floor layout), panels " + P.Lx + "×" + P.Ly, G.n, cx, cy); row("gfb", "Ground floor panels " + P.Lx + "×" + P.Ly, G.n, cx, cy, 0.1);
+    if (pH > 0.15) row("pfl", "Plinth filling, panels " + P.Lx + "×" + P.Ly, G.n, cx, cy, pH - 0.15);
+  });
+  var foot = 0;
+  if (xs.length > 1 && ys.length > 1 && !m.twoD) { row("atr", "Plinth area", 1, xs[xs.length - 1] - xs[0] + 0.4, ys[ys.length - 1] - ys[0] + 0.4); foot = (xs[xs.length - 1] - xs[0] + 0.4) * (ys[ys.length - 1] - ys[0] + 0.4); }
+  else if (gf) { qrow("atr", "Plinth area (ground floor)", gf); foot = gf; }
   /* reinforcement from the bar bending schedule + wastage */
   var byDia = {}, kg = 0, wst = p.wastage >= 0 ? +p.wastage : 3;
-  if (dt && dt.tot) dt.tot.forEach(function (t) { byDia[t.dia] = t.all; kg += t.all; });
-  q.stl = kg * (1 + wst / 100); if (kg) br.stl.push(["Bar bending schedule " + kg.toFixed(0) + " kg + " + wst + " %", q.stl]);
+  if (dt && dt.tot) dt.tot.forEach(function (t) { byDia[t.dia] = t.all; kg += t.all; qrow("stl", t.dia + " mm bars — bar bending schedule (beams " + Math.round(t.beams) + ", columns " + Math.round(t.cols) + ", slabs " + Math.round(t.slabs) + ", foundations " + Math.round(t.foot) + (t.walls ? ", walls " + Math.round(t.walls) : "") + ")", t.all, "BBS"); });
+  pct("stl", "Wastage and rolling margin " + wst + " %", wst);
+  var q = {}; BOQ.ITEMS.forEach(function (it) { q[it[0]] = R[it[0]].reduce(function (a, r) { return a + r.q; }, 0); });
   var conc = q.rcf + q.rcn + q.rcc + q.rcb + q.rcs + q.rcw, gr = "M" + p.fck;
   var items = BOQ.ITEMS.map(function (it) {
-    return { id: it[0], desc: it[1].replace("{g}", gr).replace("{fy}", p.fy).replace("{w}", wst), unit: it[2], qty: q[it[0]], sor: BOQ.sorFor(it, p), br: br[it[0]], grade: /^rc/.test(it[0]) ? gr : "" };
+    return { id: it[0], desc: it[1].replace("{g}", gr).replace("{fy}", p.fy).replace("{w}", wst), unit: it[2], qty: q[it[0]], sor: BOQ.sorFor(it, p), rows: R[it[0]], br: R[it[0]].map(function (r) { return [r.d, r.q]; }), grade: /^rc/.test(it[0]) ? gr : "" };
   }).filter(function (it) { return it.qty > 1e-9; });
   return { items: items, conc: conc, steelKg: kg, steelWithWaste: q.stl, byDia: byDia, ratio: conc > 0 ? kg / conc : 0, Df: Df, ts: ts, schedules: BOQ.schedules(S), amount: 0, footprint: foot,
-    inp: { mT: mT * 1000, open: open * 100, pH: pH, parH: parH, wst: wst, cont: p.cont >= 0 ? +p.cont : 3, cess: p.cess >= 0 ? +p.cess : 1, gst: p.gst >= 0 ? +p.gst : 18, sorOn: p.sorOn !== false } };
+    inp: { mT: mT * 1000, open: open * 100, pH: pH, parH: parH, wst: wst, cont: p.cont >= 0 ? +p.cont : 3, cess: p.cess >= 0 ? +p.cess : 1, gst: p.gst >= 0 ? +p.gst : 18, sorOn: p.sorOn !== false, fmt: p.estFmt === "detailed" ? "detailed" : "boq" } };
 };
 /* the JKSOR item for a BOQ line (concrete by grade: nominal mix M20, design mix M25 + extras for richer grades) */
 BOQ.sorFor = function (it, p) {
@@ -174,6 +187,23 @@ BOQ.price = function (boq, rates) {
   boq.abs.total = sum + boq.abs.cont + boq.abs.cess + boq.abs.gst;
   boq.unpriced = boq.items.filter(function (it) { return !it.rate; }).map(function (it) { return it.id; });
   return boq;
+};
+/* detailed estimate (measurement sheet) as HTML: every item with its No. × L × B × D/H rows and total */
+BOQ.detailedHtml = function (b, esc) {
+  function n(v, d) { return v === undefined || v === null ? "" : (Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).toFixed(d); }
+  var h = '<div class="tw"><table class="est"><tr><th>Item</th><th>Particulars</th><th>No.</th><th>L (m)</th><th>B (m)</th><th>D/H (m)</th><th>Quantity</th></tr>';
+  b.items.forEach(function (it, i) {
+    var u = it.unit, dq = u === "kg" ? 1 : 2;
+    h += '<tr class="ih"><td>' + (i + 1) + '</td><td><b>' + esc(it.desc) + '</b>' + (it.sor ? ' <span class="sorc">JKSOR ' + esc(it.sor[0]) + '</span>' : '') + '</td><td></td><td></td><td></td><td></td><td>' + esc(u) + '</td></tr>';
+    it.rows.forEach(function (r) {
+      var neg = r.q < 0;
+      var dims = r.pct !== undefined ? n(r.pct, 1) + " % of the above" : r.n === undefined ? (r.src || "") : [n(r.n, 0), n(r.L, 3), n(r.B, 3), n(r.H, 3)].filter(function (x) { return x !== ""; }).join(" × ");
+      h += '<tr' + (neg ? ' class="ded"' : '') + '><td></td><td>' + esc(r.d) + '<span class="dims">' + esc(dims) + '</span></td>' + (r.pct !== undefined ? '<td colspan="4" class="pc4">' + n(r.pct, 1) + ' % of the above</td>' : r.n === undefined ? '<td colspan="4" class="pc4">' + esc(r.src || "") + '</td>' :
+        '<td>' + n(r.n, 0) + '</td><td>' + n(r.L, 3) + '</td><td>' + n(r.B, 3) + '</td><td>' + n(r.H, 3) + '</td>') + '<td>' + n(r.q, dq) + '</td></tr>';
+    });
+    h += '<tr class="it"><td></td><td>Total</td><td></td><td></td><td></td><td></td><td><b>' + n(it.qty, dq) + ' ' + esc(u) + '</b></td></tr>';
+  });
+  return h + '</table></div>';
 };
 /* reinforcement schedules (rows ready for tables) */
 BOQ.schedules = function (S) {

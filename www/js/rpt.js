@@ -91,7 +91,7 @@ var RPT = (function () {
     /* 10 BOQ */
     if (S.boq) {
       var b = BOQ.price(S.boq, (p && p.rates) || {}), A = b.abs, I = b.inp, inr = function (v) { return Math.round(v).toLocaleString("en-IN"); };
-      body += H("Bill of quantities and estimate") + tbl(["Item", "Description", "Unit", "Quantity", "Rate (₹)", "Source", "Amount (₹)"], b.items.map(function (it, i) { return [i + 1, esc(it.desc), it.unit, f(it.qty, it.unit === "kg" ? 0 : 2), it.rate ? f(it.rate, 2) : "", esc(it.src || "—"), it.amt ? inr(it.amt) : ""]; })
+      body += H(I.fmt === "detailed" ? "Detailed estimate and abstract of cost" : "Bill of quantities and estimate") + (I.fmt === "detailed" ? '<h3>Measurement sheet</h3>' + BOQ.detailedHtml(b, esc) + '<h3>Abstract of cost</h3>' : '') + tbl(["Item", "Description", "Unit", "Quantity", "Rate (₹)", "Source", "Amount (₹)"], b.items.map(function (it, i) { return [i + 1, esc(it.desc), it.unit, f(it.qty, it.unit === "kg" ? 0 : 2), it.rate ? f(it.rate, 2) : "", esc(it.src || "—"), it.amt ? inr(it.amt) : ""]; })
         .concat([["", "Sub-total", "", "", "", "", inr(A.sub)], ["", "Contingencies " + I.cont + " %", "", "", "", "", inr(A.cont)], ["", "Labour welfare cess " + I.cess + " %", "", "", "", "", inr(A.cess)], ["", "GST " + I.gst + " %", "", "", "", "", inr(A.gst)], ["", "<b>Total estimated cost</b>", "", "", "", "", "<b>₹ " + inr(A.total) + "</b>"]])) +
         '<p class="note">' + (I.sorOn ? "Rates: Jammu & Kashmir Schedule of Rates 2022 (exclusive of GST) unless the project's own rate is entered. " : "Rates: the project's own entries. ") + "Measurement in IS 1200 style from the designed model; " + I.mT + " mm masonry under every beam line less " + I.open + " % openings; steel from the bar bending schedule + " + I.wst + " % wastage. Doors, windows, roofing, painting, services and external works are not included." + (b.unpriced.length ? " Unpriced items: " + b.unpriced.length + "." : "") + "</p>";
     }
@@ -106,7 +106,7 @@ var RPT = (function () {
     body += H("Limitations") + '<ul>' + REG.CHECKS.filter(function (r) { return r[2] === "Not implemented"; }).map(function (r) { return '<li>' + esc(r[1]) + (r[3] ? ' — ' + esc(r[3]) : '') + '</li>'; }).join("") + '<li>The results depend on the inputs listed in the design basis; defaults marked "confirm" must be checked against site data.</li></ul>';
     return '<div id="rpt">' + cover + '<h2 class="nb">Contents</h2><ol class="toc">' + toc.map(function (t) { return '<li>' + esc(t.replace(/^\d+\.\s*/, "")) + '</li>'; }).join("") + '</ol>' + body + '</div>';
   }
-  function doc(S, p, opt) { return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc((p ? p.name : "Project") + " — calculations") + '</title><style>body{margin:0;background:#fff}' + CSS + '</style></head><body>' + html(S, p, opt) + '</body></html>'; }
+  function doc(S, p, opt) { return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc((p ? p.name : "Project") + " — calculations") + '</title><style>body{margin:0;background:#fff}' + CSS + ' table.est td:nth-child(n+3){text-align:right} tr.ih td{background:#eef2f7} tr.ded td{color:#a33} tr.it td{border-top:1.5px solid #333} .sorc{font-size:.85em;color:#666}</style></head><body>' + html(S, p, opt) + '</body></html>'; }
   function view(app, title, back, ctx) {
     title.textContent = "Calculation report"; back.hidden = false;
     var S = ctx.S();

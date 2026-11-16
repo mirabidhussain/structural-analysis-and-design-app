@@ -630,10 +630,31 @@ var RX = (function () {
   function boqSheets(wb, S, G) {
     var b = S.boq, pr = null; try { pr = typeof PDB !== "undefined" ? PDB.current() : null; } catch (e) { pr = null; }
     var rates = (pr && pr.rates) || {}; BOQ.price(b, rates);
+    /* detailed estimate: measurement sheet, every quantity a formula of No. × L × B × D/H; the BOQ quantities link to its totals */
+    var de = wb.sheet("Detailed Estimate", { cols: [6, 58, 7, 10, 10, 10, 13, 7], color: TAB.design }), tot = {};
+    intro(de, "Detailed estimate — measurement sheet (IS 1200)", "Each line: quantity = No. × L × B × D/H of the dimensions given (blank = not used); deductions are negative; percentage lines (openings, wastage) act on the lines above them in the same item. Item totals feed the quantities of the BOQ / abstract of cost.", 8);
+    de.row(["Item", "Particulars", "No.", "L (m)", "B (m)", "D/H (m)", "Quantity", "Unit"], "h");
+    b.items.forEach(function (it, i) {
+      de.row([i + 1, it.desc + (it.sor ? "  [JKSOR " + it.sor[0] + "]" : "")], "b");
+      var first = de.next();
+      it.rows.forEach(function (r) {
+        var rn = de.next(), c = ["", r.d];
+        if (r.pct !== undefined) { c.push({ v: r.pct, s: "n2" }, "% of the above", "", ""); c.push({ f: "=C" + rn + "/100*SUM(G" + first + ":G" + (rn - 1) + ")", v: r.q, s: "f2" }); }
+        else if (r.n === undefined) { c.push(r.src || "", "", "", ""); c.push({ v: r.q, s: "n2" }); }
+        else {
+          var fs = ["C" + rn]; c.push({ v: r.n, s: "n0" });
+          [["L", "D"], ["B", "E"], ["H", "F"]].forEach(function (k) { if (r[k[0]] === undefined) c.push(""); else { c.push({ v: r[k[0]], s: "n3" }); fs.push(k[1] + rn); } });
+          c.push({ f: "=" + fs.join("*"), v: r.q, s: "f2" });
+        }
+        c.push(it.unit); de.row(c);
+      });
+      var tr = de.next(); tot[it.id] = tr;
+      de.row(["", "Total", "", "", "", "", { f: "=SUM(G" + first + ":G" + (tr - 1) + ")", v: it.qty, s: "f2" }, it.unit], "b");
+    });
     var I = b.inp, sh = wb.sheet("BOQ", { cols: [6, 62, 16, 7, 13, 13, 16], color: TAB.design });
     intro(sh, "Bill of quantities and estimate — measured from the designed model", "Whole building: structure, masonry (" + I.mT + " mm under every beam line, " + I.open + " % openings), plaster, flooring, plinth (" + I.pH + " m), parapet (" + I.parH + " m). Measurement in IS 1200 style: columns floor to floor less the slab, necks from footing to plinth, beams below the slab between column faces, slabs over the panels, footings L×B×D, PCC 100 mm with 100 mm offset, excavation with 300 mm working space (extra lift below 1.5 m), steel from the bar bending schedule + " + I.wst + " % wastage. Rates: " + (I.sorOn ? "Jammu & Kashmir Schedule of Rates 2022 (exclusive of GST) unless your own rate was entered in the app" : "your own rates") + " — every blue rate and percentage can be changed here; amounts and the abstract are formulas. Doors, windows, roofing, painting, services and external works are not included.", 7);
-    var t = table(sh, [{ k: "no", h: "Item", s: "n0" }, { k: "desc", h: "Description" }, { k: "sor", h: "Rate source" }, { k: "unit", h: "Unit" }, { k: "qty", h: "Quantity", s: "n2" }, { k: "rate", h: "Rate", u: "₹", s: "in" }, { k: "amt", h: "Amount", u: "₹", f: "{qty}*{rate}", s: "f0" }],
-      b.items.map(function (it, i) { return { no: i + 1, desc: it.desc, sor: it.src || "enter rate", unit: it.unit, qty: it.qty, rate: it.rate || 0 }; }), G, { fc: 2 });
+    var t = table(sh, [{ k: "no", h: "Item", s: "n0" }, { k: "desc", h: "Description" }, { k: "sor", h: "Rate source" }, { k: "unit", h: "Unit" }, { k: "qty", h: "Quantity", cell: function (r) { return { f: "='Detailed Estimate'!G" + tot[r.id], v: r.qty, s: "f2" }; } }, { k: "rate", h: "Rate", u: "₹", s: "in" }, { k: "amt", h: "Amount", u: "₹", f: "{qty}*{rate}", s: "f0" }],
+      b.items.map(function (it, i) { return { id: it.id, no: i + 1, desc: it.desc, sor: it.src || "enter rate", unit: it.unit, qty: it.qty, rate: it.rate || 0 }; }), G, { fc: 2 });
     var L = t.L, rng = function (c) { return L[c] + t.first + ":" + L[c] + t.last; };
     var r0 = sh.next(); sh.row(["", "Sub-total", "", "", "", "", { f: "=SUM(" + rng("amt") + ")", v: b.abs.sub, s: "f0" }], "b");
     var pct = [["Contingencies", I.cont, b.abs.cont], ["Labour welfare cess", I.cess, b.abs.cess], ["GST on works contract", I.gst, b.abs.gst]], rows = [];
@@ -866,7 +887,7 @@ var RX = (function () {
     }
     return 1;
   }
-  var SHEETDESC = { BOQ: "Bill of quantities of the whole building with JKSOR 2022 / your rates, abstract with contingencies, cess and GST (formulas)", Schedules: "Column, beam, wall, slab and footing reinforcement schedules", Verification: "Design summary with utilisation, verification state and the checking engineer's list", "Standards Register": "Code editions used (IS 1893:2025 withdrawn — 2016 applies) and Verified / Calculated / Simplified / Not implemented status of every check", BBS: "Bar bending schedule of every member group (incl. walls), cutting lengths and weights (formulas), totals by diameter", "Detailing Checks": "IS 13920 / IS 456 detailing rules for beams, columns, joints (strong column–weak beam) and footings", Footings: "Isolated footing sizes, soil pressure (formulas), reinforcement and shear checks", "Mat Foundation": "Raft: rigid-method pressures, punching, flexure and settlement checks (formulas) beside the plate-on-springs results", Seismic: "Modal analysis, response spectrum, centres of mass/rigidity, accidental torsion, irregularity checks (formulas)", Summary: "Key results and pass/fail counts for each member group", Notation: "Meaning and units of every symbol", Inputs: "Design parameters you can change (named cells p_fck, p_fy, p_Zz …)", Nodes: "Node coordinates and restraints", Members: "Frame members, lengths and section properties (formulas)", Shells: "Shell (slab / wall) elements",
+  var SHEETDESC = { "Detailed Estimate": "Measurement sheet: every quantity as No. × L × B × D/H (formulas), deductions and percentages, item totals", BOQ: "Bill of quantities / abstract of cost: quantities linked to the detailed estimate, JKSOR 2022 or your rates, contingencies, cess and GST (formulas)", Schedules: "Column, beam, wall, slab and footing reinforcement schedules", Verification: "Design summary with utilisation, verification state and the checking engineer's list", "Standards Register": "Code editions used (IS 1893:2025 withdrawn — 2016 applies) and Verified / Calculated / Simplified / Not implemented status of every check", BBS: "Bar bending schedule of every member group (incl. walls), cutting lengths and weights (formulas), totals by diameter", "Detailing Checks": "IS 13920 / IS 456 detailing rules for beams, columns, joints (strong column–weak beam) and footings", Footings: "Isolated footing sizes, soil pressure (formulas), reinforcement and shear checks", "Mat Foundation": "Raft: rigid-method pressures, punching, flexure and settlement checks (formulas) beside the plate-on-springs results", Seismic: "Modal analysis, response spectrum, centres of mass/rigidity, accidental torsion, irregularity checks (formulas)", Summary: "Key results and pass/fail counts for each member group", Notation: "Meaning and units of every symbol", Inputs: "Design parameters you can change (named cells p_fck, p_fy, p_Zz …)", Nodes: "Node coordinates and restraints", Members: "Frame members, lengths and section properties (formulas)", Shells: "Shell (slab / wall) elements",
     Loads: "Load-case totals, IS 1893 base shear & vertical distribution, IS 875-3 wind (formulas)", Combinations: "Load factors (IS 456 Table 18)", Disp_Cases: "Nodal displacements per load case", Disp_Combos: "Nodal displacements per combination",
     Forces_Cases: "Member end forces per load case", Forces_Combos: "Member end forces per combination", Reactions: "Support reactions with equilibrium check", Drift: "Storey drift check (formulas)", Pushover: "Capacity curve (chart), hinge sequence, ductility", "Design Basis": "Equations and IS code limits used, with clause numbers", "Worked Calcs": "Step-by-step calculation of every member: equation, substituted values, limit, clause, status", "Method & Formulas": "Element formulations, solver, design equations and clauses" };
   var METHOD = [

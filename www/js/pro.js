@@ -23,7 +23,7 @@ var PRO = (function () {
       '<label class="fld"><span>Status</span><select data-pk="status">' + STATUS.map(function (s) { return '<option' + (s === cur.status ? " selected" : "") + '>' + s + '</option>'; }).join("") + '</select></label>' +
       '<label class="fld full"><span>Notes</span><textarea data-pk="notes" rows="2">' + esc(cur.notes) + '</textarea></label>' +
       '<div class="btns full"><button class="pri" id="pSave" type="button">Save details</button><a class="btnl" href="#model">Open model ›</a></div></div>';
-    if (cur.summary) { var s = cur.summary; h += '<div class="sum"><div><span>Last analysis</span><b>' + dstr(s.date) + '</b></div><div><span>Members / failing</span><b>' + s.members + ' / ' + s.memberFails + (s.detailFails !== null ? ' · detailing ' + s.detailFails : '') + '</b></div><div><span>Concrete · steel</span><b>' + f(s.concrete_m3, 1) + ' m³ · ' + f(s.steel_t, 2) + ' t</b></div>' + (s.cost ? '<div><span>Cost from your rates</span><b>₹ ' + s.cost.toLocaleString("en-IN") + '</b></div>' : '') + '</div>'; }
+    if (cur.summary) { var s = cur.summary; h += '<div class="sum"><div><span>Last analysis</span><b>' + dstr(s.date) + '</b></div><div><span>Members / failing</span><b>' + s.members + ' / ' + s.memberFails + (s.detailFails !== null ? ' · detailing ' + s.detailFails : '') + '</b></div><div><span>Concrete · steel</span><b>' + f(s.concrete_m3, 1) + ' m³ · ' + f(s.steel_t, 2) + ' t</b></div>' + (s.cost ? '<div><span>Estimated cost (incl. GST)</span><b>₹ ' + s.cost.toLocaleString("en-IN") + '</b></div>' : '') + '</div>'; }
     h += '<h4>Revisions</h4>' + ((cur.revs || []).length ? tbl(["Rev", "Date", "By", "Note", "Engine", "Result"], cur.revs.slice().reverse().map(function (r) { return ["<b>" + esc(r.rev) + "</b>", day(r.date), esc(r.by), esc(r.note), esc(r.engine), r.summary ? (r.summary.memberFails + (r.summary.detailFails || 0) ? '<span class="not">' + (r.summary.memberFails + (r.summary.detailFails || 0)) + ' fail</span>' : '<span class="okt">all OK</span>') + ' · ' + f(r.summary.steel_t, 2) + ' t' : "not run"]; })) : '<div class="note">No revision issued yet. Issuing a revision freezes the inputs, the result summary, the engine and the code editions.</div>');
     h += '<div class="btns"><input id="revNote" placeholder="Revision note (e.g. issued for checking)" style="flex:2"><button id="pIssue" type="button">Issue revision</button></div>';
     h += '<details><summary>Activity log (' + (cur.log || []).length + ')</summary>' + tbl(["When", "What"], (cur.log || []).slice(-30).reverse().map(function (l) { return [dstr(l.t), esc(l.a)]; })) + '</details></div>';
@@ -159,15 +159,19 @@ var PRO = (function () {
   }
 
   /* ================================================================ BOQ & SCHEDULES */
+  var estView = null;
   function boqBlock(S) {
     var b = S.boq; if (!b) return "";
     var p = proj(), rates = (p && p.rates) || {}; BOQ.price(b, rates);
     var A = b.abs, I = b.inp, inr = function (v) { return Math.round(v).toLocaleString("en-IN"); };
     var h = '<div class="sum"><div><span>Concrete</span><b>' + f(b.conc, 2) + ' m³</b></div><div><span>Reinforcement</span><b>' + f(b.steelKg / 1000, 3) + ' t · ' + f(b.ratio, 0) + ' kg/m³</b></div>' +
       (A.total ? '<div><span>Estimated cost incl. GST</span><b>₹ ' + inr(A.total) + '</b></div><div><span>Per m² of floor (plinth area ' + f(b.footprint, 1) + ' m²)</span><b>₹ ' + inr(A.total / Math.max(b.footprint * (MD.floorLevels(S.m).length - 1), 1)) + '</b></div>' : '') + '</div>';
-    h += '<div class="btns noprint"><button type="button" id="bBoq">Recalculate BOQ with the current estimate inputs</button></div>';
+    var view = estView || (S.p && S.p.estFmt === "detailed" ? "detailed" : "boq");
+    h += '<div class="seg noprint" role="tablist"><button type="button" data-est="boq" class="' + (view === "boq" ? "on" : "") + '">Bill of quantities</button><button type="button" data-est="detailed" class="' + (view === "detailed" ? "on" : "") + '">Detailed estimate</button></div>';
+    h += '<div class="btns noprint"><button type="button" id="bBoq">Recalculate with the current estimate inputs</button></div>';
+    if (view === "detailed") h += BOQ.detailedHtml(b, esc) + '<h4>Abstract of cost</h4>';
     h += tblL(["No.", "Description", "Unit", "Quantity", "Rate (₹)", "Source", "Amount (₹)"], b.items.map(function (it, i) {
-      var how = it.br && it.br.length ? '<div class="mbr">' + it.br.map(function (x) { return esc(x[0]) + " = " + f(x[1], it.unit === "kg" ? 0 : 2); }).join("<br>") + '</div>' : "";
+      var how = view === "boq" && it.br && it.br.length ? '<div class="mbr">' + it.br.map(function (x) { return esc(x[0]) + " = " + f(x[1], it.unit === "kg" ? 0 : 2); }).join("<br>") + '</div>' : "";
       return [i + 1, esc(it.desc) + how, it.unit, f(it.qty, it.unit === "kg" ? 0 : 2), '<input class="rate" data-ri="' + it.id + '" type="number" step="any" inputmode="decimal" value="' + (rates[it.id] || "") + '" placeholder="' + (I.sorOn && it.sor ? it.sor[1] : "rate") + '">', esc(it.src || "—"), it.amt ? inr(it.amt) : ""];
     }));
     h += tblL(["Abstract", "₹"], [["Sub-total of priced items", inr(A.sub)], ["Contingencies " + I.cont + " %", inr(A.cont)], ["Labour welfare cess " + I.cess + " %", inr(A.cess)], ["GST " + I.gst + " % (works contract)", inr(A.gst)], ["<b>Total</b>", "<b>" + inr(A.total) + "</b>"]]);
@@ -326,6 +330,7 @@ var PRO = (function () {
       if (st && !by) { ctx.toast("Enter the reviewer's name first"); if ($("vBy")) $("vBy").focus(); return; }
       var note = st === "query" || st === "na" ? (window.prompt ? window.prompt(st === "query" ? "Query (what needs answering?)" : "Why is it not applicable?", "") || "" : "") : "";
       PDB.setReview(k, st ? { state: st, by: by, date: new Date().toISOString(), note: note } : null); ctx.rerender(); }; });
+    document.querySelectorAll("[data-est]").forEach(function (bt) { bt.onclick = function () { estView = this.getAttribute("data-est"); setTimeout(ctx.rerender, 0); }; });
     if ($("bBoq")) $("bBoq").onclick = function () { var S = ctx.S(); try { S.boq = BOQ.run(S.m, S, Object.assign({}, S.p, ctx.params ? ctx.params() : {}, { fck: S.p.fck, fy: S.p.fy, tSlab: S.p.tSlab, Df: S.p.Df })); ctx.toast("BOQ recalculated"); } catch (e) { ctx.toast(e.message); } setTimeout(ctx.rerender, 0); };
     document.querySelectorAll("input.rate").forEach(function (inp) { inp.onchange = function () { var p = proj(), r = Object.assign({}, p.rates || {}); var v = parseFloat(this.value); if (v > 0) r[this.getAttribute("data-ri")] = v; else delete r[this.getAttribute("data-ri")]; PDB.setRates(r); setTimeout(ctx.rerender, 0); }; });
     if ($("aGo")) { var go = function () { var q = $("aQ").value.trim(); if (q) ask(S, q, $("aOut")); }; $("aGo").onclick = go; $("aQ").onkeydown = function (e) { if (e.key === "Enter") go(); }; }

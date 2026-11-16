@@ -2,7 +2,7 @@
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "3.2";
+REG.ENGINE = "3.3";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],

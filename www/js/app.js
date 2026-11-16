@@ -87,37 +87,57 @@
   function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem("isd_" + k) || "null"); localStorage.setItem("isd_" + k, JSON.stringify(v)); } catch (e) { return null; } }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
+  var GRP = { RCC: ["RCC design", "IS 456:2000 · IS 13920:2016"], Steel: ["Steel design", "IS 800:2007"], Loads: ["Loads", "IS 875 · IS 1893"] }, homeFilter = "all";
   function home() {
     title.textContent = "IS StructDesign"; back.hidden = true;
-    var h = '<p class="intro">Structural design to Indian Standards — RCC (IS 456), steel (IS 800), loads (IS 875, IS 1893). Works offline.</p>';
-    if (window.PDB) { var pr = PDB.current(), sm = pr.summary;
-      h += '<a class="card wide proj" href="#projects"><span class="ic">▤</span><b>' + esc(pr.name) + ' <small class="stchip">' + esc(pr.status) + '</small></b><small>Current project · ' + PDB.list().length + ' project(s) on this device' + (sm ? ' · last run ' + new Date(sm.date).toLocaleDateString() + ' · ' + (sm.memberFails + (sm.detailFails || 0) ? (sm.memberFails + (sm.detailFails || 0)) + ' failing checks' : 'all checks OK') + ' · ' + (sm.steel_t || 0).toFixed(2) + ' t steel' : ' · not analysed yet') + '</small><em>Projects · revisions · verification · report</em></a>'; }
+    var h = '<section class="hero"><div class="hero-t"><span class="eyebrow">IS 456 · IS 800 · IS 875 · IS 1893 · IS 13920</span><h2>Analyse, design and detail buildings to Indian Standards</h2>' +
+      '<p>Frame & shell FEA, seismic, mat foundations, bar bending schedules, drawings and estimates — all offline.</p><div class="hero-b"><a class="hbtn pri" href="#model">' + IC.svg("frame") + ' Frame & FE analysis</a><a class="hbtn" href="#projects">' + IC.svg("projects") + ' Projects</a></div></div>' +
+      '<div class="hero-a">' + IC.hero() + '</div></section>';
+    if (window.PDB) { var pr = PDB.current(), sm = pr.summary, nf = sm ? sm.memberFails + (sm.detailFails || 0) : 0;
+      h += '<a class="card wide proj" href="#projects"><span class="ic">' + IC.svg("projects") + '</span><div class="pc"><b>' + esc(pr.name) + ' <small class="stchip">' + esc(pr.status) + '</small></b><small>Current project · ' + PDB.list().length + ' project(s) on this device' + (sm ? ' · last run ' + new Date(sm.date).toLocaleDateString() : ' · not analysed yet') + '</small>' +
+        (sm ? '<div class="kpis"><span class="' + (nf ? "bad" : "good") + '">' + (nf ? nf + " checks fail" : "All checks pass") + '</span>' + (sm.cost ? '<span>₹ ' + Math.round(sm.cost).toLocaleString("en-IN") + '</span>' : '') + (sm.steel_t ? '<span>' + sm.steel_t.toFixed(1) + ' t steel</span>' : '') + '</div>' : '') + '</div>' + IC.svg("chev", "go") + '</a>'; }
+    h += '<label class="search">' + IC.svg("search") + '<input id="q" type="search" placeholder="Search — beam, footing, truss, seismic…" autocomplete="off"></label>';
+    h += '<div class="chips" id="fchips">' + [["all", "All"], ["RCC", "RCC"], ["Steel", "Steel"], ["Loads", "Loads"], ["Ref", "Reference"]].map(function (c) { return '<button type="button" data-g="' + c[0] + '"' + (homeFilter === c[0] ? ' class="on"' : '') + '>' + c[1] + '</button>'; }).join("") + '</div>';
     ["RCC", "Steel", "Loads"].forEach(function (g) {
-      h += '<h2 class="grp">' + { RCC: "RCC design — IS 456:2000", Steel: "Steel design — IS 800:2007", Loads: "Loads — IS 875 & IS 1893" }[g] + '</h2><div class="grid">';
+      h += '<div class="gsec" data-g="' + g + '"><h2 class="grp"><span>' + GRP[g][0] + '</span><em>' + GRP[g][1] + '</em></h2><div class="grid">';
       M.filter(function (m) { return m.grp === g; }).forEach(function (m) {
-        h += '<a class="card" href="#' + m.id + '"><span class="ic">' + m.icon + '</span><b>' + m.t + '</b><small>' + m.d + '</small><em>' + m.code + '</em></a>';
+        h += '<a class="card mod g-' + g.toLowerCase() + '" href="#' + m.id + '" data-s="' + esc((m.t + " " + m.d + " " + m.code).toLowerCase()) + '"><span class="ic">' + IC.svg(m.id) + '</span><b>' + m.t + '</b><small>' + m.d + '</small><em>' + m.code + '</em></a>';
       });
-      h += '</div>';
+      h += '</div></div>';
     });
-    h += '<h2 class="grp">Analysis — stiffness matrix & FEA</h2><div class="grid"><a class="card wide" href="#model"><span class="ic">⌗</span><b>Frame & FE analysis</b><small>3D/2D frames by the direct stiffness method, slabs & walls by shell FEA. Linear static, P-Delta, response spectrum, pushover. Automatic design, IS 13920 detailing, isolated or mat foundations, BOQ, drawings and calculation report.</small><em>IS 456 · IS 800 · IS 875 · IS 1893</em></a></div>';
-    h += '<h2 class="grp">Reference</h2><div class="grid"><a class="card" href="#tables"><span class="ic">☰</span><b>Section tables</b><small>ISA, ISMB, ISMC properties</small><em>SP 6(1)</em></a>' +
-      '<a class="card" href="#about"><span class="ic">i</span><b>About & scope</b><small>Codes, assumptions, limits</small><em>engine ' + (window.REG ? REG.ENGINE : "") + '</em></a></div>';
+    h += '<div class="gsec" data-g="Ref"><h2 class="grp"><span>Reference</span><em>SP 6(1) · IS 456 tables</em></h2><div class="grid"><a class="card mod g-ref" href="#tables" data-s="section tables isa ismb ismc tau"><span class="ic">' + IC.svg("tables") + '</span><b>Section tables</b><small>ISA, ISMB, ISMC properties, τc</small><em>SP 6(1)</em></a>' +
+      '<a class="card mod g-ref" href="#about" data-s="about scope codes register"><span class="ic">' + IC.svg("about") + '</span><b>About & scope</b><small>Codes, assumptions, limits</small><em>engine ' + (window.REG ? REG.ENGINE : "") + '</em></a></div></div>';
+    h += '<p class="empty" id="nores" hidden>No module matches your search.</p>';
     app.innerHTML = h;
+    var q = document.getElementById("q");
+    function filt() {
+      var t = q.value.trim().toLowerCase(), any = false;
+      document.querySelectorAll(".gsec").forEach(function (sec) {
+        var g = sec.getAttribute("data-g"), show = homeFilter === "all" || homeFilter === g, n = 0;
+        sec.querySelectorAll(".card").forEach(function (c) { var ok = show && (!t || c.getAttribute("data-s").indexOf(t) >= 0); c.hidden = !ok; if (ok) n++; });
+        sec.hidden = !n; if (n) any = true;
+      });
+      document.getElementById("nores").hidden = any;
+    }
+    q.oninput = filt;
+    document.querySelectorAll("#fchips button").forEach(function (b) { b.onclick = function () { homeFilter = this.getAttribute("data-g"); document.querySelectorAll("#fchips button").forEach(function (x) { x.classList.toggle("on", x === b); }); filt(); }; });
+    filt();
   }
 
   function moduleView(m) {
     title.textContent = m.t; back.hidden = false;
-    var saved = store(m.id) || {}, h = '<form id="f" class="form" autocomplete="off"><div class="code">' + m.code + '</div>';
+    var saved = store(m.id) || {}, h = '<div class="mhead g-' + m.grp.toLowerCase() + '"><span class="mic">' + IC.svg(m.id) + '</span><div><b>' + esc(m.t) + '</b><small>' + esc(m.d) + '</small></div><em class="cchip">' + m.code + '</em></div>' +
+      '<form id="f" class="form" autocomplete="off"><div class="code">Inputs — leave a field blank to use the value shown in it</div>';
     Object.keys(m.f).forEach(function (k) {
       var f = m.f[k], v = saved[k] !== undefined && saved[k] !== "" ? saved[k] : (f.type === "select" ? f.def : "");
-      h += '<label class="fld"><span>' + f.label + (f.unit ? ' <i>(' + f.unit + ')</i>' : '') + '</span>';
+      h += '<label class="fld"><span>' + f.label + '</span>';
       if (f.type === "select") h += '<select name="' + k + '">' + f.opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(v) === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '</select>';
       else if (f.type === "text") h += '<textarea name="' + k + '" rows="4" placeholder="' + esc(f.def) + '">' + esc(v) + '</textarea>';
-      else h += '<input name="' + k + '" type="number" step="any" inputmode="decimal" placeholder="' + esc(f.def) + '" value="' + esc(v) + '">';
-      if (f.help || f.type !== "select") h += '<small>' + (f.help ? f.help + (f.type !== "select" ? ' · ' : '') : '') + (f.type !== "select" ? 'blank = default ' + esc(f.type === "text" ? "shown" : f.def) : '') + '</small>';
+      else h += '<span class="inw"><input name="' + k + '" type="number" step="any" inputmode="decimal" placeholder="' + esc(f.def) + '" value="' + esc(v) + '">' + (f.unit ? '<em class="u">' + f.unit + '</em>' : '') + '</span>';
+      if (f.help) h += '<small>' + f.help + '</small>';
       h += '</label>';
     });
-    h += '<div class="btns"><button type="submit" class="pri">Calculate</button><button type="button" id="rst">Reset</button></div></form><div id="out"></div>';
+    h += '<div class="btns sticky"><button type="submit" class="pri">' + IC.svg("play") + ' Calculate</button><button type="button" id="rst">Reset</button></div></form><div id="out"></div>';
     app.innerHTML = h;
     var form = document.getElementById("f");
     form.onsubmit = function (e) { e.preventDefault(); run(m, form); };
@@ -210,7 +230,7 @@
       '<li>Detailing: IS 13920 beams, columns, joints, strong column–weak beam, shear walls, slabs, isolated footings; bar bending schedule (IS 2502)</li><li>Mat (raft) foundations: plate on compression-only soil springs, punching, one-way shear, flexure, settlement (IS 2950, IS 456, IS 1904)</li>' +
       '<li>Outputs: Excel with live formulas, calculation report (print/PDF), drawing set DXF, STAAD.Pro input, BOQ of the whole building priced with JKSOR 2022 (with contingencies, cess and GST) and reinforcement schedules</li>' +
       '<li>Projects: offline database with revisions, backups and an engineering verification mode with reviewer sign-off; engineering assistant</li><li>Standalone modules for beams, slabs, columns, footings, stairs, steel members, connections, trusses and loads</li></ul>' +
-      '<h4>Not covered</h4><ul><li>Time-history analysis, combined / raft / pile foundations, settlement, soil–structure interaction</li><li>Deflection and crack width in the frame design (use the beam and slab modules)</li><li>Full building wind pressure-coefficient workflow</li></ul>' +
+      '<h4>Not covered</h4><ul><li>Time-history analysis, combined and pile foundations, consolidation settlement, full soil–structure interaction</li><li>Deflection and crack width in the frame design (use the beam and slab modules)</li><li>Full building wind pressure-coefficient workflow</li></ul>' +
       (window.REG ? REG.html(esc) : '') +
       '<h4>Important</h4><p>Results are for design assistance. Every design must be checked, and drawings signed, by a qualified structural engineer.</p></div>';
   }
@@ -221,9 +241,19 @@
     var ctx = window.SU ? SU.ctx() : null;
     if (m) moduleView(m); else if (id === "model" && window.SU) SU.view(app, title, back); else if (id === "projects" && window.PRO) PRO.projectsView(app, title, back, ctx); else if (id === "report" && window.RPT) RPT.view(app, title, back, ctx);
     else if (id === "tables") tables(); else if (id === "about") about(); else home();
+    var tab = m ? "" : id === "model" ? "model" : id === "projects" ? "projects" : id === "report" ? "report" : id === "about" || id === "tables" ? "about" : id ? "" : "home";
+    document.querySelectorAll(".tabbar a").forEach(function (a) { a.classList.toggle("on", a.getAttribute("data-t") === tab); });
     window.scrollTo(0, 0);
   }
   back.onclick = function () { if (location.hash) location.hash = ""; };
+  /* app chrome: logo, bottom tab bar, light / dark theme */
+  var lg = document.getElementById("logo"); if (lg) lg.innerHTML = IC.logo(30);
+  var tb = document.createElement("nav"); tb.className = "tabbar noprint";
+  tb.innerHTML = [["home", "#", "home", "Home"], ["model", "#model", "frame", "Analysis"], ["projects", "#projects", "projects", "Projects"], ["report", "#report", "report", "Report"], ["about", "#about", "about", "About"]].map(function (t) { return '<a href="' + t[1] + '" data-t="' + t[0] + '">' + IC.svg(t[2]) + '<span>' + t[3] + '</span></a>'; }).join("");
+  document.body.appendChild(tb);
+  function theme(t) { try { if (t) localStorage.setItem("isd_theme", t); t = localStorage.getItem("isd_theme") || "auto"; } catch (e) { t = t || "auto"; } document.documentElement.setAttribute("data-theme", t); var b = document.getElementById("themeBtn"); if (b) b.innerHTML = IC.svg(t === "dark" ? "sun" : "moon"); }
+  var thb = document.getElementById("themeBtn"); if (thb) thb.onclick = function () { var cur = document.documentElement.getAttribute("data-theme"), dark = cur === "dark" || (cur === "auto" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches); theme(dark ? "light" : "dark"); };
+  theme();
   window.addEventListener("hashchange", route);
   window.ISD = { modules: M, route: route };
   if (window.PDB) PDB.init().then(route, route); else route();

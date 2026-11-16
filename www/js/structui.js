@@ -13,7 +13,7 @@ var SU = (function () {
     accTor: true, rsa: true, nModes: 12, rsComb: "cqc", ortho: false, rsScaleDisp: false, sbc: 200, Df: 1.5,
     snow: false, s0: 1.5, mu: 0.8, snowW: 0, pattern: "auto", llRed: false, exposure: "moderate", fire: "1",
     found: "isolated", matT: 0, matOff: 0.5, ks: 0, gs: 18, setLim: 75, angLim: 500, matMesh: 0.5,
-    mT: 230, mOpen: 15, plinthH: 0.45, parH: 1.0, wastage: 3, cont: 3, cess: 1, gst: 18, sorOn: true
+    estFmt: "boq", mT: 230, mOpen: 15, plinthH: 0.45, parH: 1.0, wastage: 3, cont: 3, cess: 1, gst: 18, sorOn: true
   };
   /* defaults that depend on the frame material */
   var MATDEF = { rcc: { colSec: "400x400", beamSec: "300x450", sys: "rc" }, steel: { colSec: "ISMB 300", beamSec: "ISMB 250", sys: "steel" } };
@@ -42,8 +42,8 @@ var SU = (function () {
 
   /* ---------- form helpers ---------- */
   /* blank input = default (shown as greyed placeholder) */
-  function num(k, label, unit, help) { return '<label class="fld"><span>' + label + (unit ? ' <i>(' + unit + ')</i>' : '') + '</span><input data-k="' + k + '" type="number" step="any" inputmode="decimal" placeholder="' + esc(dflt(k)) + '" value="' + (given(k) ? esc(UV[k]) : "") + '"><small>' + (help ? help + ' · ' : '') + 'blank = default ' + esc(dtxt(k)) + '</small></label>'; }
-  function txt(k, label, help) { return '<label class="fld"><span>' + label + '</span><input data-k="' + k + '" placeholder="' + esc(dflt(k)) + '" value="' + (given(k) ? esc(UV[k]) : "") + '"><small>' + (help ? help + ' · ' : '') + 'blank = default ' + esc(dtxt(k)) + '</small></label>'; }
+  function num(k, label, unit, help) { return '<label class="fld"><span>' + label + '</span><span class="inw"><input data-k="' + k + '" type="number" step="any" inputmode="decimal" placeholder="' + esc(dflt(k)) + '" value="' + (given(k) ? esc(UV[k]) : "") + '">' + (unit ? '<em class="u">' + unit + '</em>' : '') + '</span>' + (help ? '<small>' + help + '</small>' : '') + '</label>'; }
+  function txt(k, label, help) { return '<label class="fld"><span>' + label + '</span><input data-k="' + k + '" placeholder="' + esc(dflt(k)) + '" value="' + (given(k) ? esc(UV[k]) : "") + '"><small>' + (help ? help + ' · ' : '') + 'default ' + esc(dtxt(k)) + '</small></label>'; }
   function area(k, label, help, ph) { return '<label class="fld full"><span>' + label + '</span><textarea data-k="' + k + '" rows="3" placeholder="' + esc(ph) + '">' + (given(k) ? esc(UV[k]) : "") + '</textarea><small>' + help + '</small></label>'; }
   function sel(k, label, opts) { return '<label class="fld"><span>' + label + '</span><select data-k="' + k + '">' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(P[k]) === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + (String(dflt(k)) === String(o[0]) ? " (default)" : "") + '</option>'; }).join("") + '</select></label>'; }
   function chk(k, label) { return '<label class="fld ck"><span><input data-k="' + k + '" type="checkbox"' + (P[k] ? " checked" : "") + '> ' + label + '</span></label>'; }
@@ -104,7 +104,11 @@ var SU = (function () {
     if (S.m) { status(); drawViewer(); if (S.res || S.po) renderResults(); }
     else { try { if (P.src === "dxf" && S.dx) buildDxf(); else if (P.src !== "dxf") buildGen(true); } catch (e) {} }
   }
-  function panel(id, t, body, open) { return '<section class="pnl' + (open ? " open" : "") + '" id="' + id + '"><h3>' + t + '</h3><div class="pb">' + body + '</div></section>'; }
+  var PIC = { p1: "geometry", p2: "material", p3: "loads", p4: "analyse", p5: "estimate" };
+  function panel(id, t, body, open) {
+    var m0 = /^(\d+)\s*·\s*(.*)$/.exec(t), num0 = m0 ? m0[1] : "", tt = m0 ? m0[2] : t;
+    return '<section class="pnl' + (open ? " open" : "") + '" id="' + id + '"><h3><span class="pnum">' + (typeof IC !== "undefined" ? IC.svg(PIC[id] || "frame") : num0) + '</span><span class="pt">' + (num0 ? '<small>Step ' + num0 + '</small>' : '') + tt + '</span></h3><div class="pb">' + body + '</div></section>';
+  }
   function srcForm() { return '<div class="form">' + sel("src", "Model source", [["gen", "Parametric frame generator"], ["dxf", "Import DXF drawing"]]) + '<div id="srcbox" class="full">' + srcInner() + '</div></div>'; }
   function srcInner() {
     if (P.src === "gen") return '<div class="form inner">' + txt("bx", "Bay widths along X (m)", "comma separated") + txt("by", "Bay widths along Y (m)", "leave blank for a 2D plane frame") +
@@ -185,7 +189,7 @@ var SU = (function () {
       '<div class="btns full"><button type="button" class="rstd" data-p="p3">Clear my entries (use defaults)</button></div><div class="note full">Combinations (IS 456 Table 18 / IS 875 Pt 5): 1.5(DL+LL), 1.2(DL+LL±EL), 1.5(DL±EL), 0.9DL±1.5EL. Seismic weight = DL + 25% LL (50% if LL>3 kN/m²), roof LL excluded. Lateral loads to nodes ∝ W·h² (cl 7.6.3).</div></div>';
   }
   function boqForm() {
-    return '<div class="form">' + chk("sorOn", "Use JKSOR 2022 rates (Jammu & Kashmir Schedule of Rates) — your own rates in the BOQ override them") +
+    return '<div class="form">' + sel("estFmt", "Estimate format", [["boq", "Bill of quantities (items with measurement notes)"], ["detailed", "Detailed estimate (measurement sheet + abstract of cost)"]]) + chk("sorOn", "Use JKSOR 2022 rates (Jammu & Kashmir Schedule of Rates) — your own rates in the BOQ override them") +
       num("mT", "Masonry wall thickness", "mm", "230 = one brick") + num("mOpen", "Openings in masonry walls", "%", "doors & windows deducted from masonry and plaster") +
       num("plinthH", "Plinth height above ground", "m", "earth filling and plinth masonry") + num("parH", "Parapet height", "m") +
       num("wastage", "Reinforcement wastage / rolling margin", "%") + num("cont", "Contingencies", "%") + num("cess", "Labour welfare cess", "%") + num("gst", "GST on works contract", "%", "JKSOR rates are exclusive of GST; 18 % since Sep 2025 — confirm for your contract") +
@@ -566,6 +570,7 @@ var SU = (function () {
     }
     if (S.po) h += poReport() + (S.res ? '' : '<div class="btns noprint"><button type="button" class="pri bXls">Excel: pushover & model</button></div>');
     $("results").innerHTML = h;
+    jumpBar($("results"));
     document.querySelectorAll(".bXls").forEach(function (b) { b.onclick = exportXlsx; });
     if ($("bPrint")) { if (!window.AndroidBridge && window.self !== window.top) $("bPrint").hidden = true; $("bPrint").onclick = function () { document.querySelectorAll("details").forEach(function (x) { x.open = true; }); if (window.AndroidBridge && AndroidBridge.print) AndroidBridge.print("Frame analysis"); else window.print(); }; }
     if ($("bCSV")) $("bCSV").onclick = csv;
@@ -573,6 +578,18 @@ var SU = (function () {
     if (typeof PRO !== "undefined") PRO.bind(S, ctx());
     if ($("bAllCalc")) $("bAllCalc").onclick = function () { this.disabled = true; this.textContent = "Preparing…"; var b = this; setTimeout(function () { allCalcs(); b.textContent = "All member calculations shown below"; }, 20); };
     document.querySelectorAll("[data-fk]").forEach(function (td) { td.onclick = function () { S.sel = { t: td.getAttribute("data-t"), k: +td.getAttribute("data-fk") }; render(); showSel(); $("viewer").scrollIntoView({ behavior: "smooth" }); }; });
+  }
+  /* sticky chips that jump to the main parts of a long result */
+  function jumpBar(box) {
+    var L = [["Analysis", /^(Linear static|P-Delta|Pushover)/], ["Seismic", /^Modal analysis/], ["Drift", /^Storey drift/], ["Design", /^(RCC beams|RCC columns|Steel members)/], ["Detailing", /^Reinforcement detailing/], ["Outputs", /^Professional outputs/], ["Estimate", /^Bill of quantities/], ["Assistant", /^Engineering assistant/], ["Calculations", /^Worked calculations/], ["Codes", /^Standards register/]], used = {}, chips = [];
+    box.querySelectorAll("h3, h4, summary").forEach(function (el, i) {
+      var t = el.textContent.trim(); L.forEach(function (q) { if (!used[q[0]] && q[1].test(t)) { used[q[0]] = 1; el.id = el.id || "j" + i; chips.push([q[0], el.id]); } });
+    });
+    if (chips.length < 3) return;
+    var nav = document.createElement("nav"); nav.className = "jump noprint";
+    nav.innerHTML = chips.map(function (c) { return '<a href="javascript:void 0" data-j="' + c[1] + '">' + c[0] + '</a>'; }).join("");
+    box.insertBefore(nav, box.firstChild);
+    nav.querySelectorAll("a").forEach(function (a) { a.onclick = function () { var el = document.getElementById(a.getAttribute("data-j")); if (!el) return; var d = el.closest("details"); if (d) d.open = true; var y = el.getBoundingClientRect().top + window.scrollY - 120; window.scrollTo({ top: y, behavior: "smooth" }); }; });
   }
   function tbl(head, rows) { return '<div class="tw"><table><tr>' + head.map(function (x) { return '<th>' + x + '</th>'; }).join("") + '</tr>' + rows.map(function (r) { return '<tr>' + r.map(function (x) { return '<td>' + x + '</td>'; }).join("") + '</tr>'; }).join("") + '</table></div>'; }
   function lk(t, k, label) { return '<a class="lk" data-t="' + t + '" data-fk="' + k + '">' + label + '</a>'; }

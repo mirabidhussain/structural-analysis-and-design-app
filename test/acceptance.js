@@ -491,5 +491,25 @@ console.log('\n== J. Mat (raft) foundation');
   ok('Mat J15: a 2D frame keeps isolated footings (a mat needs a plan)', !S2.det.mat && S2.det.foot.length > 0);
 })();
 
+console.log('\n== K. Detailed estimate (measurement sheet)');
+(function () {
+  const { PIPE, BOQ, RX } = c;
+  const base = { fck: 25, fy: 500, fys: 250, crack: true, pcCol: 2, pcBeam: 1, colSec: '400x400', beamSec: '300x450', braceSec: 'ISA 75x75x6', tSlab: 150, tWall: 200, ff: 1.5, ffRoof: 2.5, ll: 3, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0, eq: false, zone: 'V', I: 1.2, R: 5, soil: 'II', sys: 'rc', wind: false, vb: 39, terrain: 2, cf: 1.3, trib: 4, kcol: 1.2, method: 'lsm', sbc: 200, Df: 1.5, secOver: '', entered: [], estFmt: 'detailed' };
+  const S = PIPE.run(MD.generate({ bx: '4,4,4', by: '5,5', hs: '3.5,3.2,3.2', slabs: true, mesh: 1 }), base), b = S.boq;
+  ok('Estimate: every item total = Σ of its measurement lines', b.items.every(it => Math.abs(it.rows.reduce((a, r) => a + r.q, 0) - it.qty) < 1e-9 * Math.max(1, it.qty)));
+  ok('Estimate: each line = No. × L × B × D/H of the dimensions given', b.items.every(it => it.rows.every(r => r.n === undefined || r.pct !== undefined || Math.abs(r.q - r.n * (r.L === undefined ? 1 : r.L) * (r.B === undefined ? 1 : r.B) * (r.H === undefined ? 1 : r.H)) < 1e-12)));
+  const ms = b.items.find(i => i.id === 'mss'), dd = ms.rows.find(r => r.pct !== undefined), above = ms.rows.slice(0, ms.rows.indexOf(dd)).reduce((a, r) => a + r.q, 0);
+  ok('Estimate: openings deducted as −15 % of the wall lines above, parapet after the deduction', dd.pct === -15 && Math.abs(dd.q + 0.15 * above) < 1e-9 && /Parapet/.test(ms.rows[ms.rows.length - 1].d));
+  const bf = b.items.find(i => i.id === 'bfl');
+  ok('Estimate: backfill = excavated volume less footings, PCC and necks (negative lines)', bf.rows.filter(r => r.q < 0).length === bf.rows.filter(r => /^Deduct/.test(r.d)).length && bf.rows.some(r => r.q < 0));
+  const st = b.items.find(i => i.id === 'stl');
+  ok('Estimate: steel lines per bar diameter from the BBS + wastage line', st.rows.filter(r => r.src === 'BBS').length === Object.keys(b.byDia).length && /Wastage/.test(st.rows[st.rows.length - 1].d));
+  ok('Estimate: column lines grouped by size and storey (3 storeys → 3 lines, 12 each)', b.items.find(i => i.id === 'rcc').rows.length === 3 && b.items.find(i => i.id === 'rcc').rows.every(r => r.n === 12));
+  const wb = RX.build(S), de = wb.sheets.find(x => x.name === 'Detailed Estimate');
+  ok('Estimate: Excel "Detailed Estimate" sheet before the BOQ (quantities linked)', !!de && wb.sheets.indexOf(de) < wb.sheets.findIndex(x => x.name === 'BOQ'));
+  const h = BOQ.detailedHtml(BOQ.price(b, {}), x => String(x));
+  ok('Estimate: in-app / report measurement sheet with item headers, JKSOR codes and totals', (h.match(/class="ih"/g) || []).length === b.items.length && /JKSOR 5\.34\.2/.test(h) && (h.match(/class="it"/g) || []).length === b.items.length);
+})();
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;

@@ -12,6 +12,14 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   await pg.evaluate(() => localStorage.clear());
   const ids = await pg.evaluate(() => ISD.modules.map(m => m.id));
   ok('Home lists all design modules', ids.length >= 15, ids.length + ' modules');
+  await pg.fill('#q', 'footing'); const vis = await pg.evaluate(() => [...document.querySelectorAll('.card.mod')].filter(c => !c.hidden).map(c => c.getAttribute('href')));
+  ok('Home search filters the modules', vis.length === 2 && vis.indexOf('#footing') >= 0 && vis.indexOf('#strip') >= 0, vis.join(' '));
+  await pg.fill('#q', ''); await pg.evaluate(() => document.querySelector('#fchips [data-g=Steel]').click());
+  ok('Home category chips', await pg.evaluate(() => [...document.querySelectorAll('.card.mod')].filter(c => !c.hidden).length === 6));
+  await pg.evaluate(() => document.querySelector('#fchips [data-g=all]').click());
+  await pg.evaluate(() => document.getElementById('themeBtn').click()); const th = await pg.evaluate(() => document.documentElement.getAttribute('data-theme'));
+  await pg.evaluate(() => document.getElementById('themeBtn').click());
+  ok('Theme switch (light / dark) is remembered', th === 'dark' || th === 'light', th);
   for (const id of ids) {
     await pg.evaluate(i => { location.hash = '#' + i; }, id); await pg.waitForTimeout(120);
     await pg.click('button.pri'); await pg.waitForTimeout(200);
@@ -58,6 +66,11 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   await pg.evaluate(() => document.querySelector('#bBoq').click()); await pg.waitForTimeout(600); const v115 = await vol();
   ok('BOQ: "Recalculate BOQ" applies a new masonry thickness without re-analysis', v230 > 0 && Math.abs(v115 / v230 - 115 / 230) < 0.02, v230 + ' → ' + v115);
   await pg.evaluate(() => { const e = document.querySelector('[data-k=mT]'); e.value = ''; e.dispatchEvent(new Event('change', { bubbles: true })); });
+  await pg.evaluate(() => document.querySelector('[data-est=detailed]').click()); await pg.waitForTimeout(500);
+  const de = await pg.evaluate(() => ({ ih: document.querySelectorAll('#results table.est tr.ih').length, ab: /Abstract of cost/.test(document.querySelector('#results').textContent), rate: document.querySelectorAll('#results input.rate').length, on: document.querySelector('[data-est=detailed]').classList.contains('on') }));
+  ok('Detailed estimate: measurement sheet + abstract of cost, rates still editable', de.ih > 20 && de.ab && de.rate > 20 && de.on, JSON.stringify(de));
+  await pg.evaluate(() => document.querySelector('[data-est=boq]').click()); await pg.waitForTimeout(300);
+  ok('Results: jump chips to the main sections and the bottom tab bar', await pg.evaluate(() => document.querySelectorAll('#results .jump a').length >= 6 && document.querySelector('.tabbar a.on') && document.querySelector('.tabbar a.on').getAttribute('data-t') === 'model'));
   ok('Load inputs: snow, pattern load, imposed-load reduction, exposure and fire are on the form', await pg.evaluate(() => ['snow', 's0', 'mu', 'pattern', 'llRed', 'exposure', 'fire', 'gst', 'sorOn'].every(k => document.querySelector('[data-k=' + k + ']'))));
   /* mat foundation */
   const setK = (k, v) => pg.evaluate(([k, v]) => { const e = document.querySelector('[data-k=' + k + ']'); e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }, [k, v]);
