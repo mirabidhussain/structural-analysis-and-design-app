@@ -633,7 +633,7 @@ var RX = (function () {
     /* detailed estimate: measurement sheet, every quantity a formula of No. × L × B × D/H; the BOQ quantities link to its totals */
     var de = wb.sheet("Detailed Estimate", { cols: [6, 58, 7, 10, 10, 10, 13, 7], color: TAB.design }), tot = {};
     intro(de, "Detailed estimate — measurement sheet (IS 1200)", "Each line: quantity = No. × L × B × D/H of the dimensions given (blank = not used); deductions are negative; percentage lines (openings, wastage) act on the lines above them in the same item. Item totals feed the quantities of the BOQ / abstract of cost.", 8);
-    de.row(["Item", "Particulars", "No.", "L (m)", "B (m)", "D/H (m)", "Quantity", "Unit"], "h");
+    de.row(["Item", "Particulars", "No.", "L (m)", "B (m)", "D/H (m) · kg/m", "Quantity", "Unit"], "h");
     b.items.forEach(function (it, i) {
       de.row([i + 1, it.desc + (it.sor ? "  [JKSOR " + it.sor[0] + "]" : "")], "b");
       var first = de.next();
