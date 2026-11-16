@@ -13,7 +13,7 @@ var EST = (function () {
   function finish(m) {
     m.items.forEach(function (it) { it.qty = itemQty(it); it.amt = it.qty * (it.rate || 0); });
     m.sub = sum(m.items, function (it) { return it.amt; });
-    var a = m.abs || { cont: 3, cess: 1, gst: 18 }; m.abs = a;
+    var a = m.abs || { cont: 3, cess: 1, gst: 0 }; m.abs = a;
     m.cont = m.sub * a.cont / 100; m.cess = m.sub * a.cess / 100; m.gst = m.sub * a.gst / 100; m.total = m.sub + m.cont + m.cess + m.gst;
     return m;
   }
@@ -57,6 +57,7 @@ var EST = (function () {
     list.sort(function (a, b) { return (ORDER[a.cat] || 8) - (ORDER[b.cat] || 8); });
     var m = { title: title || "Detailed estimate", items: list }; carriage(m); return finish(m);
   };
+  function absLines(m) { var A = m.abs; return [["Total (JKSOR 2022 rates include GST)", m.sub, true], ["Contingencies " + A.cont + " %", m.cont], ["Labour welfare cess " + A.cess + " %", m.cess]].concat(A.gst > 0 ? [["GST " + A.gst + " % (own rates excluding GST)", m.gst]] : []).concat([["Grand total", m.total, true]]); }
   function fx(v, d) { return v === undefined || v === null || v === "" ? "" : (+v).toFixed(d); }
   function inr(v) { return Math.round(v).toLocaleString("en-IN"); }
   /* HTML: S.No | Particulars | No. | L | B | D/H | Qty | Unit | Quantity | Rate | Amount */
@@ -79,7 +80,7 @@ var EST = (function () {
       h += '<tr class="it"><td></td><td>Total<span class="dims">' + fx(it.qty, dq) + ' ' + esc(it.unit) + ' @ ₹ ' + fx(it.rate, 2) + '</span></td><td></td><td></td><td></td><td></td><td>' + fx(it.qty, dq) + '</td><td>' + esc(it.unit) + '</td><td><b>' + fx(it.qty, dq) + '</b></td><td>' + fx(it.rate, 2) + '</td><td><b>' + inr(it.amt) + '</b></td></tr>';
     });
     var A = m.abs;
-    [["Total", m.sub, true], ["Contingencies " + A.cont + " %", m.cont], ["Labour welfare cess " + A.cess + " %", m.cess], ["GST " + A.gst + " % (works contract)", m.gst], ["Grand total", m.total, true]].forEach(function (x) {
+    absLines(m).forEach(function (x) {
       h += '<tr class="gt' + (x[2] ? ' b' : '') + '"><td></td><td>' + x[0] + '<span class="dims">₹ ' + inr(x[1]) + '</span></td><td colspan="8"></td><td>' + (x[2] ? '<b>' + inr(x[1]) + '</b>' : inr(x[1])) + '</td></tr>';
     });
     return h + '</table></div>';
@@ -88,7 +89,7 @@ var EST = (function () {
     var h = '<div class="tw"><table class="est jk ab"><tr><th>S.No.</th><th>Particulars</th><th>Quantity</th><th>Unit</th><th>Rate (₹)</th><th>Amount (₹)</th></tr>';
     m.items.forEach(function (it, i) { var dq = it.unit === "kg" ? 1 : 2; h += '<tr><td>' + (i + 1) + '</td><td>' + esc(it.d) + (it.sor ? ' <span class="sorc">' + (/^[\d.]/.test(it.sor) ? 'JKSOR ' : '') + esc(it.sor) + '</span>' : '') + '<span class="dims">' + fx(it.qty, dq) + ' ' + esc(it.unit) + ' @ ₹ ' + fx(it.rate, 2) + '</span></td><td>' + fx(it.qty, dq) + '</td><td>' + esc(it.unit) + '</td><td>' + fx(it.rate, 2) + '</td><td>' + inr(it.amt) + '</td></tr>'; });
     var A = m.abs;
-    [["Total", m.sub, true], ["Contingencies " + A.cont + " %", m.cont], ["Labour welfare cess " + A.cess + " %", m.cess], ["GST " + A.gst + " % (works contract)", m.gst], ["Grand total", m.total, true]].forEach(function (x) { h += '<tr class="gt' + (x[2] ? ' b' : '') + '"><td></td><td>' + x[0] + '<span class="dims">₹ ' + inr(x[1]) + '</span></td><td></td><td></td><td></td><td>' + (x[2] ? '<b>' + inr(x[1]) + '</b>' : inr(x[1])) + '</td></tr>'; });
+    absLines(m).forEach(function (x) { h += '<tr class="gt' + (x[2] ? ' b' : '') + '"><td></td><td>' + x[0] + '<span class="dims">₹ ' + inr(x[1]) + '</span></td><td></td><td></td><td></td><td>' + (x[2] ? '<b>' + inr(x[1]) + '</b>' : inr(x[1])) + '</td></tr>'; });
     return h + '</table></div>';
   };
   /* Excel sheet in the reference layout: A S.No · B Particulars · C No. · D x · E L · F x · G B · H x · I D/H · J = · K qty · L unit · M Quantity · N unit · O Rate · P Amount */
@@ -120,7 +121,7 @@ var EST = (function () {
     var rs = sh.next(), A = m.abs;
     sh.row(["", "", "", "", "", "", "", "", "", "", "Total", "", "", "", "Rs.", { f: "=" + totRows.map(function (r) { return "P" + r; }).join("+"), v: m.sub, s: "f0" }], "b");
     var lines = [];
-    [["Contingencies", A.cont, m.cont], ["Labour welfare cess", A.cess, m.cess], ["GST on works contract", A.gst, m.gst]].forEach(function (x) { var r = sh.next(); lines.push(r); sh.row(["", "", "", "", "", "", "", "", "", "", x[0], "", "", "", { v: x[1], s: "in" }, { f: "=P" + rs + "*O" + r + "/100", v: x[2], s: "f0" }]); });
+    [["Contingencies", A.cont, m.cont], ["Labour welfare cess", A.cess, m.cess]].concat(A.gst > 0 ? [["GST on works contract (own rates excluding GST)", A.gst, m.gst]] : []).forEach(function (x) { var r = sh.next(); lines.push(r); sh.row(["", "", "", "", "", "", "", "", "", "", x[0], "", "", "", { v: x[1], s: "in" }, { f: "=P" + rs + "*O" + r + "/100", v: x[2], s: "f0" }]); });
     sh.row(["", "", "", "", "", "", "", "", "", "", "Grand total", "", "", "", "Rs.", { f: "=P" + rs + "+" + lines.map(function (r) { return "P" + r; }).join("+"), v: m.total, s: "f0" }], "b");
     if (note) { var rn2 = sh.row([note], "note"); sh.merge("A" + rn2 + ":P" + rn2); }
     return { sh: sh, tot: tot, sub: rs };

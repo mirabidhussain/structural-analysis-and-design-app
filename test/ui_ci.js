@@ -127,8 +127,8 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   ok('Verification: an item can be accepted and is signed', /Accepted by Checker/.test(await pg.textContent('#results')));
   await pg.evaluate(() => document.querySelectorAll('.rep.pro details').forEach(d => d.open = true));
   await pg.fill('input.rate[data-ri=rcs]', '6500'); await pg.dispatchEvent('input.rate[data-ri=rcs]', 'change'); await pg.waitForTimeout(300);
-  const bq = await pg.evaluate(() => { const t = document.querySelector('#results').textContent; return { sor: /JKSOR 5\.34\.2/.test(t), own: /own rate/.test(t), gst: /GST 18 %/.test(t), total: /Estimated cost incl\. GST/.test(t), mas: /Brick masonry/.test(t) }; });
-  ok('BOQ: whole-building items priced with JKSOR 2022, own rate overrides, abstract with GST', bq.sor && bq.own && bq.gst && bq.total && bq.mas, JSON.stringify(bq));
+  const bq = await pg.evaluate(() => { const t = document.querySelector('#results').textContent; return { sor: /JKSOR 5\.34\.2/.test(t), own: /own rate/.test(t), gst: !/GST \d+ %/.test(t), total: /Estimated cost \(JKSOR 2022\)/.test(t), mas: /Brick masonry/.test(t) }; });
+  ok('BOQ: whole-building items priced with JKSOR 2022, own rate overrides, abstract without GST (JKSOR rates include it)', bq.sor && bq.own && bq.gst && bq.total && bq.mas, JSON.stringify(bq));
   const vol = async () => pg.evaluate(() => { const r = [...document.querySelectorAll('#results tr')].find(tr => /Brick masonry \(class 7\.5\) in CM 1:6 in superstructure/.test(tr.textContent)); return r ? parseFloat(r.children[3].textContent.replace(/,/g, '')) : null; });
   await pg.evaluate(() => { const b = document.querySelector('#results [data-est=boq]'); if (b) b.click(); }); await pg.waitForTimeout(600);
   const v230 = await vol();

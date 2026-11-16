@@ -5544,13 +5544,13 @@ FD.pile = function (p) {
   r.h("6. Bar bending schedule");
   r.table(["Member", "Mark", "Bar", "No.", "Cut length (m)", "Weight (kg)"], bbs.rows.map(function (q) { return [q.mem, q.mark, q.dia + " mm " + q.shape, String(q.n), (q.L / 1000).toFixed(2), q.kg.toFixed(1)]; }).concat([["Total", "", "", "", "", bbs.kg.toFixed(0)]]));
   r.h("7. Quantities and estimate (JKSOR 2022)");
-  r.table(["Item", "Description", "Qty", "Unit", "Rate (₹)", "Amount (₹)"], boq.items.map(function (q, i) { return [String(i + 1), q.d + (q.sor ? " [" + q.sor + "]" : ""), q.q.toFixed(2), q.u, q.rate ? q.rate.toFixed(2) : "—", q.rate ? Math.round(q.q * q.rate).toLocaleString("en-IN") : "—"]; }).concat([["", "Sub-total (excl. GST)", "", "", "", Math.round(boq.sum).toLocaleString("en-IN")], ["", "GST 18 %", "", "", "", Math.round(boq.sum * 0.18).toLocaleString("en-IN")], ["", "Total", "", "", "", Math.round(boq.sum * 1.18).toLocaleString("en-IN")]]));
+  r.table(["Item", "Description", "Qty", "Unit", "Rate (₹)", "Amount (₹)"], boq.items.map(function (q, i) { return [String(i + 1), q.d + (q.sor ? " [" + q.sor + "]" : ""), q.q.toFixed(2), q.u, q.rate ? q.rate.toFixed(2) : "—", q.rate ? Math.round(q.q * q.rate).toLocaleString("en-IN") : "—"]; }).concat([["", "Total (JKSOR 2022 rates are inclusive of GST)", "", "", "", Math.round(boq.sum).toLocaleString("en-IN")]]));
   var dws = FD.drawPile(p, res, marks, pb);
   r.svg = '<div class="dwgs">' + dws.map(function (d) { return '<div class="dwgt">' + d.title + '</div><div class="tw">' + DT.svg(d, { maxW: 680, maxH: 560 }) + '</div>'; }).join("") + '</div>';
   r.dxf = DT.dxf([{ title: "PILE FOUNDATION", dws: dws }]);
   r.dxfName = "pile-foundation.dxf";
   r.sum("Pile", "Ø" + p.Dp + " × " + p.Lp + " m"); r.sum("Safe capacity", Qsafe.toFixed(0) + " kN");
-  r.sum("Piles", String(res.reduce(function (a0, g) { return a0 + g.n; }, 0))); r.sum("Caps", marks.length + " types"); r.sum("Steel", (bbs.kg / 1000).toFixed(2) + " t"); r.sum("Cost (incl. GST)", "₹ " + Math.round(boq.sum * 1.18).toLocaleString("en-IN"));
+  r.sum("Piles", String(res.reduce(function (a0, g) { return a0 + g.n; }, 0))); r.sum("Caps", marks.length + " types"); r.sum("Steel", (bbs.kg / 1000).toFixed(2) + " t"); r.sum("Cost (JKSOR 2022)", "₹ " + Math.round(boq.sum).toLocaleString("en-IN"));
   r.fd = { res: res, marks: marks, pb: pb, cap: cap, CAP: CAP, bbs: bbs, boq: boq, lat: latU };
   return r;
 };
@@ -5709,7 +5709,7 @@ FD.raft = function (p) {
     { d: "Reinforcement Fe " + p.fy + " (BBS + 3 %)", q: kg * 1.03, u: "kg", sor: "5.22.6", rate: 123.20 }];
   if (Dfm + 0.1 > 1.5) it.splice(1, 0, { d: "Extra lift below 1.5 m", q: (mt.L + 0.6) * (mt.B + 0.6) * (Dfm + 0.1 - 1.5), u: "m³", sor: "2.10.1", rate: 89.75 });
   var sum = 0; it.forEach(function (q) { sum += q.q * q.rate; });
-  r.h("7. Quantities and estimate (JKSOR 2022)"); r.table(["Item", "Description", "Qty", "Unit", "Rate (₹)", "Amount (₹)"], it.map(function (q, i) { return [String(i + 1), q.d + " [" + q.sor + "]", q.q.toFixed(2), q.u, q.rate.toFixed(2), Math.round(q.q * q.rate).toLocaleString("en-IN")]; }).concat([["", "Total incl. GST 18 %", "", "", "", Math.round(sum * 1.18).toLocaleString("en-IN")]]));
+  r.h("7. Quantities and estimate (JKSOR 2022)"); r.table(["Item", "Description", "Qty", "Unit", "Rate (₹)", "Amount (₹)"], it.map(function (q, i) { return [String(i + 1), q.d + " [" + q.sor + "]", q.q.toFixed(2), q.u, q.rate.toFixed(2), Math.round(q.q * q.rate).toLocaleString("en-IN")]; }).concat([["", "Total (JKSOR 2022 rates are inclusive of GST)", "", "", "", Math.round(sum).toLocaleString("en-IN")]]));
   var dws = MAT.draw(mt, cf);
   r.svg = '<div class="dwgs"><div class="dwgt">Net soil pressure under DL+LL (kN/m²)</div><div class="tw">' + MAT.heat(mt, function (q) { return q.qG; }, "kN/m²", 520) + '</div>' + dws.map(function (d) { return '<div class="dwgt">' + d.title + '</div><div class="tw">' + DT.svg(d, { maxW: 680, maxH: 560 }) + '</div>'; }).join("") + '</div>';
   r.dxf = DT.dxf([{ title: "RAFT FOUNDATION", dws: dws }]); r.dxfName = "raft-foundation.dxf";
@@ -5737,7 +5737,7 @@ REG.STANDARDS = [
   ["IS 2911 (Part 1/Sec 2):2010", "Pile foundations — bored cast-in-situ concrete piles (Sec 1: driven cast-in-situ)", "In use", "Pile module: capacity (Annex B), lateral moduli (Annex C), reinforcement, spacing, caps"],
   ["IS 875 (Part 4):2021", "Snow loads (Third Revision)", "In use", "Roof snow s = μ·s0 (flat roof μ = 0.8), designed for the more severe of snow and roof imposed load (cl 1); drift, unbalanced and the exposure/thermal effects are not modelled — enter an adjusted s0 where they matter"],
   ["IS 1200", "Method of measurement of building and civil engineering works", "In use", "Measurement rules of the bill of quantities"],
-  ["JKSOR 2022", "Jammu & Kashmir Schedule of Rates 2022 (PW(R&B) Department)", "In use", "Default BOQ rates (exclusive of GST); project rates override them; apply the cost index / premium of your work"],
+  ["JKSOR 2022", "Jammu & Kashmir Schedule of Rates 2022 (PW(R&B) Department)", "In use", "Default BOQ rates (inclusive of GST — no GST is added in the abstract); project rates override them; apply the cost index / premium of your work"],
   ["IS 875 (Part 5):1987", "Special loads and load combinations", "In use", "Combinations as IS 456 Table 18 / IS 800 Table 4"],
   ["SP 16:1980, SP 34:1987", "Design aids (IS 456); handbook on concrete reinforcement and detailing", "In use", "Reference values in tests; detailing practice (curtailment, slab top bars)"],
   ["IS 2502:1963", "Bending and fixing of bars for concrete reinforcement", "In use", "Bar bending schedule, bend deductions and hooks"]
@@ -5856,11 +5856,11 @@ if (typeof module !== "undefined") module.exports = PIPE;
 /* js/boq.js */
 /* Bill of quantities of the whole building (structure + masonry, plaster, flooring, plinth) measured from the designed model
    in IS 1200 style, priced with the Jammu & Kashmir Schedule of Rates 2022 (JKSOR 2022) unless the user enters own rates,
-   with reinforcement wastage, contingencies, labour cess and GST in the abstract. Reinforcement schedules for the drawings.
+   with reinforcement wastage, contingencies and labour cess in the abstract (JKSOR rates include GST; a GST % is added only if entered, for own rates that exclude it). Reinforcement schedules for the drawings.
    Concrete: columns floor to floor less slab (+ necks footing to plinth), beams below the slab between column faces, slabs over
    the panel area, walls between end columns, footings L×B×D; PCC 100 mm with 100 mm offsets; excavation with 300 mm working space. */
 var BOQ = {};
-/* JKSOR 2022 rates (₹, exclusive of GST): [item no., rate] */
+/* JKSOR 2022 rates (₹, inclusive of GST): [item no., rate] */
 BOQ.SOR = {
   exc: ["2.6.1", 592.90], exl: ["2.10.1", 89.75], pcc: ["4.4.7", 5202.90], bfl: ["2.11", 218.40], pfl: ["2.11(a)", 276.60], gfb: ["4.4.7", 5202.90], dpc: ["4.17", 346.70],
   rcM20f: ["5.1.2", 7788.40], rcM20c: ["5.2.2", 9395.70], rcM20b: ["5.3.1", 9821.85], dmBelow: ["5.34.1", 8021.10], dmAbove: ["5.34.2", 9412.05],
@@ -6039,7 +6039,7 @@ BOQ.run = function (m, S, p) {
     });
   }
   return { items: items, conc: conc, steelKg: kg, steelWithWaste: q.stl, byDia: byDia, ratio: conc > 0 ? kg / conc : 0, Df: Df, ts: ts, schedules: BOQ.schedules(S), amount: 0, footprint: foot,
-    inp: { mT: mT * 1000, open: open * 100, pH: pH, parH: parH, wst: wst, cont: p.cont >= 0 ? +p.cont : 3, cess: p.cess >= 0 ? +p.cess : 1, gst: p.gst >= 0 ? +p.gst : 18, sorOn: p.sorOn !== false, fmt: p.estFmt === "detailed" ? "detailed" : "boq" } };
+    inp: { mT: mT * 1000, open: open * 100, pH: pH, parH: parH, wst: wst, cont: p.cont >= 0 ? +p.cont : 3, cess: p.cess >= 0 ? +p.cess : 1, gst: p.gst >= 0 ? +p.gst : 0, sorOn: p.sorOn !== false, fmt: p.estFmt === "detailed" ? "detailed" : "boq" } };
 };
 /* the JKSOR item for a BOQ line (concrete by grade: nominal mix M20, design mix M25 + extras for richer grades) */
 BOQ.sorFor = function (it, p) {
@@ -6053,9 +6053,9 @@ BOQ.sorFor = function (it, p) {
   }
   return S0[k] || null;
 };
-/* rates: your own rate, else JKSOR 2022 (when on); abstract with contingencies, labour cess and GST */
+/* rates: your own rate, else JKSOR 2022 (when on, GST included); abstract with contingencies, labour cess and an optional GST % */
 BOQ.price = function (boq, rates) {
-  var sum = 0, i = boq.inp || { cont: 3, cess: 1, gst: 18, sorOn: true };
+  var sum = 0, i = boq.inp || { cont: 3, cess: 1, gst: 0, sorOn: true };
   boq.items.forEach(function (it) {
     var own = rates && +rates[it.id];
     it.rate = own > 0 ? own : i.sorOn && it.sor ? it.sor[1] : null;
@@ -6255,7 +6255,7 @@ var EST = (function () {
   function finish(m) {
     m.items.forEach(function (it) { it.qty = itemQty(it); it.amt = it.qty * (it.rate || 0); });
     m.sub = sum(m.items, function (it) { return it.amt; });
-    var a = m.abs || { cont: 3, cess: 1, gst: 18 }; m.abs = a;
+    var a = m.abs || { cont: 3, cess: 1, gst: 0 }; m.abs = a;
     m.cont = m.sub * a.cont / 100; m.cess = m.sub * a.cess / 100; m.gst = m.sub * a.gst / 100; m.total = m.sub + m.cont + m.cess + m.gst;
     return m;
   }
@@ -6299,6 +6299,7 @@ var EST = (function () {
     list.sort(function (a, b) { return (ORDER[a.cat] || 8) - (ORDER[b.cat] || 8); });
     var m = { title: title || "Detailed estimate", items: list }; carriage(m); return finish(m);
   };
+  function absLines(m) { var A = m.abs; return [["Total (JKSOR 2022 rates include GST)", m.sub, true], ["Contingencies " + A.cont + " %", m.cont], ["Labour welfare cess " + A.cess + " %", m.cess]].concat(A.gst > 0 ? [["GST " + A.gst + " % (own rates excluding GST)", m.gst]] : []).concat([["Grand total", m.total, true]]); }
   function fx(v, d) { return v === undefined || v === null || v === "" ? "" : (+v).toFixed(d); }
   function inr(v) { return Math.round(v).toLocaleString("en-IN"); }
   /* HTML: S.No | Particulars | No. | L | B | D/H | Qty | Unit | Quantity | Rate | Amount */
@@ -6321,7 +6322,7 @@ var EST = (function () {
       h += '<tr class="it"><td></td><td>Total<span class="dims">' + fx(it.qty, dq) + ' ' + esc(it.unit) + ' @ ₹ ' + fx(it.rate, 2) + '</span></td><td></td><td></td><td></td><td></td><td>' + fx(it.qty, dq) + '</td><td>' + esc(it.unit) + '</td><td><b>' + fx(it.qty, dq) + '</b></td><td>' + fx(it.rate, 2) + '</td><td><b>' + inr(it.amt) + '</b></td></tr>';
     });
     var A = m.abs;
-    [["Total", m.sub, true], ["Contingencies " + A.cont + " %", m.cont], ["Labour welfare cess " + A.cess + " %", m.cess], ["GST " + A.gst + " % (works contract)", m.gst], ["Grand total", m.total, true]].forEach(function (x) {
+    absLines(m).forEach(function (x) {
       h += '<tr class="gt' + (x[2] ? ' b' : '') + '"><td></td><td>' + x[0] + '<span class="dims">₹ ' + inr(x[1]) + '</span></td><td colspan="8"></td><td>' + (x[2] ? '<b>' + inr(x[1]) + '</b>' : inr(x[1])) + '</td></tr>';
     });
     return h + '</table></div>';
@@ -6330,7 +6331,7 @@ var EST = (function () {
     var h = '<div class="tw"><table class="est jk ab"><tr><th>S.No.</th><th>Particulars</th><th>Quantity</th><th>Unit</th><th>Rate (₹)</th><th>Amount (₹)</th></tr>';
     m.items.forEach(function (it, i) { var dq = it.unit === "kg" ? 1 : 2; h += '<tr><td>' + (i + 1) + '</td><td>' + esc(it.d) + (it.sor ? ' <span class="sorc">' + (/^[\d.]/.test(it.sor) ? 'JKSOR ' : '') + esc(it.sor) + '</span>' : '') + '<span class="dims">' + fx(it.qty, dq) + ' ' + esc(it.unit) + ' @ ₹ ' + fx(it.rate, 2) + '</span></td><td>' + fx(it.qty, dq) + '</td><td>' + esc(it.unit) + '</td><td>' + fx(it.rate, 2) + '</td><td>' + inr(it.amt) + '</td></tr>'; });
     var A = m.abs;
-    [["Total", m.sub, true], ["Contingencies " + A.cont + " %", m.cont], ["Labour welfare cess " + A.cess + " %", m.cess], ["GST " + A.gst + " % (works contract)", m.gst], ["Grand total", m.total, true]].forEach(function (x) { h += '<tr class="gt' + (x[2] ? ' b' : '') + '"><td></td><td>' + x[0] + '<span class="dims">₹ ' + inr(x[1]) + '</span></td><td></td><td></td><td></td><td>' + (x[2] ? '<b>' + inr(x[1]) + '</b>' : inr(x[1])) + '</td></tr>'; });
+    absLines(m).forEach(function (x) { h += '<tr class="gt' + (x[2] ? ' b' : '') + '"><td></td><td>' + x[0] + '<span class="dims">₹ ' + inr(x[1]) + '</span></td><td></td><td></td><td></td><td>' + (x[2] ? '<b>' + inr(x[1]) + '</b>' : inr(x[1])) + '</td></tr>'; });
     return h + '</table></div>';
   };
   /* Excel sheet in the reference layout: A S.No · B Particulars · C No. · D x · E L · F x · G B · H x · I D/H · J = · K qty · L unit · M Quantity · N unit · O Rate · P Amount */
@@ -6362,7 +6363,7 @@ var EST = (function () {
     var rs = sh.next(), A = m.abs;
     sh.row(["", "", "", "", "", "", "", "", "", "", "Total", "", "", "", "Rs.", { f: "=" + totRows.map(function (r) { return "P" + r; }).join("+"), v: m.sub, s: "f0" }], "b");
     var lines = [];
-    [["Contingencies", A.cont, m.cont], ["Labour welfare cess", A.cess, m.cess], ["GST on works contract", A.gst, m.gst]].forEach(function (x) { var r = sh.next(); lines.push(r); sh.row(["", "", "", "", "", "", "", "", "", "", x[0], "", "", "", { v: x[1], s: "in" }, { f: "=P" + rs + "*O" + r + "/100", v: x[2], s: "f0" }]); });
+    [["Contingencies", A.cont, m.cont], ["Labour welfare cess", A.cess, m.cess]].concat(A.gst > 0 ? [["GST on works contract (own rates excluding GST)", A.gst, m.gst]] : []).forEach(function (x) { var r = sh.next(); lines.push(r); sh.row(["", "", "", "", "", "", "", "", "", "", x[0], "", "", "", { v: x[1], s: "in" }, { f: "=P" + rs + "*O" + r + "/100", v: x[2], s: "f0" }]); });
     sh.row(["", "", "", "", "", "", "", "", "", "", "Grand total", "", "", "", "Rs.", { f: "=P" + rs + "+" + lines.map(function (r) { return "P" + r; }).join("+"), v: m.total, s: "f0" }], "b");
     if (note) { var rn2 = sh.row([note], "note"); sh.merge("A" + rn2 + ":P" + rn2); }
     return { sh: sh, tot: tot, sub: rs };
@@ -6813,8 +6814,8 @@ var RPT = (function () {
     if (S.boq) {
       var b = BOQ.price(S.boq, (p && p.rates) || {}), A = b.abs, I = b.inp, inr = function (v) { return Math.round(v).toLocaleString("en-IN"); };
       body += H(I.fmt === "detailed" ? "Detailed estimate and abstract of cost" : "Bill of quantities and estimate") + (I.fmt === "detailed" ? '<h3>Measurement sheet</h3>' + BOQ.detailedHtml(b, esc) + '<h3>Abstract of cost</h3>' : '') + tbl(["Item", "Description", "Unit", "Quantity", "Rate (₹)", "Source", "Amount (₹)"], b.items.map(function (it, i) { return [i + 1, esc(it.desc), it.unit, f(it.qty, it.unit === "kg" ? 0 : 2), it.rate ? f(it.rate, 2) : "", esc(it.src || "—"), it.amt ? inr(it.amt) : ""]; })
-        .concat([["", "Sub-total", "", "", "", "", inr(A.sub)], ["", "Contingencies " + I.cont + " %", "", "", "", "", inr(A.cont)], ["", "Labour welfare cess " + I.cess + " %", "", "", "", "", inr(A.cess)], ["", "GST " + I.gst + " %", "", "", "", "", inr(A.gst)], ["", "<b>Total estimated cost</b>", "", "", "", "", "<b>₹ " + inr(A.total) + "</b>"]])) +
-        '<p class="note">' + (I.sorOn ? "Rates: Jammu & Kashmir Schedule of Rates 2022 (exclusive of GST) unless the project's own rate is entered. " : "Rates: the project's own entries. ") + "Measurement in IS 1200 style from the designed model; " + I.mT + " mm masonry under every beam line less " + I.open + " % openings; steel from the bar bending schedule + " + I.wst + " % wastage. Doors, windows, roofing, painting, services and external works are not included." + (b.unpriced.length ? " Unpriced items: " + b.unpriced.length + "." : "") + "</p>";
+        .concat([["", "Sub-total", "", "", "", "", inr(A.sub)], ["", "Contingencies " + I.cont + " %", "", "", "", "", inr(A.cont)], ["", "Labour welfare cess " + I.cess + " %", "", "", "", "", inr(A.cess)], ].concat(I.gst > 0 ? [["", "GST " + I.gst + " % (own rates excluding GST)", "", "", "", "", inr(A.gst)]] : []).concat([["", "<b>Total estimated cost</b>", "", "", "", "", "<b>₹ " + inr(A.total) + "</b>"]]))) +
+        '<p class="note">' + (I.sorOn ? "Rates: Jammu & Kashmir Schedule of Rates 2022 (inclusive of GST, so no GST is added) unless the project's own rate is entered. " : "Rates: the project's own entries. ") + "Measurement in IS 1200 style from the designed model; " + I.mT + " mm masonry under every beam line less " + I.open + " % openings; steel from the bar bending schedule + " + I.wst + " % wastage. Doors, windows, roofing, painting, services and external works are not included." + (b.unpriced.length ? " Unpriced items: " + b.unpriced.length + "." : "") + "</p>";
     }
     /* 11 verification */
     var rv = (p && p.review) || {};
@@ -6868,7 +6869,7 @@ var PRO = (function () {
       '<label class="fld"><span>Status</span><select data-pk="status">' + STATUS.map(function (s) { return '<option' + (s === cur.status ? " selected" : "") + '>' + s + '</option>'; }).join("") + '</select></label>' +
       '<label class="fld full"><span>Notes</span><textarea data-pk="notes" rows="2">' + esc(cur.notes) + '</textarea></label>' +
       '<div class="btns full"><button class="pri" id="pSave" type="button">Save details</button><a class="btnl" href="#elements">Designed elements (' + (cur.elements || []).length + ') ›</a><a class="btnl" href="#model">Open model ›</a></div></div>';
-    if (cur.summary) { var s = cur.summary; h += '<div class="sum"><div><span>Last analysis</span><b>' + dstr(s.date) + '</b></div><div><span>Members / failing</span><b>' + s.members + ' / ' + s.memberFails + (s.detailFails !== null ? ' · detailing ' + s.detailFails : '') + '</b></div><div><span>Concrete · steel</span><b>' + f(s.concrete_m3, 1) + ' m³ · ' + f(s.steel_t, 2) + ' t</b></div>' + (s.cost ? '<div><span>Estimated cost (incl. GST)</span><b>₹ ' + s.cost.toLocaleString("en-IN") + '</b></div>' : '') + '</div>'; }
+    if (cur.summary) { var s = cur.summary; h += '<div class="sum"><div><span>Last analysis</span><b>' + dstr(s.date) + '</b></div><div><span>Members / failing</span><b>' + s.members + ' / ' + s.memberFails + (s.detailFails !== null ? ' · detailing ' + s.detailFails : '') + '</b></div><div><span>Concrete · steel</span><b>' + f(s.concrete_m3, 1) + ' m³ · ' + f(s.steel_t, 2) + ' t</b></div>' + (s.cost ? '<div><span>Estimated cost (JKSOR 2022)</span><b>₹ ' + s.cost.toLocaleString("en-IN") + '</b></div>' : '') + '</div>'; }
     h += '<h4>Revisions</h4>' + ((cur.revs || []).length ? tbl(["Rev", "Date", "By", "Note", "Engine", "Result"], cur.revs.slice().reverse().map(function (r) { return ["<b>" + esc(r.rev) + "</b>", day(r.date), esc(r.by), esc(r.note), esc(r.engine), r.summary ? (r.summary.memberFails + (r.summary.detailFails || 0) ? '<span class="not">' + (r.summary.memberFails + (r.summary.detailFails || 0)) + ' fail</span>' : '<span class="okt">all OK</span>') + ' · ' + f(r.summary.steel_t, 2) + ' t' : "not run"]; })) : '<div class="note">No revision issued yet. Issuing a revision freezes the inputs, the result summary, the engine and the code editions.</div>');
     h += '<div class="btns"><input id="revNote" placeholder="Revision note (e.g. issued for checking)" style="flex:2"><button id="pIssue" type="button">Issue revision</button></div>';
     h += '<details><summary>Activity log (' + (cur.log || []).length + ')</summary>' + tbl(["When", "What"], (cur.log || []).slice(-30).reverse().map(function (l) { return [dstr(l.t), esc(l.a)]; })) + '</details></div>';
@@ -7015,7 +7016,7 @@ var PRO = (function () {
     var p = proj(), rates = (p && p.rates) || {}; BOQ.price(b, rates);
     var A = b.abs, I = b.inp, inr = function (v) { return Math.round(v).toLocaleString("en-IN"); };
     var h = '<div class="sum"><div><span>Concrete</span><b>' + f(b.conc, 2) + ' m³</b></div><div><span>Reinforcement</span><b>' + f(b.steelKg / 1000, 3) + ' t · ' + f(b.ratio, 0) + ' kg/m³</b></div>' +
-      (A.total ? '<div><span>Estimated cost incl. GST</span><b>₹ ' + inr(A.total) + '</b></div><div><span>Per m² of floor (plinth area ' + f(b.footprint, 1) + ' m²)</span><b>₹ ' + inr(A.total / Math.max(b.footprint * (MD.floorLevels(S.m).length - 1), 1)) + '</b></div>' : '') + '</div>';
+      (A.total ? '<div><span>Estimated cost (JKSOR 2022)</span><b>₹ ' + inr(A.total) + '</b></div><div><span>Per m² of floor (plinth area ' + f(b.footprint, 1) + ' m²)</span><b>₹ ' + inr(A.total / Math.max(b.footprint * (MD.floorLevels(S.m).length - 1), 1)) + '</b></div>' : '') + '</div>';
     var view = estView || (S.p && S.p.estFmt === "detailed" ? "detailed" : "boq");
     h += '<div class="seg noprint" role="tablist"><button type="button" data-est="boq" class="' + (view === "boq" ? "on" : "") + '">Bill of quantities</button><button type="button" data-est="detailed" class="' + (view === "detailed" ? "on" : "") + '">Detailed estimate</button></div>';
     h += '<div class="btns noprint"><button type="button" id="bBoq">Recalculate with the current estimate inputs</button></div>';
@@ -7024,9 +7025,9 @@ var PRO = (function () {
       var how = view === "boq" && it.br && it.br.length ? '<div class="mbr">' + it.br.map(function (x) { return esc(x[0]) + " = " + f(x[1], it.unit === "kg" ? 0 : 2); }).join("<br>") + '</div>' : "";
       return [i + 1, esc(it.desc) + how, it.unit, f(it.qty, it.unit === "kg" ? 0 : 2), '<input class="rate" data-ri="' + it.id + '" type="number" step="any" inputmode="decimal" value="' + (rates[it.id] || "") + '" placeholder="' + (I.sorOn && it.sor ? it.sor[1] : "rate") + '">', esc(it.src || "—"), it.amt ? inr(it.amt) : ""];
     }));
-    h += tblL(["Abstract", "₹"], [["Sub-total of priced items", inr(A.sub)], ["Contingencies " + I.cont + " %", inr(A.cont)], ["Labour welfare cess " + I.cess + " %", inr(A.cess)], ["GST " + I.gst + " % (works contract)", inr(A.gst)], ["<b>Total</b>", "<b>" + inr(A.total) + "</b>"]]);
+    h += tblL(["Abstract", "₹"], [["Sub-total of priced items", inr(A.sub)], ["Contingencies " + I.cont + " %", inr(A.cont)], ["Labour welfare cess " + I.cess + " %", inr(A.cess)]].concat(I.gst > 0 ? [["GST " + I.gst + " % (own rates excluding GST)", inr(A.gst)]] : []).concat([["<b>Total</b>", "<b>" + inr(A.total) + "</b>"]]));
     if (b.unpriced.length) h += '<div class="note">Not priced yet: ' + b.unpriced.map(function (id) { return esc((b.items.filter(function (it) { return it.id === id; })[0] || {}).desc || id); }).join("; ") + ' — enter a rate.</div>';
-    h += '<div class="note">' + (I.sorOn ? 'Rates are the Jammu & Kashmir Schedule of Rates 2022 (exclusive of GST) unless you type your own; typed rates are saved with the project and used in the report and Excel. Check the current cost index / premium applicable to your work. ' : 'JKSOR rates are off — enter your own rates. ') +
+    h += '<div class="note">' + (I.sorOn ? 'Rates are the Jammu & Kashmir Schedule of Rates 2022 (inclusive of GST — no GST is added) unless you type your own; typed rates are saved with the project and used in the report and Excel. Check the current cost index / premium applicable to your work. ' : 'JKSOR rates are off — enter your own rates. ') +
       'Measurement (IS 1200 style): columns floor-to-floor less the slab, necks from footing to plinth (founding depth ' + f(b.Df, 2) + ' m); beams below the slab between column faces; slabs over the panels; walls between end columns; PCC 100 mm with 100 mm offset; excavation with 300 mm working space, extra lift below 1.5 m; ' + I.mT + ' mm masonry under every beam line with ' + I.open + ' % openings; plinth ' + I.pH + ' m; parapet ' + I.parH + ' m; steel from the bar bending schedule + ' + I.wst + ' % wastage. Doors, windows, roofing/waterproofing, painting, services and external works are not included.</div>';
     h += tbl(["Bar φ", "kg (schedule)"], Object.keys(b.byDia).map(Number).sort(function (a, c) { return a - c; }).map(function (k) { return [k + " mm", f(b.byDia[k], 0)]; }));
     var sc = b.schedules;
@@ -8630,15 +8631,15 @@ var RX = (function () {
     var b = S.boq, pr = null; try { pr = typeof PDB !== "undefined" ? PDB.current() : null; } catch (e) { pr = null; }
     var rates = (pr && pr.rates) || {}; BOQ.price(b, rates);
     /* detailed estimate: measurement sheet, every quantity a formula of No. × L × B × D/H; the BOQ quantities link to its totals */
-    var em = EST.fromBoq(b, ((pr && pr.name) || "Building") + " — detailed estimate (JKSOR 2022)"), ds = EST.sheet(wb, em, "Detailed Estimate", "Measurement in the J&K R&B format: each line No. × L × B × D/H = quantity (live formulas), deductions negative, % lines act on the lines above; item totals carried to Quantity × Rate = Amount. Rates JKSOR 2022 (excl. GST) or your own; carriage leads as in the reference format — edit them to the site."), tot = {};
+    var em = EST.fromBoq(b, ((pr && pr.name) || "Building") + " — detailed estimate (JKSOR 2022)"), ds = EST.sheet(wb, em, "Detailed Estimate", "Measurement in the J&K R&B format: each line No. × L × B × D/H = quantity (live formulas), deductions negative, % lines act on the lines above; item totals carried to Quantity × Rate = Amount. Rates JKSOR 2022 (inclusive of GST) or your own; carriage leads as in the reference format — edit them to the site."), tot = {};
     b.items.forEach(function (it, i) { tot[it.id] = ds.tot[it.id]; });
     var I = b.inp, sh = wb.sheet("BOQ", { cols: [6, 62, 16, 7, 13, 13, 16], color: TAB.design });
-    intro(sh, "Bill of quantities and estimate — measured from the designed model", "Whole building: structure, masonry (" + I.mT + " mm under every beam line, " + I.open + " % openings), plaster, flooring, plinth (" + I.pH + " m), parapet (" + I.parH + " m). Measurement in IS 1200 style: columns floor to floor less the slab, necks from footing to plinth, beams below the slab between column faces, slabs over the panels, footings L×B×D, PCC 100 mm with 100 mm offset, excavation with 300 mm working space (extra lift below 1.5 m), steel from the bar bending schedule + " + I.wst + " % wastage. Rates: " + (I.sorOn ? "Jammu & Kashmir Schedule of Rates 2022 (exclusive of GST) unless your own rate was entered in the app" : "your own rates") + " — every blue rate and percentage can be changed here; amounts and the abstract are formulas. Doors, windows, roofing, painting, services and external works are not included.", 7);
+    intro(sh, "Bill of quantities and estimate — measured from the designed model", "Whole building: structure, masonry (" + I.mT + " mm under every beam line, " + I.open + " % openings), plaster, flooring, plinth (" + I.pH + " m), parapet (" + I.parH + " m). Measurement in IS 1200 style: columns floor to floor less the slab, necks from footing to plinth, beams below the slab between column faces, slabs over the panels, footings L×B×D, PCC 100 mm with 100 mm offset, excavation with 300 mm working space (extra lift below 1.5 m), steel from the bar bending schedule + " + I.wst + " % wastage. Rates: " + (I.sorOn ? "Jammu & Kashmir Schedule of Rates 2022 (inclusive of GST — no GST added) unless your own rate was entered in the app" : "your own rates") + " — every blue rate and percentage can be changed here; amounts and the abstract are formulas. Doors, windows, roofing, painting, services and external works are not included.", 7);
     var t = table(sh, [{ k: "no", h: "Item", s: "n0" }, { k: "desc", h: "Description" }, { k: "sor", h: "Rate source" }, { k: "unit", h: "Unit" }, { k: "qty", h: "Quantity", cell: function (r) { return { f: "='Detailed Estimate'!M" + tot[r.id], v: r.qty, s: "f2" }; } }, { k: "rate", h: "Rate", u: "₹", cell: function (r) { return { f: "='Detailed Estimate'!O" + tot[r.id], v: r.rate, s: "f2" }; } }, { k: "amt", h: "Amount", u: "₹", f: "{qty}*{rate}", s: "f0" }],
       b.items.map(function (it, i) { return { id: it.id, no: i + 1, desc: it.desc, sor: it.src || "enter rate", unit: it.unit, qty: it.qty, rate: it.rate || 0 }; }), G, { fc: 2 });
     var L = t.L, rng = function (c) { return L[c] + t.first + ":" + L[c] + t.last; };
     var r0 = sh.next(); sh.row(["", "Sub-total", "", "", "", "", { f: "=SUM(" + rng("amt") + ")", v: b.abs.sub, s: "f0" }], "b");
-    var pct = [["Contingencies", I.cont, b.abs.cont], ["Labour welfare cess", I.cess, b.abs.cess], ["GST on works contract", I.gst, b.abs.gst]], rows = [];
+    var pct = [["Contingencies", I.cont, b.abs.cont], ["Labour welfare cess", I.cess, b.abs.cess]].concat(I.gst > 0 ? [["GST on works contract (own rates excluding GST)", I.gst, b.abs.gst]] : []), rows = [];
     pct.forEach(function (x) { var r = sh.next(); rows.push(r); sh.row(["", x[0], "", "%", "", { v: x[1], s: "in" }, { f: "=G" + r0 + "*F" + r + "/100", v: x[2], s: "f0" }]); });
     sh.row(["", "Total estimated cost", "", "", "", "", { f: "=G" + r0 + "+" + rows.map(function (r) { return "G" + r; }).join("+"), v: b.abs.total, s: "f0" }], "b");
     var rc = sh.next(); sh.row(["", "Concrete total", "", "m³", { f: '=SUMIFS(' + rng("qty") + "," + rng("desc") + ',"RCC*")', v: b.conc, s: "f2" }]);
@@ -8980,7 +8981,7 @@ var SU = (function () {
     accTor: true, rsa: true, mmc: true, nModes: 12, rsComb: "cqc", ortho: false, rsScaleDisp: false, sbc: 200, Df: 1.5,
     snow: false, s0: 1.5, mu: 0.8, snowW: 0, pattern: "auto", llRed: false, exposure: "moderate", fire: "1",
     found: "isolated", matT: 0, matOff: 0.5, ks: 0, gs: 18, setLim: 75, angLim: 500, matMesh: 0.5,
-    estFmt: "detailed", mT: 230, mOpen: 15, plinthH: 0.45, parH: 1.0, wastage: 3, cont: 3, cess: 1, gst: 18, sorOn: true
+    estFmt: "detailed", mT: 230, mOpen: 15, plinthH: 0.45, parH: 1.0, wastage: 3, cont: 3, cess: 1, gst: 0, sorOn: true
   };
   /* defaults that depend on the frame material */
   var MATDEF = { rcc: { colSec: "400x400", beamSec: "300x450", sys: "rc" }, steel: { colSec: "ISMB 300", beamSec: "ISMB 250", sys: "steel" } };
@@ -9161,7 +9162,7 @@ var SU = (function () {
     return '<div class="form">' + sel("estFmt", "Estimate format", [["boq", "Bill of quantities (items with measurement notes)"], ["detailed", "Detailed estimate (measurement sheet + abstract of cost)"]]) + chk("sorOn", "Use JKSOR 2022 rates (Jammu & Kashmir Schedule of Rates) — your own rates in the BOQ override them") +
       num("mT", "Masonry wall thickness", "mm", "230 = one brick") + num("mOpen", "Openings in masonry walls", "%", "doors & windows deducted from masonry and plaster") +
       num("plinthH", "Plinth height above ground", "m", "earth filling and plinth masonry") + num("parH", "Parapet height", "m") +
-      num("wastage", "Reinforcement wastage / rolling margin", "%") + num("cont", "Contingencies", "%") + num("cess", "Labour welfare cess", "%") + num("gst", "GST on works contract", "%", "JKSOR rates are exclusive of GST; 18 % since Sep 2025 — confirm for your contract") +
+      num("wastage", "Reinforcement wastage / rolling margin", "%") + num("cont", "Contingencies", "%") + num("cess", "Labour welfare cess", "%") + num("gst", "GST on works contract", "%", "Keep 0 with JKSOR 2022 — its rates already include GST. Enter a % only if your own rates exclude GST.") +
       '<div class="note full">Masonry is measured under every beam line when the wall load is above zero (ground-storey walls on the plinth, on the first-floor layout); perimeter lines are external walls. Re-run the analysis, or tap "Recalculate BOQ" in the results, after changing these.</div></div>';
   }
   function anaForm() {
@@ -10089,7 +10090,7 @@ var SU = (function () {
       var tk = EL.take(m.id, pp, r, xx);
       if (tk.items.length) {
         var ed1 = mkData([], [{ mark: nextMark(m.id), nos: 1, title: m.t, take: tk }], m.t + " — detailed estimate (JKSOR 2022)"), c1 = ed1.cb, anchor = out.querySelector(".sum") || out.querySelector(".rh");
-        anchor.insertAdjacentHTML("afterend", '<details class="estd noprint" id="estd"><summary>' + IC.svg("estimate") + '<span><b>Detailed estimate</b><small>' + (ex ? 'per 1 m ' + (ex[0] === "len" ? "length" : "width") : '1 no.') + ' · ' + (c1.kg ? (c1.kg).toFixed(0) + ' kg steel · ' : '') + 'JKSOR 2022 incl. GST</small></span><em>' + inr(ed1.model.total) + '</em></summary>' + elemEstHtml(ed1, "detailed") +
+        anchor.insertAdjacentHTML("afterend", '<details class="estd noprint" id="estd"><summary>' + IC.svg("estimate") + '<span><b>Detailed estimate</b><small>' + (ex ? 'per 1 m ' + (ex[0] === "len" ? "length" : "width") : '1 no.') + ' · ' + (c1.kg ? (c1.kg).toFixed(0) + ' kg steel · ' : '') + 'JKSOR 2022</small></span><em>' + inr(ed1.model.total) + '</em></summary>' + elemEstHtml(ed1, "detailed") +
           '<div class="btns"><button type="button" class="pri" id="addp2">' + IC.svg("projects") + ' Add to project with the number of elements' + (ex ? ' and the ' + (ex[0] === "len" ? "length" : "width") : '') + '</button></div></details>');
         document.getElementById("addp2").onclick = function () { addSheet(m, r, pp); };
         out.querySelectorAll("#estd .estx").forEach(function (b) { b.onclick = function () { estExcel(ed1, m.t); }; });
@@ -10141,11 +10142,11 @@ var SU = (function () {
   function elemEstHtml(ed, view) {
     var cb = ed.cb, h = view === "detailed" ? '<h4>Detailed estimate</h4>' + EST.html(ed.model, esc) : '<h4>Abstract of cost</h4>' + EST.abstractHtml(ed.model, esc);
     if (view === "detailed" && cb.bbs.length) h += '<h4>Reinforcement — bar bending schedule</h4>' + etb(["Bar mark", "Description", "φ", "No.", "Length (m)", "kg"], cb.bbs.map(function (q) { return ["<b>" + esc(q.mark) + "</b>", esc(q.desc) + '<div class="dims">' + q.n + " nos " + q.dia + "φ × " + (q.L / 1000).toFixed(2) + ' m</div>', String(q.dia), String(q.n), (q.L / 1000).toFixed(2), q.kg.toFixed(1)]; }).concat([["", "<b>Total</b>", "", "", "", "<b>" + cb.kg.toFixed(1) + "</b>"]]), "est");
-    return h + '<div class="note">J&K R&B format: items of work in order, measurement No. × L × B × D/H, totals carried to Quantity × Rate = Amount. Rates JKSOR 2022 (excl. GST); carriage of aggregate (' + EST.CARRIAGE.agg[2] + ') and sand (' + EST.CARRIAGE.sand[2] + ') as in the reference format — change the leads and rates in the Excel. Excavation, backfill and finishes are not part of the element take-off.</div>' +
+    return h + '<div class="note">J&K R&B format: items of work in order, measurement No. × L × B × D/H, totals carried to Quantity × Rate = Amount. Rates JKSOR 2022 (inclusive of GST, so no GST is added); carriage of aggregate (' + EST.CARRIAGE.agg[2] + ') and sand (' + EST.CARRIAGE.sand[2] + ') as in the reference format — change the leads and rates in the Excel. Excavation, backfill and finishes are not part of the element take-off.</div>' +
       '<div class="btns noprint"><button type="button" class="pri estx">' + IC.svg("estimate") + ' Excel — detailed estimate</button></div>';
   }
   function estExcel(ed, name) {
-    var wb = XL.book(); EST.sheet(wb, ed.model, "Detailed Estimate", "Rates JKSOR 2022 (excl. GST) — edit any rate in column O; carriage leads as in the reference format.");
+    var wb = XL.book(); EST.sheet(wb, ed.model, "Detailed Estimate", "Rates JKSOR 2022 (inclusive of GST) — edit any rate in column O; carriage leads as in the reference format.");
     if (ed.cb.bbs.length) { var b = wb.sheet("BBS", { cols: [10, 52, 7, 8, 12, 10, 12] }); b.row(["Bar bending schedule"], "t"); b.row(["Bar mark", "Description", "φ (mm)", "No.", "Cut length (m)", "kg/m", "Weight (kg)"], "h"); var f0 = b.next(); ed.cb.bbs.forEach(function (q) { var r = b.next(); b.row([q.mark, q.desc, { v: q.dia, s: "n0" }, { v: q.n, s: "n0" }, { v: q.L / 1000, s: "n3" }, { f: "=C" + r + "^2/162", v: q.dia * q.dia / 162, s: "f4" }, { f: "=D" + r + "*E" + r + "*F" + r, v: q.kg, s: "f2" }]); }); var lr = b.next(); b.row(["", "Total", "", "", "", "", { f: "=SUM(G" + f0 + ":G" + (lr - 1) + ")", v: ed.cb.kg, s: "f2" }], "b"); }
     toast("Preparing Excel…"); RX.save(wb, name.replace(/[^\w\- ]+/g, "_") + "-detailed-estimate.xlsx", function (ok) { if (!ok) toast("Excel export not available here"); });
   }
@@ -10161,7 +10162,7 @@ var SU = (function () {
     else h += '<p>The building estimate is prepared from the analysed and detailed frame model.' + (pr && pr.summary && pr.summary.cost ? ' Last run: <b>' + inr(pr.summary.cost) + '</b> (' + new Date(pr.summary.date).toLocaleDateString("en-IN") + ').' : '') + '</p><div class="btns"><button type="button" class="pri" id="estRun">' + IC.svg("play") + ' Analyse the building and prepare the estimate</button><a class="btnl" href="#model">Open the model ›</a></div>';
     h += '</div><div class="rep" id="estE"><div class="rh"><div><h3>Designed elements</h3><small>' + list.length + ' element(s) added from the design modules</small></div><a class="btnl" href="#elements">Elements ›</a></div>';
     var ed = null;
-    if (list.length) { ed = elemData(list); h += '<div class="sum"><div><span>Reinforcement</span><b>' + (ed.cb.kg / 1000).toFixed(2) + ' t</b></div><div><span>Estimated cost incl. GST</span><b>' + inr(ed.model.total) + '</b></div></div>' + elemEstHtml(ed, v) + '<div class="btns noprint"><button type="button" id="estCsv">Estimate CSV</button><button type="button" id="estPrint">Print / Save PDF</button></div>'; }
+    if (list.length) { ed = elemData(list); h += '<div class="sum"><div><span>Reinforcement</span><b>' + (ed.cb.kg / 1000).toFixed(2) + ' t</b></div><div><span>Estimated cost (JKSOR 2022)</span><b>' + inr(ed.model.total) + '</b></div></div>' + elemEstHtml(ed, v) + '<div class="btns noprint"><button type="button" id="estCsv">Estimate CSV</button><button type="button" id="estPrint">Print / Save PDF</button></div>'; }
     else h += '<p>No elements yet — design a beam, slab, column, footing, pile group or raft and tap <b>Add to project</b>.</p>';
     h += '</div>';
     app.innerHTML = h;
@@ -10180,7 +10181,7 @@ var SU = (function () {
     var h = '<div class="mhead g-ana"><span class="mic">' + IC.svg("projects") + '</span><div><b>' + esc(pr.name) + '</b><small>Individually designed elements · ' + list.length + ' element(s)</small></div><a class="cchip" href="#projects">Project ›</a></div>';
     if (!list.length) { app.innerHTML = h + '<div class="rep"><p>No elements yet. Design a beam, slab, column, footing, pile group or steel member and tap <b>Add to project</b> under the result.</p><div class="btns"><a class="btnl pri" href="#">Design a member ›</a></div></div>'; return; }
     var ed = elemData(list), runs = ed.runs, okRuns = ed.okRuns, cb = ed.cb, nf = okRuns.filter(function (q) { return !q.x.r.ok(); }).length;
-    h += '<div class="sum"><div><span>Elements</span><b>' + list.length + ' types · ' + list.reduce(function (a, e) { return a + e.nos; }, 0) + ' nos</b></div><div><span>Checks</span><b class="' + (nf ? "bad" : "good") + '">' + (nf ? nf + " failing" : "All pass") + '</b></div><div><span>Reinforcement</span><b>' + (cb.kg / 1000).toFixed(2) + ' t</b></div><div><span>Estimate (JKSOR 2022, incl. GST)</span><b>' + inr(ed.model.total) + '</b></div></div>';
+    h += '<div class="sum"><div><span>Elements</span><b>' + list.length + ' types · ' + list.reduce(function (a, e) { return a + e.nos; }, 0) + ' nos</b></div><div><span>Checks</span><b class="' + (nf ? "bad" : "good") + '">' + (nf ? nf + " failing" : "All pass") + '</b></div><div><span>Reinforcement</span><b>' + (cb.kg / 1000).toFixed(2) + ' t</b></div><div><span>Estimate (JKSOR 2022)</span><b>' + inr(ed.model.total) + '</b></div></div>';
     h += '<div class="elist">' + runs.map(function (q) {
       var e = q.e, ok = q.x ? q.x.r.ok() : e.ok, sm = (q.x ? q.x.r.summary : e.sum).slice(0, 3);
       return '<div class="ecard"><div class="eh"><span class="emk">' + esc(e.mark) + '</span><div><b>' + esc(e.title) + (e.nos > 1 ? ' × ' + e.nos : '') + '</b><small>' + sm.map(function (s) { return esc(s[0] + ": " + s[1]); }).join(" · ") + '</small></div><span class="badge ' + (ok ? "pass" : "fail") + '">' + (ok ? "PASS" : "FAIL") + '</span></div>' +
@@ -10322,7 +10323,7 @@ var SU = (function () {
       '<h4>What it does</h4><ul><li>Frame & shell FE analysis: linear static, P-Delta, modal and response spectrum (IS 1893:2016), accidental torsion, pushover</li>' +
       '<li>Design: IS 456 (limit state or working stress), IS 800, with worked calculations</li><li>Loads & durability: snow (IS 875 Pt 4), pattern imposed load, imposed-load reduction, covers for exposure and fire (IS 456 Table 16/16A)</li><li>Automatic design & detailing: storey-wise enlargement until every check passes</li>' +
       '<li>Detailing: IS 13920 beams, columns, joints, strong column–weak beam, shear walls, slabs, isolated footings; bar bending schedule (IS 2502)</li><li>Mat (raft) foundations: plate on compression-only soil springs, punching, one-way shear, flexure, settlement (IS 2950, IS 456, IS 1904)</li>' +
-      '<li>Outputs: Excel with live formulas, calculation report (print/PDF), drawing set DXF, STAAD.Pro input, BOQ of the whole building priced with JKSOR 2022 (with contingencies, cess and GST) and reinforcement schedules</li>' +
+      '<li>Outputs: Excel with live formulas, calculation report (print/PDF), drawing set DXF, STAAD.Pro input, BOQ of the whole building priced with JKSOR 2022 (rates inclusive of GST; contingencies and cess added) and reinforcement schedules</li>' +
       '<li>Projects: offline database with revisions, backups and an engineering verification mode with reviewer sign-off; engineering assistant</li><li>Standalone modules for beams, slabs, columns, footings, piles, rafts, stairs, steel members, connections, trusses and loads — input units SI / MKS / FPS, code limits on inputs, fix suggestions, and project elements with schedule, bar bending schedule and estimate</li><li>Design aids: SP 16 style charts and development-length tables</li></ul>' +
       '<h4>Not covered</h4><ul><li>Time-history analysis, combined footings, piled raft, beam-slab raft, consolidation settlement, full soil–structure interaction</li><li>Deflection and crack width in the frame design (use the beam and slab modules)</li><li>Full building wind pressure-coefficient workflow</li></ul>' +
       (window.REG ? REG.html(esc) : '') +

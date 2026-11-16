@@ -292,13 +292,13 @@ FD.pile = function (p) {
   r.h("6. Bar bending schedule");
   r.table(["Member", "Mark", "Bar", "No.", "Cut length (m)", "Weight (kg)"], bbs.rows.map(function (q) { return [q.mem, q.mark, q.dia + " mm " + q.shape, String(q.n), (q.L / 1000).toFixed(2), q.kg.toFixed(1)]; }).concat([["Total", "", "", "", "", bbs.kg.toFixed(0)]]));
   r.h("7. Quantities and estimate (JKSOR 2022)");
-  r.table(["Item", "Description", "Qty", "Unit", "Rate (₹)", "Amount (₹)"], boq.items.map(function (q, i) { return [String(i + 1), q.d + (q.sor ? " [" + q.sor + "]" : ""), q.q.toFixed(2), q.u, q.rate ? q.rate.toFixed(2) : "—", q.rate ? Math.round(q.q * q.rate).toLocaleString("en-IN") : "—"]; }).concat([["", "Sub-total (excl. GST)", "", "", "", Math.round(boq.sum).toLocaleString("en-IN")], ["", "GST 18 %", "", "", "", Math.round(boq.sum * 0.18).toLocaleString("en-IN")], ["", "Total", "", "", "", Math.round(boq.sum * 1.18).toLocaleString("en-IN")]]));
+  r.table(["Item", "Description", "Qty", "Unit", "Rate (₹)", "Amount (₹)"], boq.items.map(function (q, i) { return [String(i + 1), q.d + (q.sor ? " [" + q.sor + "]" : ""), q.q.toFixed(2), q.u, q.rate ? q.rate.toFixed(2) : "—", q.rate ? Math.round(q.q * q.rate).toLocaleString("en-IN") : "—"]; }).concat([["", "Total (JKSOR 2022 rates are inclusive of GST)", "", "", "", Math.round(boq.sum).toLocaleString("en-IN")]]));
   var dws = FD.drawPile(p, res, marks, pb);
   r.svg = '<div class="dwgs">' + dws.map(function (d) { return '<div class="dwgt">' + d.title + '</div><div class="tw">' + DT.svg(d, { maxW: 680, maxH: 560 }) + '</div>'; }).join("") + '</div>';
   r.dxf = DT.dxf([{ title: "PILE FOUNDATION", dws: dws }]);
   r.dxfName = "pile-foundation.dxf";
   r.sum("Pile", "Ø" + p.Dp + " × " + p.Lp + " m"); r.sum("Safe capacity", Qsafe.toFixed(0) + " kN");
-  r.sum("Piles", String(res.reduce(function (a0, g) { return a0 + g.n; }, 0))); r.sum("Caps", marks.length + " types"); r.sum("Steel", (bbs.kg / 1000).toFixed(2) + " t"); r.sum("Cost (incl. GST)", "₹ " + Math.round(boq.sum * 1.18).toLocaleString("en-IN"));
+  r.sum("Piles", String(res.reduce(function (a0, g) { return a0 + g.n; }, 0))); r.sum("Caps", marks.length + " types"); r.sum("Steel", (bbs.kg / 1000).toFixed(2) + " t"); r.sum("Cost (JKSOR 2022)", "₹ " + Math.round(boq.sum).toLocaleString("en-IN"));
   r.fd = { res: res, marks: marks, pb: pb, cap: cap, CAP: CAP, bbs: bbs, boq: boq, lat: latU };
   return r;
 };
@@ -457,7 +457,7 @@ FD.raft = function (p) {
     { d: "Reinforcement Fe " + p.fy + " (BBS + 3 %)", q: kg * 1.03, u: "kg", sor: "5.22.6", rate: 123.20 }];
   if (Dfm + 0.1 > 1.5) it.splice(1, 0, { d: "Extra lift below 1.5 m", q: (mt.L + 0.6) * (mt.B + 0.6) * (Dfm + 0.1 - 1.5), u: "m³", sor: "2.10.1", rate: 89.75 });
   var sum = 0; it.forEach(function (q) { sum += q.q * q.rate; });
-  r.h("7. Quantities and estimate (JKSOR 2022)"); r.table(["Item", "Description", "Qty", "Unit", "Rate (₹)", "Amount (₹)"], it.map(function (q, i) { return [String(i + 1), q.d + " [" + q.sor + "]", q.q.toFixed(2), q.u, q.rate.toFixed(2), Math.round(q.q * q.rate).toLocaleString("en-IN")]; }).concat([["", "Total incl. GST 18 %", "", "", "", Math.round(sum * 1.18).toLocaleString("en-IN")]]));
+  r.h("7. Quantities and estimate (JKSOR 2022)"); r.table(["Item", "Description", "Qty", "Unit", "Rate (₹)", "Amount (₹)"], it.map(function (q, i) { return [String(i + 1), q.d + " [" + q.sor + "]", q.q.toFixed(2), q.u, q.rate.toFixed(2), Math.round(q.q * q.rate).toLocaleString("en-IN")]; }).concat([["", "Total (JKSOR 2022 rates are inclusive of GST)", "", "", "", Math.round(sum).toLocaleString("en-IN")]]));
   var dws = MAT.draw(mt, cf);
   r.svg = '<div class="dwgs"><div class="dwgt">Net soil pressure under DL+LL (kN/m²)</div><div class="tw">' + MAT.heat(mt, function (q) { return q.qG; }, "kN/m²", 520) + '</div>' + dws.map(function (d) { return '<div class="dwgt">' + d.title + '</div><div class="tw">' + DT.svg(d, { maxW: 680, maxH: 560 }) + '</div>'; }).join("") + '</div>';
   r.dxf = DT.dxf([{ title: "RAFT FOUNDATION", dws: dws }]); r.dxfName = "raft-foundation.dxf";

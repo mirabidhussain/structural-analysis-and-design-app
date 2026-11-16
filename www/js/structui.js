@@ -13,7 +13,7 @@ var SU = (function () {
     accTor: true, rsa: true, mmc: true, nModes: 12, rsComb: "cqc", ortho: false, rsScaleDisp: false, sbc: 200, Df: 1.5,
     snow: false, s0: 1.5, mu: 0.8, snowW: 0, pattern: "auto", llRed: false, exposure: "moderate", fire: "1",
     found: "isolated", matT: 0, matOff: 0.5, ks: 0, gs: 18, setLim: 75, angLim: 500, matMesh: 0.5,
-    estFmt: "detailed", mT: 230, mOpen: 15, plinthH: 0.45, parH: 1.0, wastage: 3, cont: 3, cess: 1, gst: 18, sorOn: true
+    estFmt: "detailed", mT: 230, mOpen: 15, plinthH: 0.45, parH: 1.0, wastage: 3, cont: 3, cess: 1, gst: 0, sorOn: true
   };
   /* defaults that depend on the frame material */
   var MATDEF = { rcc: { colSec: "400x400", beamSec: "300x450", sys: "rc" }, steel: { colSec: "ISMB 300", beamSec: "ISMB 250", sys: "steel" } };
@@ -194,7 +194,7 @@ var SU = (function () {
     return '<div class="form">' + sel("estFmt", "Estimate format", [["boq", "Bill of quantities (items with measurement notes)"], ["detailed", "Detailed estimate (measurement sheet + abstract of cost)"]]) + chk("sorOn", "Use JKSOR 2022 rates (Jammu & Kashmir Schedule of Rates) — your own rates in the BOQ override them") +
       num("mT", "Masonry wall thickness", "mm", "230 = one brick") + num("mOpen", "Openings in masonry walls", "%", "doors & windows deducted from masonry and plaster") +
       num("plinthH", "Plinth height above ground", "m", "earth filling and plinth masonry") + num("parH", "Parapet height", "m") +
-      num("wastage", "Reinforcement wastage / rolling margin", "%") + num("cont", "Contingencies", "%") + num("cess", "Labour welfare cess", "%") + num("gst", "GST on works contract", "%", "JKSOR rates are exclusive of GST; 18 % since Sep 2025 — confirm for your contract") +
+      num("wastage", "Reinforcement wastage / rolling margin", "%") + num("cont", "Contingencies", "%") + num("cess", "Labour welfare cess", "%") + num("gst", "GST on works contract", "%", "Keep 0 with JKSOR 2022 — its rates already include GST. Enter a % only if your own rates exclude GST.") +
       '<div class="note full">Masonry is measured under every beam line when the wall load is above zero (ground-storey walls on the plinth, on the first-floor layout); perimeter lines are external walls. Re-run the analysis, or tap "Recalculate BOQ" in the results, after changing these.</div></div>';
   }
   function anaForm() {

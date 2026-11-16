@@ -345,7 +345,7 @@ console.log('\n== H. Professional platform: BOQ, automatic design, projects, ver
   BOQ.price(b, { rcs: 6500, stl: 75 });
   const sub = b.items.reduce((a, it) => a + (it.id === 'rcs' ? 6500 : it.id === 'stl' ? 75 : it.sor ? it.sor[1] : 0) * it.qty, 0);
   near('BOQ amount = Σ quantity × (own rate, else JKSOR)', b.amount, sub, 1e-9);
-  near('BOQ abstract: + 3 % contingencies + 1 % cess + 18 % GST', b.abs.total, sub * 1.22, 1e-9);
+  near('BOQ abstract: + 3 % contingencies + 1 % cess, no GST on JKSOR rates (they include it)', b.abs.total, sub * 1.04, 1e-9);
   ok('BOQ: anti-termite (not in JKSOR) is left for the user to price', b.unpriced.length === 1 && b.unpriced[0] === 'atr');
 
   const r = AUTO.run(geo, p);
@@ -632,7 +632,7 @@ console.log('\n== P. Detailed estimate in the J&K R&B format');
   ok('Estimate P1: items in the order of work — PCC, RCC, steel, shuttering, carriage — each with element sub-heads and No. × L × B × D lines', cats === 'pcc,rcc,rcc,stl,fw,fw,carr,carr' && m.items[1].rows[0].sub === 'B1 (4 nos) — RCC Beam' && m.items[1].rows[1].n === 4, cats);
   ok('Estimate P2: carriage = 0.87 (aggregate) and 0.46 (sand) m³ per m³ of the concrete items, as in the reference format', Math.abs(car[0].qty - 0.87 * conc) < 1e-9 && Math.abs(car[1].qty - 0.46 * conc) < 1e-9);
   const stl = m.items.find(it => it.cat === 'stl'), base = stl.rows.filter(r => !r.sub && r.pct === undefined).reduce((a, r) => a + r.q, 0);
-  ok('Estimate P3: steel lines No. × L × kg/m with a 3 % wastage line; totals = Σ amounts; grand total adds contingencies, cess and GST', Math.abs(stl.qty - base * 1.03) < 1e-9 && Math.abs(m.sub - m.items.reduce((a, it) => a + it.qty * it.rate, 0)) < 1e-6 && Math.abs(m.total - m.sub * 1.22) < 1e-6, '₹ ' + Math.round(m.total));
+  ok('Estimate P3: steel lines No. × L × kg/m with a 3 % wastage line; totals = Σ amounts; grand total adds contingencies and cess only (JKSOR rates include GST)', Math.abs(stl.qty - base * 1.03) < 1e-9 && Math.abs(m.sub - m.items.reduce((a, it) => a + it.qty * it.rate, 0)) < 1e-6 && Math.abs(m.total - m.sub * 1.04) < 1e-6 && m.gst === 0, '₹ ' + Math.round(m.total));
 })();
 
 console.log(`\n${pass} passed, ${fail} failed`);

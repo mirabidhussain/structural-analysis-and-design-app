@@ -1,10 +1,10 @@
 /* Bill of quantities of the whole building (structure + masonry, plaster, flooring, plinth) measured from the designed model
    in IS 1200 style, priced with the Jammu & Kashmir Schedule of Rates 2022 (JKSOR 2022) unless the user enters own rates,
-   with reinforcement wastage, contingencies, labour cess and GST in the abstract. Reinforcement schedules for the drawings.
+   with reinforcement wastage, contingencies and labour cess in the abstract (JKSOR rates include GST; a GST % is added only if entered, for own rates that exclude it). Reinforcement schedules for the drawings.
    Concrete: columns floor to floor less slab (+ necks footing to plinth), beams below the slab between column faces, slabs over
    the panel area, walls between end columns, footings L×B×D; PCC 100 mm with 100 mm offsets; excavation with 300 mm working space. */
 var BOQ = {};
-/* JKSOR 2022 rates (₹, exclusive of GST): [item no., rate] */
+/* JKSOR 2022 rates (₹, inclusive of GST): [item no., rate] */
 BOQ.SOR = {
   exc: ["2.6.1", 592.90], exl: ["2.10.1", 89.75], pcc: ["4.4.7", 5202.90], bfl: ["2.11", 218.40], pfl: ["2.11(a)", 276.60], gfb: ["4.4.7", 5202.90], dpc: ["4.17", 346.70],
   rcM20f: ["5.1.2", 7788.40], rcM20c: ["5.2.2", 9395.70], rcM20b: ["5.3.1", 9821.85], dmBelow: ["5.34.1", 8021.10], dmAbove: ["5.34.2", 9412.05],
@@ -183,7 +183,7 @@ BOQ.run = function (m, S, p) {
     });
   }
   return { items: items, conc: conc, steelKg: kg, steelWithWaste: q.stl, byDia: byDia, ratio: conc > 0 ? kg / conc : 0, Df: Df, ts: ts, schedules: BOQ.schedules(S), amount: 0, footprint: foot,
-    inp: { mT: mT * 1000, open: open * 100, pH: pH, parH: parH, wst: wst, cont: p.cont >= 0 ? +p.cont : 3, cess: p.cess >= 0 ? +p.cess : 1, gst: p.gst >= 0 ? +p.gst : 18, sorOn: p.sorOn !== false, fmt: p.estFmt === "detailed" ? "detailed" : "boq" } };
+    inp: { mT: mT * 1000, open: open * 100, pH: pH, parH: parH, wst: wst, cont: p.cont >= 0 ? +p.cont : 3, cess: p.cess >= 0 ? +p.cess : 1, gst: p.gst >= 0 ? +p.gst : 0, sorOn: p.sorOn !== false, fmt: p.estFmt === "detailed" ? "detailed" : "boq" } };
 };
 /* the JKSOR item for a BOQ line (concrete by grade: nominal mix M20, design mix M25 + extras for richer grades) */
 BOQ.sorFor = function (it, p) {
@@ -197,9 +197,9 @@ BOQ.sorFor = function (it, p) {
   }
   return S0[k] || null;
 };
-/* rates: your own rate, else JKSOR 2022 (when on); abstract with contingencies, labour cess and GST */
+/* rates: your own rate, else JKSOR 2022 (when on, GST included); abstract with contingencies, labour cess and an optional GST % */
 BOQ.price = function (boq, rates) {
-  var sum = 0, i = boq.inp || { cont: 3, cess: 1, gst: 18, sorOn: true };
+  var sum = 0, i = boq.inp || { cont: 3, cess: 1, gst: 0, sorOn: true };
   boq.items.forEach(function (it) {
     var own = rates && +rates[it.id];
     it.rate = own > 0 ? own : i.sorOn && it.sor ? it.sor[1] : null;

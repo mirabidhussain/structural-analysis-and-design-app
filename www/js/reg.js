@@ -16,7 +16,7 @@ REG.STANDARDS = [
   ["IS 2911 (Part 1/Sec 2):2010", "Pile foundations — bored cast-in-situ concrete piles (Sec 1: driven cast-in-situ)", "In use", "Pile module: capacity (Annex B), lateral moduli (Annex C), reinforcement, spacing, caps"],
   ["IS 875 (Part 4):2021", "Snow loads (Third Revision)", "In use", "Roof snow s = μ·s0 (flat roof μ = 0.8), designed for the more severe of snow and roof imposed load (cl 1); drift, unbalanced and the exposure/thermal effects are not modelled — enter an adjusted s0 where they matter"],
   ["IS 1200", "Method of measurement of building and civil engineering works", "In use", "Measurement rules of the bill of quantities"],
-  ["JKSOR 2022", "Jammu & Kashmir Schedule of Rates 2022 (PW(R&B) Department)", "In use", "Default BOQ rates (exclusive of GST); project rates override them; apply the cost index / premium of your work"],
+  ["JKSOR 2022", "Jammu & Kashmir Schedule of Rates 2022 (PW(R&B) Department)", "In use", "Default BOQ rates (inclusive of GST — no GST is added in the abstract); project rates override them; apply the cost index / premium of your work"],
   ["IS 875 (Part 5):1987", "Special loads and load combinations", "In use", "Combinations as IS 456 Table 18 / IS 800 Table 4"],
   ["SP 16:1980, SP 34:1987", "Design aids (IS 456); handbook on concrete reinforcement and detailing", "In use", "Reference values in tests; detailing practice (curtailment, slab top bars)"],
   ["IS 2502:1963", "Bending and fixing of bars for concrete reinforcement", "In use", "Bar bending schedule, bend deductions and hooks"]
