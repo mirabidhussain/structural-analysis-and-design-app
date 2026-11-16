@@ -2,7 +2,7 @@
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "3.5";
+REG.ENGINE = "3.6";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],
@@ -66,12 +66,14 @@ REG.CHECKS = [
   ["Loads", "Imposed-load reduction for floors carried (IS 875 Pt 2 cl 3.2.1)", "Calculated", "Table values checked in acceptance.js I; applied to footing sizing and design only, not to columns"],
   ["Detailing", "Nominal cover for exposure and fire (IS 456 Table 16, 16A, Fig. 1) and minimum grade (Table 5)", "Verified", "Table values and the effective depths that use them checked in acceptance.js I"],
   ["Quantities", "Bill of quantities of the whole building (IS 1200 style) priced with JKSOR 2022", "Calculated", "Concrete, masonry, plaster, floor and excavation quantities checked by hand in acceptance.js H; every default rate is traced to its JKSOR 2022 item"],
-  ["Automation", "Automatic design (storey-wise enlargement until all checks pass)", "Calculated", "Converges on the test building in acceptance.js H; sizes are written as editable section rules"]
+  ["Automation", "Automatic design (storey-wise enlargement until all checks pass)", "Calculated", "Converges on the test building in acceptance.js H; sizes are written as editable section rules"],
+  ["Inputs", "Code limits on inputs: cover (IS 456 Table 16, cl 26.4), grade (Table 5), bar size (cl 26.5), span/d ceiling (cl 23.2.1), column slenderness (cl 25.3.1), footing edge (cl 34.1.2), IS 13920 member sizes, IS 2911 piles, IS 800 bolts and welds", "Verified", "Rules checked case by case in acceptance.js N; blocking can be switched off for existing structures and is then reported"],
+  ["Automation", "Fix suggestions for failed member designs: smallest change of size, bars or grade that passes every check", "Calculated", "Each suggestion is re-run through the design and the input limits (acceptance.js N, UI test)"]
 ];
 /* stable ids of REG.CHECKS rows, used by the verification mode */
 REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "mmc", "timehist",
   "rcbeam", "rccol", "rcslab", "rcwallel", "rcwall", "servic", "stfcd", "stltb", "stklen", "dtbeam", "dtcol", "scwb", "joint", "dtslab", "bbs",
-  "foot", "footpress", "mat", "matsoil", "pilecap", "pilelat", "pilegrp", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto"];
+  "foot", "footpress", "mat", "matsoil", "pilecap", "pilelat", "pilegrp", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto", "inlim", "fixes"];
 REG.byId = function (id) { var i = REG.IDS.indexOf(id); return i >= 0 ? { id: id, area: REG.CHECKS[i][0], t: REG.CHECKS[i][1], st: REG.CHECKS[i][2], ev: REG.CHECKS[i][3] } : null; };
 REG.RANK = { "Not implemented": 0, Simplified: 1, Calculated: 2, Verified: 3 };
 /* checks behind each kind of result; the weakest decides the result's verification state */

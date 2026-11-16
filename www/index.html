@@ -121,7 +121,7 @@ h2.grp{display:flex;justify-content:space-between;align-items:baseline;text-tran
 .card:hover{box-shadow:var(--sh2)}.card:active{transform:scale(.98)}
 .card .ic{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;background:var(--eq);color:var(--pri)}.card .ic .ico{width:24px;height:24px}
 .card b{font-size:15px;font-weight:650;letter-spacing:-.01em}.card small{font-size:12.5px;line-height:1.35}.card em{align-self:flex-start;font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:20px;background:var(--eq);color:var(--mut);margin-top:6px}
-.g-rcc .ic{background:var(--rccbg);color:var(--rcc)}.g-steel .ic{background:var(--stlbg);color:var(--stl)}.g-loads .ic{background:var(--ldsbg);color:var(--lds)}.g-ref .ic{background:var(--refbg);color:var(--ref)}.g-fdn .ic,.mhead.g-fdn .mic{background:#efe6dc;color:#8a5a2b}:root[data-theme=dark] .g-fdn .ic,:root[data-theme=dark] .mhead.g-fdn .mic{background:#33261a;color:#d9a46c}.dwgs .dwgt{font-weight:600;font-size:13px;margin:14px 0 6px}.dwgs .tw{background:#fff;padding:6px}
+.g-rcc .ic{background:var(--rccbg);color:var(--rcc)}.g-steel .ic{background:var(--stlbg);color:var(--stl)}.g-loads .ic{background:var(--ldsbg);color:var(--lds)}.g-ref .ic{background:var(--refbg);color:var(--ref)}.g-ana .ic{background:#e6ecf7;color:#3d5a99}:root[data-theme=dark] .g-ana .ic{background:#1d2840;color:#8fa9e0}.gsec .card.proj{margin-bottom:10px}.g-fdn .ic,.mhead.g-fdn .mic{background:#efe6dc;color:#8a5a2b}:root[data-theme=dark] .g-fdn .ic,:root[data-theme=dark] .mhead.g-fdn .mic{background:#33261a;color:#d9a46c}.dwgs .dwgt{font-weight:600;font-size:13px;margin:14px 0 6px}.dwgs .tw{background:#fff;padding:6px}
 .card.proj{flex-direction:row;align-items:center;gap:12px;min-height:0}.card.proj .ic{margin:0;background:var(--stlbg);color:var(--stl)}.card.proj .pc{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}.card.proj .go{color:var(--mut)}
 .kpis{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.kpis span{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:8px;background:var(--eq);color:var(--ink)}.kpis .good{background:var(--okbg);color:var(--ok)}.kpis .bad{background:var(--nobg);color:var(--no)}
 /* module header */
@@ -182,6 +182,10 @@ table.est td{white-space:nowrap}table.est td:nth-child(2){white-space:normal;tex
 .viewer canvas{border-radius:var(--r)}
 @media (min-width:900px){.tabbar{left:50%;transform:translateX(-50%);bottom:12px;max-width:520px;border:1px solid var(--line);border-radius:18px;box-shadow:var(--sh2);padding:6px}body{padding-bottom:96px}}
 @media print{.tabbar,.jump,.seg,header button{display:none!important}body{padding:0}.rep,.card,.form{box-shadow:none}}
+.fld .lim{font-size:11.5px;line-height:1.35}.fld .lim.hd{color:var(--no);font-weight:600}.fld .lim.wn{color:#b7791f}.fld.bad input,.fld.bad select{border-color:var(--no);box-shadow:0 0 0 1px var(--no) inset}
+.fixbox{margin:10px 0;padding:12px;border-radius:12px;border:1px solid color-mix(in srgb,var(--acc) 35%,transparent);background:color-mix(in srgb,var(--acc) 7%,transparent);display:flex;flex-direction:column;gap:8px}.fixbox>b{display:flex;align-items:center;gap:6px;font-size:14px}.fixbox .ico{width:18px;height:18px;color:var(--acc)}.fixbox small{color:var(--mut);font-size:12px}
+.fixbox .fx{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:10px;background:var(--card,#fff);border:1px solid var(--line)}.fixbox .fx span{font-weight:550;font-size:13.5px}.fixbox .fx button{flex:none;min-height:34px;padding:0 14px;background:var(--acc);color:#fff;border:0;border-radius:9px;font-weight:600}
+.fixbox .busy{font-size:12.5px;color:var(--mut)}
 </style>
 </head>
 <body>
@@ -191,6 +195,7 @@ table.est td{white-space:nowrap}table.est td:nth-child(2){white-space:normal;tex
 <script src="js/data.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/core.js"></script>
+<script src="js/lim.js"></script>
 <script src="js/rcc.js"></script>
 <script src="js/steel.js"></script>
 <script src="js/loads.js"></script>

@@ -33,6 +33,30 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
     const r = await pg.evaluate(() => { const x = document.querySelector('#out .badge'), e = document.querySelector('#out .err'); return { badge: x ? x.textContent : null, err: e ? e.textContent : null }; });
     ok('Module "' + id + '" produces a report with defaults (all inputs blank)', !!r.badge && !r.err, r.badge || r.err || 'no report');
   }
+  /* v3.6: standard bars, code limits, fixes, home order */
+  await pg.evaluate(() => { location.hash = ''; }); await pg.waitForTimeout(300);
+  const ho = await pg.evaluate(() => ({ order: [...document.querySelectorAll('.gsec')].map(x => x.getAttribute('data-g')).join(','), heroFE: !!document.querySelector('.hero a[href="#model"]'), ana: !!document.querySelector('.gsec[data-g=Ana] a[href="#model"]') }));
+  ok('Home: member design first, frame & FE analysis moved to the bottom', ho.order === 'RCC,Fdn,Steel,Loads,Ana,Ref' && !ho.heroFE && ho.ana, JSON.stringify(ho));
+  await pg.evaluate(() => { location.hash = '#beam'; }); await pg.waitForSelector('#f');
+  const bars = await pg.evaluate(() => { const f = document.getElementById('f'); return ['dia', 'stir'].map(k => f.elements[k].tagName + ':' + [...f.elements[k].options].map(o => o.value).join('/')); });
+  ok('Bar diameters are dropdowns of standard sizes', bars[0] === 'SELECT:12/16/20/25/28/32' && bars[1] === 'SELECT:6/8/10/12', bars.join(' '));
+  await pg.evaluate(() => { location.hash = '#slab1'; }); await pg.waitForSelector('#f');
+  await pg.fill('#f [name=cover]', '10'); await pg.waitForTimeout(400);
+  const lv = await pg.evaluate(() => { const l = document.querySelector('.fld[data-fk=cover] .lim'); return { shown: !l.hidden, hard: l.classList.contains('hd'), t: l.textContent }; });
+  await pg.click('button.pri'); await pg.waitForTimeout(200);
+  const blk = await pg.evaluate(() => ({ err: !!document.querySelector('#out .err'), badge: !!document.querySelector('#out .badge') }));
+  ok('Cover below IS 456 Table 16 is flagged on the field and blocks the calculation', lv.shown && lv.hard && /Table 16/.test(lv.t) && blk.err && !blk.badge, lv.t);
+  await pg.evaluate(() => { document.getElementById('exist').checked = true; }); await pg.click('button.pri'); await pg.waitForTimeout(200);
+  ok('Existing-structure switch runs the design and flags the input in the report', await pg.evaluate(() => !!document.querySelector('#out .badge') && /outside the code limits/.test(document.querySelector('#out .limn').textContent)));
+  await pg.evaluate(() => { document.getElementById('exist').checked = false; document.getElementById('rst').click(); });
+  await pg.evaluate(() => { location.hash = '#beam'; }); await pg.waitForSelector('#f');
+  await pg.fill('#f [name=D]', '300'); await pg.fill('#f [name=L]', '6'); await pg.fill('#f [name=wu]', '45'); await pg.click('button.pri');
+  await pg.waitForSelector('#fixbox .fx button', { timeout: 30000 });
+  const fx1 = await pg.evaluate(() => ({ fail: !!document.querySelector('#out .badge.fail'), t: document.querySelector('#fixbox .fx span').textContent }));
+  await pg.click('#fixbox .fx button'); await pg.waitForTimeout(400);
+  const fx2 = await pg.evaluate(() => ({ pass: !!document.querySelector('#out .badge.pass'), D: document.querySelector('#f [name=D]').value }));
+  ok('Failed design shows changes that pass; Apply fills the input and the design passes', fx1.fail && fx2.pass, fx1.t + ' → D ' + fx2.D);
+  await pg.evaluate(() => { document.getElementById('rst').click(); });
   await pg.evaluate(() => { location.hash = '#model'; }); await pg.waitForTimeout(300);
   await pg.click('#bAna'); await pg.waitForSelector('#results .rh', { timeout: 60000 });
   ok('Frame & FE analysis (linear) runs on the default 3D model', await pg.$('#results table.basis') !== null);

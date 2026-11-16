@@ -119,7 +119,7 @@ h2.grp{display:flex;justify-content:space-between;align-items:baseline;text-tran
 .card:hover{box-shadow:var(--sh2)}.card:active{transform:scale(.98)}
 .card .ic{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;background:var(--eq);color:var(--pri)}.card .ic .ico{width:24px;height:24px}
 .card b{font-size:15px;font-weight:650;letter-spacing:-.01em}.card small{font-size:12.5px;line-height:1.35}.card em{align-self:flex-start;font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:20px;background:var(--eq);color:var(--mut);margin-top:6px}
-.g-rcc .ic{background:var(--rccbg);color:var(--rcc)}.g-steel .ic{background:var(--stlbg);color:var(--stl)}.g-loads .ic{background:var(--ldsbg);color:var(--lds)}.g-ref .ic{background:var(--refbg);color:var(--ref)}.g-fdn .ic,.mhead.g-fdn .mic{background:#efe6dc;color:#8a5a2b}:root[data-theme=dark] .g-fdn .ic,:root[data-theme=dark] .mhead.g-fdn .mic{background:#33261a;color:#d9a46c}.dwgs .dwgt{font-weight:600;font-size:13px;margin:14px 0 6px}.dwgs .tw{background:#fff;padding:6px}
+.g-rcc .ic{background:var(--rccbg);color:var(--rcc)}.g-steel .ic{background:var(--stlbg);color:var(--stl)}.g-loads .ic{background:var(--ldsbg);color:var(--lds)}.g-ref .ic{background:var(--refbg);color:var(--ref)}.g-ana .ic{background:#e6ecf7;color:#3d5a99}:root[data-theme=dark] .g-ana .ic{background:#1d2840;color:#8fa9e0}.gsec .card.proj{margin-bottom:10px}.g-fdn .ic,.mhead.g-fdn .mic{background:#efe6dc;color:#8a5a2b}:root[data-theme=dark] .g-fdn .ic,:root[data-theme=dark] .mhead.g-fdn .mic{background:#33261a;color:#d9a46c}.dwgs .dwgt{font-weight:600;font-size:13px;margin:14px 0 6px}.dwgs .tw{background:#fff;padding:6px}
 .card.proj{flex-direction:row;align-items:center;gap:12px;min-height:0}.card.proj .ic{margin:0;background:var(--stlbg);color:var(--stl)}.card.proj .pc{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}.card.proj .go{color:var(--mut)}
 .kpis{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.kpis span{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:8px;background:var(--eq);color:var(--ink)}.kpis .good{background:var(--okbg);color:var(--ok)}.kpis .bad{background:var(--nobg);color:var(--no)}
 /* module header */
@@ -180,6 +180,10 @@ table.est td{white-space:nowrap}table.est td:nth-child(2){white-space:normal;tex
 .viewer canvas{border-radius:var(--r)}
 @media (min-width:900px){.tabbar{left:50%;transform:translateX(-50%);bottom:12px;max-width:520px;border:1px solid var(--line);border-radius:18px;box-shadow:var(--sh2);padding:6px}body{padding-bottom:96px}}
 @media print{.tabbar,.jump,.seg,header button{display:none!important}body{padding:0}.rep,.card,.form{box-shadow:none}}
+.fld .lim{font-size:11.5px;line-height:1.35}.fld .lim.hd{color:var(--no);font-weight:600}.fld .lim.wn{color:#b7791f}.fld.bad input,.fld.bad select{border-color:var(--no);box-shadow:0 0 0 1px var(--no) inset}
+.fixbox{margin:10px 0;padding:12px;border-radius:12px;border:1px solid color-mix(in srgb,var(--acc) 35%,transparent);background:color-mix(in srgb,var(--acc) 7%,transparent);display:flex;flex-direction:column;gap:8px}.fixbox>b{display:flex;align-items:center;gap:6px;font-size:14px}.fixbox .ico{width:18px;height:18px;color:var(--acc)}.fixbox small{color:var(--mut);font-size:12px}
+.fixbox .fx{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:10px;background:var(--card,#fff);border:1px solid var(--line)}.fixbox .fx span{font-weight:550;font-size:13.5px}.fixbox .fx button{flex:none;min-height:34px;padding:0 14px;background:var(--acc);color:#fff;border:0;border-radius:9px;font-weight:600}
+.fixbox .busy{font-size:12.5px;color:var(--mut)}
 </style>
 </head>
 <body>
@@ -336,6 +340,8 @@ var IC = (function () {
     dxf: '<path d="M3.5 20.5l7-17 7 17"/><path d="M6.4 13.5h8.2M17.5 20.5h3"/>',
     search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5l5 5"/>',
     play: '<path d="M7 4.5l13 7.5-13 7.5z"/>',
+    bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.4 1.1 2.2h5c0-.8.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
+    analysis: '<path d="M4 20V9l8-5 8 5v11"/><path d="M4 9h16M4 14.5h16M12 4v16"/>',
     moon: '<path d="M20 14.5A8.5 8.5 0 019.5 4 8.5 8.5 0 1020 14.5z"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2.2M12 19.8V22M2 12h2.2M19.8 12H22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/>',
     geometry: '<path d="M3.5 20.5V6.5l7-3 10 4v13z"/><path d="M10.5 3.5v14l10 3M3.5 20.5l7-3"/>',
@@ -444,6 +450,221 @@ Rep.prototype.ok = function () { return this.checks.every(function (c) { return 
 Rep.prototype.fail = function (msg) { this.items.push({ k: "x", t: msg }); this.checks.push({ l: msg, ok: false, d: "", ref: "" }); return this; };
 
 if (typeof module !== "undefined") { module.exports = { U: U, Rep: Rep }; }
+
+/* js/lim.js */
+/* Code limits on inputs (IS 456, IS 13920, IS 2911, IS 800) and fix suggestions for failed designs. */
+var LIM = (function () {
+  var L = {};
+  /* standard sizes — IS 1786 bars, IS 1364 bolts */
+  L.BARS = { tie: [6, 8, 10, 12], slab: [8, 10, 12, 16, 20], main: [12, 16, 20, 25, 28, 32], col: [12, 16, 20, 25, 28, 32], ftg: [10, 12, 16, 20, 25], bolt: [12, 16, 20, 24, 27, 30, 36] };
+  L.EXPO = { mild: [20, 20], moderate: [30, 25], severe: [45, 30], "very severe": [50, 35], extreme: [75, 40] };   /* IS 456 Table 16 nominal cover, Table 5 minimum grade */
+  L.EXPO_OPTS = [["mild", "Mild — cover 20, ≥ M20"], ["moderate", "Moderate — cover 30, ≥ M25"], ["severe", "Severe — cover 45, ≥ M30"], ["very severe", "Very severe — cover 50, ≥ M35"], ["extreme", "Extreme — cover 75, ≥ M40"]];
+  L.GRADES = [20, 25, 30, 35, 40];
+
+  /* nominal cover required by IS 456 Table 16 with its notes 1 and 3 */
+  L.nomCover = function (exp, dia, fck) {
+    var e = L.EXPO[exp] || L.EXPO.moderate, c = e[0];
+    if (exp === "mild" && dia <= 12) c -= 5;                                  /* note 1 */
+    if ((exp === "severe" || exp === "very severe") && fck >= 35) c -= 5;     /* note 3 */
+    return c;
+  };
+  function f0(v) { return Math.round(v * 10) / 10; }
+
+  /* returns [{k, hard, msg, ref}] — hard = against the code, warn = advisory */
+  L.check = function (id, p) {
+    var out = [];
+    function hard(k, cond, msg, ref) { if (cond) out.push({ k: k, hard: true, msg: msg, ref: ref }); }
+    function warn(k, cond, msg, ref) { if (cond) out.push({ k: k, hard: false, msg: msg, ref: ref }); }
+    function pos(keys) { keys.forEach(function (k) { if (p[k] !== undefined) hard(k, !(p[k] > 0), "must be greater than zero", ""); }); }
+    function grade(min, why) { if (p.fck !== undefined) hard("fck", p.fck < min, "M" + p.fck + " is below the minimum M" + min + " " + why, "IS 456 Table 5"); }
+    function rccGrade() { var e = L.EXPO[p.exp]; if (e) grade(e[1], "for " + p.exp + " exposure"); else grade(20, "for reinforced concrete"); }
+    function slabDepth(span, d, basic, k) {
+      if (!(span > 0 && d > 0)) return;
+      var r = span * 1000 / d;
+      hard(k, r > basic * 2, "span/d = " + f0(r) + " exceeds " + basic + " × 2.0 (largest modification factor) — the deflection limit cannot be met; minimum d ≈ " + Math.ceil(span * 1000 / (basic * 2)) + " mm", "IS 456 cl 23.2.1, Fig 4");
+    }
+    var basic = { ss: 20, cont: 26, cant: 7 };
+    switch (id) {
+      case "beam": {
+        pos(["b", "D", "cover", "L"]);
+        var nc = L.nomCover(p.exp, p.dia, p.fck);
+        hard("cover", p.cover < nc, "clear cover " + p.cover + " mm is less than the nominal cover " + nc + " mm for " + p.exp + " exposure", "IS 456 cl 26.4.2, Table 16");
+        hard("cover", p.cover < p.stir || p.cover + p.stir < p.dia, "cover must not be less than the bar diameter", "IS 456 cl 26.4.1");
+        hard("D", p.D <= 2 * (p.cover + p.stir) + 2 * p.dia, "overall depth leaves no room for the bars", "");
+        var d = p.D - p.cover - p.stir - p.dia / 2;
+        if (p.L > 0 && d > 0) { var bs = basic[p.support] || 20, r = p.L * 1000 / d; hard("D", r > bs * 2 * 1.5, "span/d = " + f0(r) + " exceeds " + bs + " × 2.0 × 1.5 (largest factors of Fig 4 and 5) — minimum d ≈ " + Math.ceil(p.L * 1000 / (bs * 3)) + " mm", "IS 456 cl 23.2.1"); }
+        warn("b", p.b < 200, "width below 200 mm is not permitted in seismic zones III–V", "IS 13920 cl 6.1.2");
+        warn("b", p.b / p.D < 0.3, "b/D = " + f0(p.b / p.D * 100) / 100 + " < 0.3 (ductile detailing)", "IS 13920 cl 6.1.1");
+        if (p.L > 0 && d > 0) { var lim = p.support === "cant" ? Math.min(25 * p.b, 100 * p.b * p.b / d) : Math.min(60 * p.b, 250 * p.b * p.b / d); warn("L", p.L * 1000 > lim, "check lateral stability: clear distance between restraints should not exceed " + f0(lim / 1000) + " m", "IS 456 cl 23.3"); }
+        rccGrade(); break;
+      }
+      case "slab1": case "slab2": case "stair": {
+        var t = id === "stair" ? p.t : p.D, tk = id === "stair" ? "t" : "D";
+        pos([tk, "cover"]);
+        var nc2 = L.nomCover(p.exp, p.dia, p.fck);
+        hard("cover", p.cover < nc2, "clear cover " + p.cover + " mm is less than the nominal cover " + nc2 + " mm for " + p.exp + " exposure", "IS 456 cl 26.4.2, Table 16");
+        hard("cover", p.cover < p.dia, "cover must not be less than the bar diameter", "IS 456 cl 26.4.1");
+        hard("dia", p.dia > t / 8, "bar diameter " + p.dia + " mm exceeds 1/8 of the slab thickness (" + f0(t / 8) + " mm)", "IS 456 cl 26.5.2.2");
+        var d2 = t - p.cover - p.dia / 2;
+        hard(tk, d2 <= 0, "thickness leaves no effective depth", "");
+        if (id === "slab1") slabDepth(p.L, d2, basic[p.support] || 20, tk);
+        if (id === "slab2") { slabDepth(p.lx, d2, 26, tk); hard("ly", p.ly < p.lx, "long span must not be less than the short span", "IS 456 Annex D"); }
+        if (id === "stair") {
+          slabDepth(p.L, d2, p.support === "cont" ? 26 : 20, tk);
+          warn("R", p.R > 190, "riser above 190 mm (residential maximum)", "NBC 2016 Part 3/4");
+          warn("T", p.T < 250, "tread below 250 mm (residential minimum)", "NBC 2016 Part 3/4");
+          warn("R", 2 * p.R + p.T < 550 || 2 * p.R + p.T > 700, "2R + T = " + (2 * p.R + p.T) + " mm, usual range 550–700", "IS 456 cl 33 practice");
+        }
+        rccGrade(); break;
+      }
+      case "column": {
+        pos(["b", "D", "L", "lex", "ley", "cover"]);
+        var small = Math.min(p.b, p.D) <= 200 && p.dia <= 12, need = small ? 25 : 40;
+        hard("cover", p.cover + p.tie < Math.max(need, p.dia), "cover to the longitudinal bars " + (p.cover + p.tie) + " mm is less than " + Math.max(need, p.dia) + " mm", "IS 456 cl 26.4.2.1");
+        var nc3 = (L.EXPO[p.exp] || L.EXPO.moderate)[0];
+        hard("cover", p.cover < nc3, "clear cover to the ties " + p.cover + " mm is less than the nominal cover " + nc3 + " mm for " + p.exp + " exposure", "IS 456 Table 16");
+        hard("tie", p.tie < Math.max(6, p.dia / 4), "tie diameter must be at least max(6, φ/4) = " + Math.max(6, p.dia / 4) + " mm", "IS 456 cl 26.5.3.2(c)");
+        hard("dia", p.dia < 12, "longitudinal bars must be at least 12 mm", "IS 456 cl 26.5.3.1(d)");
+        hard("pmax", p.pmax > 6, "maximum longitudinal steel is 6 % (4 % recommended)", "IS 456 cl 26.5.3.1(a)");
+        hard("pmax", p.pmax < 0.8, "maximum steel cannot be below the 0.8 % minimum", "IS 456 cl 26.5.3.1(a)");
+        if (p.b > 0 && p.D > 0) hard("L", p.L * 1000 > 60 * Math.min(p.b, p.D), "unsupported length exceeds 60 × least lateral dimension (" + f0(60 * Math.min(p.b, p.D) / 1000) + " m)", "IS 456 cl 25.3.1");
+        warn("b", Math.min(p.b, p.D) < 300, "least dimension below 300 mm is not permitted in seismic zones III–V", "IS 13920 cl 7.1.2");
+        warn("b", Math.min(p.b, p.D) / Math.max(p.b, p.D) < 0.4, "ratio of shortest to longest dimension below 0.4", "IS 13920 cl 7.1.1");
+        rccGrade(); break;
+      }
+      case "footing": case "strip": {
+        pos(["sbc", "cover"].concat(id === "footing" ? ["P", "cb", "cd"] : ["w", "tw"]));
+        hard("cover", p.cover < 50, "minimum cover for footings is 50 mm", "IS 456 cl 26.4.2.2");
+        hard("cover", p.cover < (L.EXPO[p.exp] || L.EXPO.moderate)[0], "cover is less than the nominal cover for " + p.exp + " exposure", "IS 456 Table 16");
+        if (id === "strip") hard("Dmin", p.Dmin > 0 && p.Dmin < 150, "thickness at the edge of a footing on soil must be at least 150 mm", "IS 456 cl 34.1.2");
+        rccGrade(); break;
+      }
+      case "pile": {
+        pos(["Dp", "Lp", "cb", "cd", "fos", "sp"]);
+        hard("pcov", p.pcov < 50, "cover to pile reinforcement must be at least 50 mm", "IS 2911 (Part 1/Sec 2)");
+        hard("sp", p.sp < 2.5, "pile spacing must be at least 2.5 × D", "IS 2911 (Part 1/Sec 2)");
+        warn("sp", p.sp < 3, "friction piles need at least 3 × D", "IS 2911 (Part 1/Sec 2)");
+        hard("fos", !(p.Qg > 0) && p.fos < 2.5, "factor of safety on the static formula must be at least 2.5", "IS 2911 Annex B");
+        hard("edge", p.edge < 100, "cap must project at least 100 mm beyond the outer piles", "IS 2911 (Part 1/Sec 2)");
+        warn("edge", p.edge >= 100 && p.edge < 150, "150 mm projection is normal practice", "IS 2911 (Part 1/Sec 2)");
+        grade(25, "for piles", "IS 2911"); break;
+      }
+      case "raft": {
+        pos(["sbc", "cb", "cd", "matMesh"]);
+        hard("matT", p.matT > 0 && p.matT < 150, "a raft thinner than 150 mm is below the footing edge minimum", "IS 456 cl 34.1.2");
+        grade(25, "for moderate exposure (in contact with soil)"); break;
+      }
+      case "tension": {
+        var d0 = p.db + (p.db <= 14 ? 1 : p.db <= 24 ? 2 : 3);
+        if (p.conn === "bolt") {
+          hard("pitch", p.pitch < 2.5 * p.db, "pitch must be at least 2.5 × bolt dia = " + 2.5 * p.db + " mm", "IS 800 cl 10.2.2");
+          hard("e", p.e < 1.5 * d0, "end distance must be at least 1.5 × hole dia = " + f0(1.5 * d0) + " mm", "IS 800 cl 10.2.4.2");
+        }
+        hard("lmax", p.lmax > 400, "maximum L/r for tension members is 400", "IS 800 Table 3"); break;
+      }
+      case "comp": hard("lmax", p.lmax > 250, "maximum KL/r for compression members is 250 (180 for dead + imposed loads)", "IS 800 Table 3"); warn("lmax", p.lmax > 180 && p.lmax <= 250, "KL/r above 180 is allowed only for members resisting wind or earthquake forces", "IS 800 Table 3"); break;
+      case "bolts": {
+        var h0 = p.db + (p.db <= 14 ? 1 : p.db <= 24 ? 2 : 3), tt = p.tw_thk, smin = tt <= 10 ? 3 : tt <= 20 ? 5 : tt <= 32 ? 6 : 8;
+        hard("pitch", p.pitch < 2.5 * p.db, "pitch must be at least 2.5 × bolt dia = " + 2.5 * p.db + " mm", "IS 800 cl 10.2.2");
+        hard("e", p.e < 1.5 * h0, "end distance must be at least 1.5 × hole dia = " + f0(1.5 * h0) + " mm", "IS 800 cl 10.2.4.2");
+        hard("s", p.s < smin, "minimum fillet weld size for a " + tt + " mm part is " + smin + " mm", "IS 800 Table 21");
+        hard("Lw", p.Lw < 4 * p.s, "effective weld length must be at least 4 × weld size", "IS 800 cl 10.5.4.1");
+        warn("s", p.s > p.t - 1.5, "weld size above (thinner part − 1.5 mm) on square edges", "IS 800 cl 10.5.8.2"); break;
+      }
+      case "sbeam": warn("dl", p.dl < 240, "deflection limit looser than span/240", "IS 800 Table 6"); break;
+    }
+    return out;
+  };
+
+  /* frame / building model inputs */
+  L.frame = function (p) {
+    var out = [], duct = String(p.zone) !== "II";
+    function add(k, hard, msg, ref) { out.push({ k: k, hard: hard, msg: msg, ref: ref }); }
+    function dims(t) { var m = /^\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*$/i.exec(String(t || "")); return m ? [+m[1], +m[2]] : null; }
+    if (p.mat !== "steel") {
+      var e = L.EXPO[p.exposure] || L.EXPO.moderate;
+      if (+p.fck < e[1]) add("fck", true, "M" + p.fck + " is below the minimum M" + e[1] + " for " + (p.exposure || "moderate") + " exposure", "IS 456 Table 5");
+      var c = dims(p.colSec), b = dims(p.beamSec);
+      if (c && Math.min(c[0], c[1]) < 300) add("colSec", duct, "column " + p.colSec + ": least dimension below 300 mm" + (duct ? " in zone " + p.zone : " (needed in zones III–V)"), "IS 13920 cl 7.1.2");
+      if (c && Math.min(c[0], c[1]) / Math.max(c[0], c[1]) < 0.4) add("colSec", false, "column " + p.colSec + ": shortest/longest side below 0.4", "IS 13920 cl 7.1.1");
+      if (b && b[0] < 200) add("beamSec", duct, "beam " + p.beamSec + ": width below 200 mm" + (duct ? " in zone " + p.zone : " (needed in zones III–V)"), "IS 13920 cl 6.1.2");
+      if (b && b[0] / b[1] < 0.3) add("beamSec", false, "beam " + p.beamSec + ": b/D below 0.3", "IS 13920 cl 6.1.1");
+      if (p.walls && +p.tWall < 150) add("tWall", true, "shear wall thickness below 150 mm", "IS 13920 cl 10.1.2");
+    }
+    return out;
+  };
+  /* ---------- fix suggestions: smallest single change (then pairs) that makes every check pass ---------- */
+  function up(v, step, max) { var a = []; for (var x = Math.ceil((v + 0.01) / step) * step; x <= max + 1e-9; x += step) a.push(Math.round(x * 1000) / 1000); return a; }
+  function after(list, v) { return list.filter(function (x) { return x > v; }); }
+  var GR = [20, 25, 30, 35, 40];
+  function levers(id, p) {
+    var Lv = [];
+    function lv(k, label, unit, vals) { if (vals.length) Lv.push({ k: k, label: label, unit: unit, vals: vals }); }
+    function gradeLv() { lv("fck", "Concrete grade", "", after(GR, p.fck)); }
+    switch (id) {
+      case "beam": lv("D", "Overall depth D", "mm", up(p.D, 25, Math.max(900, p.D * 2))); lv("b", "Width b", "mm", after([230, 250, 300, 350, 400, 450, 500, 600], p.b)); lv("dia", "Main bar dia", "mm", after(L.BARS.main, p.dia)); lv("stir", "Stirrup dia", "mm", after([8, 10, 12], p.stir)); gradeLv(); break;
+      case "slab1": case "slab2": lv("D", "Thickness D", "mm", up(p.D, 10, Math.max(300, p.D * 2))); lv("dia", "Bar dia", "mm", after(L.BARS.slab, p.dia)); gradeLv(); break;
+      case "stair": lv("t", "Waist thickness", "mm", up(p.t, 10, Math.max(300, p.t * 2))); lv("dia", "Bar dia", "mm", after(L.BARS.slab, p.dia)); gradeLv(); break;
+      case "column": lv("b", "Width b", "mm", up(p.b, 50, Math.max(900, p.b * 2))); lv("D", "Depth D", "mm", up(p.D, 50, Math.max(1200, p.D * 2))); lv("dia", "Main bar dia", "mm", after(L.BARS.col, p.dia)); gradeLv(); lv("pmax", "Max steel %", "%", after([4, 5, 6], p.pmax)); break;
+      case "footing": lv("dia", "Bar dia", "mm", after(L.BARS.ftg, p.dia)); gradeLv(); break;
+      case "strip": lv("Dmin", "Minimum depth", "mm", up(Math.max(p.Dmin, 150), 50, 900)); lv("dia", "Bar dia", "mm", after(L.BARS.ftg, p.dia)); gradeLv(); break;
+      case "pile": lv("Dp", "Pile diameter", "mm", after([450, 500, 600, 750, 1000, 1200], p.Dp)); lv("Lp", "Pile length", "m", up(p.Lp, 1, p.Lp + 15)); if (p.capT > 0) lv("capT", "Cap thickness", "mm", [0]); gradeLv(); break;
+      case "raft": if (p.matT > 0) lv("matT", "Raft thickness", "mm", [0].concat(up(p.matT, 100, p.matT + 600))); gradeLv(); break;
+      case "tension": if (p.sec !== "auto") lv("sec", "Angle section", "", ["auto"]); if (+p.n === 1) lv("n", "Arrangement", "", [2]); lv("nb", "Bolts in line", "", up(p.nb, 1, p.nb + 6)); if (p.bgrade === "4.6") lv("bgrade", "Bolt grade", "", ["8.8"]); break;
+      case "comp": if (p.sec !== "auto") lv("sec", "Section", "", ["auto"]); if (p.type === "sa") lv("type", "Member type", "", ["da"]); break;
+      case "sbeam": if (p.sec !== "auto") lv("sec", "Section", "", ["auto"]); if (!p.lat) lv("lat", "Compression flange", "", [true]); if (!p.lat) lv("Lun", "Unbraced length", "m", [p.Lun / 2, p.Lun / 3]); break;
+      case "bolts": lv("nb", "Number of bolts", "", up(p.nb, 1, p.nb + 8)); lv("grade", "Bolt grade", "", p.grade === "4.6" ? ["8.8", "10.9"] : p.grade === "8.8" ? ["10.9"] : []); lv("db", "Bolt dia", "mm", after(L.BARS.bolt, p.db)); lv("s", "Weld size", "mm", up(p.s, 1, Math.max(p.s, p.t - 1.5))); lv("Lw", "Weld length", "mm", up(p.Lw, 20, p.Lw * 3)); break;
+      case "purlin": if (p.kind === "angle") lv("kind", "Section type", "", ["channel"]); if (!p.sag) lv("sag", "Sag rods", "", [true]); break;
+      case "truss": if (+p.fy === 250) lv("fy", "Steel", "", [350]); lv("webMin", "Min web angle leg", "mm", after([50, 55, 60, 65, 70, 75, 80, 90, 100], p.webMin)); break;
+    }
+    return Lv;
+  }
+  function label(l, v) {
+    if (l.k === "fck") return "Use M" + v + " concrete";
+    if (l.k === "sec" && v === "auto") return "Let the app pick the lightest section that passes";
+    if (l.k === "capT" || l.k === "matT") { if (v === 0) return "Let the app choose the " + (l.k === "capT" ? "cap" : "raft") + " thickness"; }
+    if (l.k === "n") return "Use a double angle";
+    if (l.k === "lat") return "Restrain the compression flange laterally";
+    if (l.k === "sag") return "Add sag rods at mid-span";
+    if (l.k === "kind") return "Use a channel (ISMC)";
+    if (l.k === "type") return "Use a double angle";
+    if (l.k === "fy") return "Use E350 steel";
+    if (l.k === "grade" || l.k === "bgrade") return "Use grade " + v + " bolts";
+    if (l.k === "dia") return "Use " + v + " mm " + (/Main/.test(l.label) ? "main bars" : "bars");
+    if (l.k === "stir") return "Use " + v + " mm stirrups";
+    if (l.k === "db") return "Use M" + v + " bolts";
+    return "Increase " + l.label.charAt(0).toLowerCase() + l.label.slice(1) + " to " + v + (l.unit ? " " + l.unit : "");
+  }
+  /* run(p) → report; returns [{text, set: {k: v}, fails}] ranked by size of change */
+  L.fixes = function (id, p, run, opt) {
+    opt = opt || {};
+    var budget = opt.budget || 120, n = 0, res = [];
+    function test(q) {
+      if (n >= budget) return null; n++;
+      if (L.check(id, q).some(function (x) { return x.hard; })) return null;
+      try { var r = run(q); return r && r.ok() ? r : null; } catch (e) { return null; }
+    }
+    var Lv = levers(id, p);
+    Lv.forEach(function (l) {
+      for (var i = 0; i < l.vals.length; i++) {
+        var q = Object.assign({}, p); q[l.k] = l.vals[i];
+        if (test(q)) { var s = {}; s[l.k] = l.vals[i]; res.push({ text: label(l, l.vals[i]), set: s, rank: i / l.vals.length }); break; }
+      }
+    });
+    if (!res.length && Lv.length > 1) {      /* pairs of the first two levers, stepping both */
+      var a = Lv[0], b = Lv[1];
+      for (var i = 0; i < a.vals.length && !res.length; i++) for (var j = 0; j < b.vals.length; j++) {
+        var q = Object.assign({}, p); q[a.k] = a.vals[i]; q[b.k] = b.vals[j];
+        if (test(q)) { var s = {}; s[a.k] = a.vals[i]; s[b.k] = b.vals[j]; res.push({ text: label(a, a.vals[i]) + " and " + label(b, b.vals[j]).replace(/^(Use|Increase) /, function (m) { return m.toLowerCase(); }).replace(/^increase /, ""), set: s, rank: 1 }); break; }
+        if (n >= budget) break;
+      }
+    }
+    res.sort(function (x, y) { return x.rank - y.rank; });
+    return { list: res.slice(0, opt.max || 4), tried: n };
+  };
+  return L;
+})();
+if (typeof module !== "undefined") module.exports = LIM;
 
 /* js/rcc.js */
 /* RCC design to IS 456:2000 (limit state method). Units: mm, N, kN, kNm unless stated. */
@@ -5438,7 +5659,7 @@ if (typeof module !== "undefined") module.exports = FD;
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "3.5";
+REG.ENGINE = "3.6";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],
@@ -5502,12 +5723,14 @@ REG.CHECKS = [
   ["Loads", "Imposed-load reduction for floors carried (IS 875 Pt 2 cl 3.2.1)", "Calculated", "Table values checked in acceptance.js I; applied to footing sizing and design only, not to columns"],
   ["Detailing", "Nominal cover for exposure and fire (IS 456 Table 16, 16A, Fig. 1) and minimum grade (Table 5)", "Verified", "Table values and the effective depths that use them checked in acceptance.js I"],
   ["Quantities", "Bill of quantities of the whole building (IS 1200 style) priced with JKSOR 2022", "Calculated", "Concrete, masonry, plaster, floor and excavation quantities checked by hand in acceptance.js H; every default rate is traced to its JKSOR 2022 item"],
-  ["Automation", "Automatic design (storey-wise enlargement until all checks pass)", "Calculated", "Converges on the test building in acceptance.js H; sizes are written as editable section rules"]
+  ["Automation", "Automatic design (storey-wise enlargement until all checks pass)", "Calculated", "Converges on the test building in acceptance.js H; sizes are written as editable section rules"],
+  ["Inputs", "Code limits on inputs: cover (IS 456 Table 16, cl 26.4), grade (Table 5), bar size (cl 26.5), span/d ceiling (cl 23.2.1), column slenderness (cl 25.3.1), footing edge (cl 34.1.2), IS 13920 member sizes, IS 2911 piles, IS 800 bolts and welds", "Verified", "Rules checked case by case in acceptance.js N; blocking can be switched off for existing structures and is then reported"],
+  ["Automation", "Fix suggestions for failed member designs: smallest change of size, bars or grade that passes every check", "Calculated", "Each suggestion is re-run through the design and the input limits (acceptance.js N, UI test)"]
 ];
 /* stable ids of REG.CHECKS rows, used by the verification mode */
 REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "mmc", "timehist",
   "rcbeam", "rccol", "rcslab", "rcwallel", "rcwall", "servic", "stfcd", "stltb", "stklen", "dtbeam", "dtcol", "scwb", "joint", "dtslab", "bbs",
-  "foot", "footpress", "mat", "matsoil", "pilecap", "pilelat", "pilegrp", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto"];
+  "foot", "footpress", "mat", "matsoil", "pilecap", "pilelat", "pilegrp", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto", "inlim", "fixes"];
 REG.byId = function (id) { var i = REG.IDS.indexOf(id); return i >= 0 ? { id: id, area: REG.CHECKS[i][0], t: REG.CHECKS[i][1], st: REG.CHECKS[i][2], ev: REG.CHECKS[i][3] } : null; };
 REG.RANK = { "Not implemented": 0, Simplified: 1, Calculated: 2, Verified: 3 };
 /* checks behind each kind of result; the weakest decides the result's verification state */
@@ -8416,7 +8639,7 @@ var SU = (function () {
     src: "gen", bx: "4, 4, 4", by: "5, 5", hs: "3.5, 3.2, 3.2", slabs: true, walls: false, brace: false, mesh: 1,
     dmode: "3d", dunits: "auto", dmesh: 1, roles: {},
     method: "lsm", mat: "rcc", fck: 25, fy: 500, fys: 250, colSec: "400x400", beamSec: "300x450", braceSec: "ISA 75x75x6", tSlab: 150, tWall: 200,
-    crack: true, pcCol: 2, pcBeam: 1, kcol: 1.2,
+    crack: true, existing: false, pcCol: 2, pcBeam: 1, kcol: 1.2,
     ff: 1.5, ll: 3, ffRoof: 2.5, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0,
     eq: true, zone: "V", I: 1.2, R: 5, soil: "II", sys: "rc", wind: false, vbp: "Srinagar", terrain: 2, cf: 1.3, trib: 4,
     pdir: 0, ppat: "parabolic", pdrift: 4, ppd: true, pev: 80, secOver: "", loadOver: "",
@@ -8565,7 +8788,7 @@ var SU = (function () {
       txt("colSec", "Columns", "b×D mm (D along X) or ISMB…") + txt("beamSec", "Beams", "b×D mm or ISMB…") + txt("braceSec", "Braces", "ISA a×a×t or ISMB") +
       num("tSlab", "Slab thickness", "mm") + num("tWall", "Wall thickness", "mm") +
       sel("exposure", "Exposure condition (IS 456 Table 3)", [["mild", "Mild — cover 20, ≥ M20"], ["moderate", "Moderate — cover 30, ≥ M25"], ["severe", "Severe — cover 45, ≥ M30"], ["very severe", "Very severe — cover 50, ≥ M35"], ["extreme", "Extreme — cover 75, ≥ M40"]]) +
-      sel("fire", "Fire resistance (IS 456 Table 16A)", [["0.5", "0.5 h"], ["1", "1 h"], ["1.5", "1.5 h"], ["2", "2 h"], ["3", "3 h"], ["4", "4 h"]]) + chk("crack", "Cracked stiffness (IS 1893 cl 6.4.3.1: beams 0.35, columns 0.70)") +
+      sel("fire", "Fire resistance (IS 456 Table 16A)", [["0.5", "0.5 h"], ["1", "1 h"], ["1.5", "1.5 h"], ["2", "2 h"], ["3", "3 h"], ["4", "4 h"]]) + chk("crack", "Cracked stiffness (IS 1893 cl 6.4.3.1: beams 0.35, columns 0.70)") + chk("existing", "Checking an existing structure — allow member sizes and grades outside the code limits") +
       num("pcCol", "Column steel for hinges / P-M", "%") + num("pcBeam", "Beam steel (both faces) for hinges", "%") + num("kcol", "Column effective length factor", "", "IS 456 Table 28 / Annex E (1.2 for sway frames)") +
       area("secOver", "Member section overrides (optional)", "One rule per line: <i>which = section</i>. Which: member numbers (12, 1-12, F20), <i>columns / beams / braces / all</i>, optionally with <i>storey 1</i>, <i>storey 2-4</i>, <i>level 3.5</i> (m) or <i>layer NAME</i>. Later lines win. Tap a member in the 3D view to assign it directly.", "columns storey 1-2 = 450x450\nbeams storey 3 = 300x400\n15, 18-20 = ISMB 350") +
       '<div class="btns full"><button type="button" class="rstd" data-p="p2">Clear my entries (use defaults)</button></div><div class="note full">Priority: override rules › section written in the DXF layer name › the default sections above. Sections are standard-table values (SP 6).</div></div>';
@@ -8657,11 +8880,17 @@ var SU = (function () {
 
   /* ---------- analysis ---------- */
   function busy(t) { $("results").innerHTML = '<div class="rep"><div class="busy"><i></i>' + t + '</div></div>'; }
+  function codeBlock(p) {
+    var li = LIM.frame(p), hd = li.filter(function (x) { return x.hard; });
+    S.limits = li;
+    if (hd.length && !p.existing) { err("Inputs against the IS code — correct them in Properties (or switch on \u201cChecking an existing structure\u201d):\n" + hd.map(function (x) { return "• " + x.msg + " (" + x.ref + ")"; }).join("\n")); return true; }
+    return false;
+  }
   function runLinear(pd) {
     grab(document.getElementById("app"));
     try { if (P.src === "gen" && !S.geo) buildGen(true); } catch (e) { return err(e); }
     if (!S.m) return err("Build a model first");
-    var p = params(); S.p = p; MD._pm = {};
+    var p = params(); if (codeBlock(p)) return; S.p = p; MD._pm = {};
     S.m = MD.make(S.geo, p);
     busy("Assembling stiffness matrix and solving…");
     var t0 = Date.now(), steps = PIPE.steps(S, p, pd);
@@ -8682,7 +8911,7 @@ var SU = (function () {
     grab(document.getElementById("app"));
     try { if (P.src === "gen" && !S.geo) buildGen(true); } catch (e) { return err(e); }
     if (!S.m) return err("Build a model first");
-    var p = params(); MD._pm = {};
+    var p = params(); if (codeBlock(p)) return; MD._pm = {};
     busy("Automatic design: iteration 1…");
     AUTO.run(S.geo, p, { async: true, step: function (i, l) { busy("Automatic design: iteration " + (i + 2) + " — " + (Object.keys(l.fails.col).length + Object.keys(l.fails.beam).length) + " storey group(s) enlarged after iteration " + (i + 1) + "…"); } }).then(function (r) {
       Object.keys(r.S).forEach(function (k) { if (k !== "geo") S[k] = r.S[k]; });
@@ -8964,6 +9193,8 @@ var SU = (function () {
       if (qs && qs.shells) h += '<div><span>Mesh quality</span><b>' + qs.shells + ' shells · max aspect ' + f(qs.maxAR, 1) + ' · min angle ' + f(qs.minAng, 0) + '°</b></div>';
       h += '</div>';
       var dfl = used().filter(function (k) { return LBL[k]; }).map(function (k) { return LBL[k] + " " + dtxt(k); });
+      if (S.des.fails) h += '<div class="fixbox noprint"><b>' + IC.svg("bulb") + ' How to make it pass</b><small>' + S.des.fails + ' design check(s) fail.</small><div class="fx"><span>' + (S.autoRes && !S.autoRes.ok ? 'Run automatic design again from the enlarged sizes' : 'Run automatic design — enlarges the columns and beams of the failing storeys in 50 mm steps until every check passes') + '</span><button type="button" id="bFixAuto">Apply</button></div><small>Or edit the sizes in <b>Member section overrides</b>, raise the concrete grade, or add shear walls / bracing where drift governs.</small></div>';
+      if (S.limits && S.limits.length) h += '<div class="note"><b>' + (S.limits.some(function (x) { return x.hard; }) ? 'Existing structure — inputs outside the code limits:' : 'Code notes on the inputs:') + '</b> ' + S.limits.map(function (x) { return esc(x.msg + " (" + x.ref + ")"); }).join("<br>") + '</div>';
       if (dfl.length) h += '<div class="note"><b>Defaults used</b> (not entered): ' + esc(dfl.join(" · ")) + '</div>';
       if (S.L.notes.length) h += '<div class="note">' + S.L.notes.map(esc).join("<br>") + '</div>';
       if (r.warn && r.warn.length) h += '<div class="note"><b>Model warnings:</b> ' + r.warn.map(esc).join("<br>") + '</div>';
@@ -8980,6 +9211,7 @@ var SU = (function () {
     }
     if (S.po) h += poReport() + (S.res ? '' : '<div class="btns noprint"><button type="button" class="pri bXls">Excel: pushover & model</button></div>');
     $("results").innerHTML = h;
+    if ($("bFixAuto")) $("bFixAuto").onclick = runAuto;
     jumpBar($("results"));
     function handoff(id) {
       var cr = S.res && S.res.caseReac; if (!cr || !cr.DL) return toast("Run the analysis first");
@@ -9231,6 +9463,9 @@ var SU = (function () {
   var fy = { type: "select", opts: [["250", "Fe 250"], ["415", "Fe 415"], ["500", "Fe 500"], ["550", "Fe 550"]], def: "500", label: "Steel grade fy", unit: "N/mm²", num: true };
   var fck = { type: "select", opts: [["15", "M15"], ["20", "M20"], ["25", "M25"], ["30", "M30"], ["35", "M35"], ["40", "M40"]], def: "20", label: "Concrete grade fck", unit: "N/mm²", num: true };
   function n(label, def, unit, help) { return { type: "number", label: label, def: def, unit: unit || "", help: help || "" }; }
+  var fck25 = Object.assign({}, fck, { def: "25" });
+  function bar(label, def, set, pre) { return { type: "select", label: label, opts: LIM.BARS[set].map(function (d) { return [String(d), (pre || "") + d + " mm"]; }), def: String(def), num: true, unit: "mm" }; }
+  function expo(def) { return { type: "select", label: "Exposure condition", opts: LIM.EXPO_OPTS, def: def, help: "IS 456 Table 3 — sets the minimum cover (Table 16) and grade (Table 5)" }; }
   var meth = { type: "select", label: "Design method", opts: [["lsm", "Limit state method (default)"], ["wsm", "Working stress method (Annex B)"]], def: "lsm", help: "Loads: factored for LSM, working (service) for WSM" };
   function by(l, w) { return function (p) { return p.method === "wsm" ? w(p) : l(p); }; }
   function sel(label, opts, def, num) { return { type: "select", label: label, opts: opts, def: def, num: !!num }; }
@@ -9241,24 +9476,24 @@ var SU = (function () {
 
   var M = [
     { id: "beam", grp: "RCC", icon: "━", t: "RCC Beam", d: "Flexure, shear, deflection, Ld", code: "IS 456", fn: by(RCC.beam, WS.beam), f: {
-      method: meth, b: n("Width b", 230, "mm"), D: n("Overall depth D", 450, "mm"), cover: n("Clear cover", 25, "mm"), stir: n("Stirrup dia", 8, "mm"), dia: n("Main bar dia (for d)", 16, "mm"),
+      method: meth, b: n("Width b", 230, "mm"), D: n("Overall depth D", 450, "mm"), exp: expo("mild"), cover: n("Clear cover to stirrups", 25, "mm"), stir: bar("Stirrup dia", 8, "tie"), dia: bar("Main bar dia (for d)", 16, "main"),
       L: n("Effective span L", 5, "m"), support: supp, mode: sel("Design forces", [["load", "From factored UDL"], ["direct", "Enter Mu, Vu"]], "load"),
       wu: n("Design UDL w", 30, "kN/m", "LSM: factored 1.5(DL+LL) · WSM: working DL+LL"), Mu: n("M (if direct)", 100, "kNm", "factored (LSM) / working (WSM)"), Vu: n("V (if direct)", 80, "kN"), fck: fck, fy: fy } },
     { id: "slab1", grp: "RCC", icon: "▭", t: "One-way Slab", d: "ly/lx > 2, cantilever, continuous", code: "IS 456", fn: by(RCC.slab1, WS.slab1), f: {
-      method: meth, L: n("Effective span", 3.0, "m"), D: n("Thickness D", 150, "mm"), cover: n("Clear cover", 20, "mm"), dia: n("Bar dia", 10, "mm"),
+      method: meth, L: n("Effective span", 3.0, "m"), D: n("Thickness D", 150, "mm"), exp: expo("mild"), cover: n("Clear cover", 20, "mm"), dia: bar("Bar dia", 10, "slab"),
       LL: n("Live load", 3, "kN/m²", "IS 875 Pt 2: office 2.5-4"), FF: n("Floor finish", 1, "kN/m²"), support: supp, fck: fck, fy: fy } },
     { id: "slab2", grp: "RCC", icon: "▦", t: "Two-way Slab", d: "Table 26/27 coefficients, 10 edge cases", code: "IS 456 Annex D", fn: by(RCC.slab2, WS.slab2), f: {
       method: meth, lx: n("Short span lx", 4, "m"), ly: n("Long span ly", 5, "m"), case_: sel("Edge condition", D.T26.map(function (c, i) { return [String(i + 1), c.name]; }), "4", true),
-      D: n("Thickness D", 150, "mm"), cover: n("Clear cover", 20, "mm"), dia: n("Bar dia", 10, "mm"), LL: n("Live load", 3, "kN/m²"), FF: n("Floor finish", 1, "kN/m²"), fck: fck, fy: fy } },
+      D: n("Thickness D", 150, "mm"), exp: expo("mild"), cover: n("Clear cover", 20, "mm"), dia: bar("Bar dia", 10, "slab"), LL: n("Live load", 3, "kN/m²"), FF: n("Floor finish", 1, "kN/m²"), fck: fck, fy: fy } },
     { id: "column", grp: "RCC", icon: "┃", t: "RCC Column", d: "Axial + biaxial bending, slender", code: "IS 456 cl 39", fn: by(RCC.column, WS.column), f: {
       method: meth, b: n("Width b", 300, "mm"), D: n("Depth D", 450, "mm"), L: n("Unsupported length", 3, "m"), lex: n("Effective length lex", 3, "m"), ley: n("Effective length ley", 3, "m"),
-      Pu: n("Axial load P", 1500, "kN", "factored (LSM) / working (WSM)"), Mux: n("Mx", 60, "kNm"), Muy: n("My", 30, "kNm"), cover: n("Clear cover", 40, "mm"), tie: n("Tie dia", 8, "mm"),
-      dia: sel("Main bar dia", [["12", "12 mm"], ["16", "16 mm"], ["20", "20 mm"], ["25", "25 mm"], ["32", "32 mm"]], "16", true),
+      Pu: n("Axial load P", 1500, "kN", "factored (LSM) / working (WSM)"), Mux: n("Mx", 60, "kNm"), Muy: n("My", 30, "kNm"), exp: expo("mild"), cover: n("Clear cover to ties", 40, "mm", "IS 456 cl 26.4.2.1: ≥ 40 mm to the main bars"), tie: bar("Tie dia", 8, "tie"),
+      dia: bar("Main bar dia", 16, "col"),
       arr: sel("Bar arrangement", [["four", "Equal on four faces"], ["two", "Two faces (parallel to b)"]], "four"), pmax: n("Max steel %", 4, "%"), fck: fck, fy: fy } },
     { id: "footing", grp: "RCC", icon: "⬛", t: "Isolated Footing", d: "Size, bending, one-way & punching shear", code: "IS 456 cl 34", fn: RCC.footing, f: {
       P: n("Service axial load P", 1000, "kN"), Mx: n("Service moment (long dir)", 0, "kNm"), sbc: n("Safe bearing capacity", 150, "kN/m²"), sw: n("Self wt + backfill", 10, "% of P"),
       cb: n("Column width b", 300, "mm"), cd: n("Column depth D", 450, "mm"), shape: sel("Shape", [["rect", "Rectangular (equal projections)"], ["sq", "Square"]], "rect"),
-      cover: n("Clear cover", 50, "mm"), dia: n("Bar dia", 12, "mm"), fck: fck, fy: fy } },
+      exp: expo("moderate"), cover: n("Clear cover", 50, "mm", "IS 456 cl 26.4.2.2: ≥ 50 mm"), dia: bar("Bar dia", 12, "ftg"), fck: fck25, fy: fy } },
     { id: "pile", grp: "Fdn", icon: "⦿", t: "Pile Foundation", d: "Pile capacity, groups, caps, pile bars, drawings, BOQ", code: "IS 2911 / IS 456", fn: FD.pile, f: {
       cols: { type: "text", label: "Columns: mark, x (m), y (m), P (kN), Mx, My (kNm), Hx, Hy (kN) — service loads, one per line", def: "C1, 0, 0, 1800, 40, 30, 35, 25\nC2, 6, 0, 2600, 20, 60, 40, 30\nC3, 0, 5, 2200, 50, 20, 30, 35\nC4, 6, 5, 3200, 30, 40, 45, 40" },
       cb: n("Column size along X", 450, "mm"), cd: n("Column size along Y", 450, "mm"),
@@ -9271,18 +9506,18 @@ var SU = (function () {
       seis: sel("Allowable load increase for seismic loads", [["0", "None (gravity loads)"], ["25", "25 % (IS 1893 Table 1)"], ["50", "50 % (piles on rock / hard soil)"]], "0", true),
       nsf: n("Negative skin friction per pile", 0, "kN"), sp: n("Pile spacing", 3, "× D", "IS 2911: ≥ 3D friction piles, 2.5D end-bearing"), edge: n("Clear edge distance beyond the piles", 150, "mm", "IS 2911 cl 6.12.5: ≥ 150"),
       capT: n("Cap thickness (0 = smallest that passes)", 0, "mm"), pcov: n("Cover to pile bars", 75, "mm", "IS 2911: ≥ 50"), lf: n("Load factor for design", 1.5, ""),
-      zone: sel("Seismic zone (confinement links at the pile top)", [["2", "II"], ["3", "III"], ["4", "IV"], ["5", "V"]], "4", true), fck: fck, fy: fy } },
+      zone: sel("Seismic zone (confinement links at the pile top)", [["2", "II"], ["3", "III"], ["4", "IV"], ["5", "V"]], "4", true), fck: fck25, fy: fy } },
     { id: "raft", grp: "Fdn", icon: "▭", t: "Raft Foundation", d: "Plate on soil springs, punching, mesh + extra bars, drawings, BOQ", code: "IS 2950 / IS 456", fn: FD.raft, f: {
       cols: { type: "text", label: "Columns: mark, x (m), y (m), P dead (kN), P live (kN), Mx, My (kNm) — one per line", def: "C1, 0, 0, 600, 200, 0, 0\nC2, 5, 0, 900, 300, 0, 0\nC3, 10, 0, 600, 200, 0, 0\nC4, 0, 5, 900, 300, 0, 0\nC5, 5, 5, 1300, 450, 0, 0\nC6, 10, 5, 900, 300, 0, 0" },
       cb: n("Column size along X", 450, "mm"), cd: n("Column size along Y", 450, "mm"), sbc: n("Safe bearing capacity (net)", 200, "kN/m²"), ks: n("Modulus of subgrade reaction ks (0 = 120 × SBC)", 0, "kN/m³"),
       Df: n("Founding depth", 1.5, "m"), matT: n("Raft thickness (0 = smallest that passes)", 0, "mm"), matOff: n("Projection beyond the outer column faces", 0.5, "m"),
-      setLim: n("Permissible settlement", 75, "mm", "IS 1904: raft on sand 75, clay 100"), matMesh: n("Mesh size", 0.5, "m"), lf: n("Load factor", 1.5, ""), fck: fck, fy: fy } },
+      setLim: n("Permissible settlement", 75, "mm", "IS 1904: raft on sand 75, clay 100"), matMesh: n("Mesh size", 0.5, "m"), lf: n("Load factor", 1.5, ""), fck: fck25, fy: fy } },
     { id: "strip", grp: "RCC", icon: "▁", t: "Strip / Wall Footing", d: "Under masonry walls", code: "IS 456 cl 34", fn: RCC.strip, f: {
       w: n("Wall load (service)", 150, "kN/m"), sbc: n("Safe bearing capacity", 150, "kN/m²"), sw: n("Self wt + backfill", 10, "% of w"), tw: n("Wall / block width", 350, "mm"),
-      Bmin: n("Minimum width (optional)", 0, "m", "e.g. 0.76 m for 2'-6\""), Dmin: n("Minimum depth (optional)", 0, "mm"), cover: n("Clear cover", 50, "mm"), dia: n("Bar dia", 8, "mm"), fck: fck, fy: fy } },
+      Bmin: n("Minimum width (optional)", 0, "m", "e.g. 0.76 m for 2'-6\""), Dmin: n("Minimum depth (optional)", 0, "mm", "IS 456 cl 34.1.2: ≥ 150 mm at the edge"), exp: expo("moderate"), cover: n("Clear cover", 50, "mm"), dia: bar("Bar dia", 8, "slab"), fck: fck25, fy: fy } },
     { id: "stair", grp: "RCC", icon: "↗", t: "Staircase", d: "Dog-legged / waist slab", code: "IS 456 cl 33", fn: RCC.stair, f: {
       R: n("Riser", 150, "mm"), T: n("Tread", 250, "mm"), t: n("Waist thickness", 175, "mm"), L: n("Effective horizontal span", 3.5, "m"), LL: n("Live load", 3, "kN/m²", "3 residential, 5 public"),
-      FF: n("Finishes", 1, "kN/m²"), support: sel("End condition", [["ss", "Simply supported"], ["cont", "Continuous / monolithic"]], "ss"), cover: n("Clear cover", 20, "mm"), dia: n("Bar dia", 10, "mm"), fck: fck, fy: fy } },
+      FF: n("Finishes", 1, "kN/m²"), support: sel("End condition", [["ss", "Simply supported"], ["cont", "Continuous / monolithic"]], "ss"), exp: expo("mild"), cover: n("Clear cover", 20, "mm"), dia: bar("Bar dia", 10, "slab"), fck: fck, fy: fy } },
 
     { id: "truss", grp: "Steel", icon: "△", t: "Roof Truss", d: "Geometry, IS 875 loads, analysis & design", code: "IS 800 / 875", fn: TR.design, f: {
       type: sel("Truss type", [["pratt", "Pratt"], ["howe", "Howe"], ["fink", "Fink (W, 4 panels)"]], "pratt"), span: n("Span (c/c bearing)", 9.65, "m"), slope: n("Roof slope", 30, "deg"),
@@ -9298,7 +9533,7 @@ var SU = (function () {
       kind: sel("Section type", [["angle", "Angle (ISA)"], ["channel", "Channel (ISMC)"]], "angle"), sag: sel("Sag rods at mid-span", [["", "No"], ["1", "Yes"]], ""), fy: sel("Steel fy", [["250", "E250"], ["350", "E350"]], "250", true) } },
     { id: "tension", grp: "Steel", icon: "↔", t: "Tension Member", d: "Yield, rupture, block shear", code: "IS 800 Sec 6", fn: ST.tension, f: {
       Tu: n("Factored tension Tu", 150, "kN"), sec: sel("Angle section", isa, "auto"), n: sel("Arrangement", [["1", "Single angle"], ["2", "Double angle back-to-back"]], "1", true),
-      L: n("Length", 2.5, "m"), conn: sel("End connection", [["bolt", "Bolted (one leg)"], ["weld", "Welded"]], "bolt"), db: n("Bolt dia", 16, "mm"), bgrade: sel("Bolt grade", [["4.6", "4.6"], ["8.8", "8.8"]], "4.6"),
+      L: n("Length", 2.5, "m"), conn: sel("End connection", [["bolt", "Bolted (one leg)"], ["weld", "Welded"]], "bolt"), db: bar("Bolt dia", 16, "bolt", "M"), bgrade: sel("Bolt grade", [["4.6", "4.6"], ["8.8", "8.8"]], "4.6"),
       nb: n("Bolts in line", 6, ""), pitch: n("Pitch", 50, "mm"), e: n("End distance", 30, "mm"), g: n("Gauge (heel to bolt line)", 35, "mm"), Lw: n("Weld length (if welded)", 150, "mm"),
       tg: n("Gusset thickness", 8, "mm"), gap: n("Gap between angles", 8, "mm"), lmax: n("Max L/r", 400, ""), fy: n("fy", 250, "N/mm²"), fu: n("fu", 410, "N/mm²") } },
     { id: "comp", grp: "Steel", icon: "↕", t: "Compression Member", d: "Struts & columns, buckling curves", code: "IS 800 Sec 7", fn: ST.compression, f: {
@@ -9312,7 +9547,7 @@ var SU = (function () {
       Pu: n("Factored mid-span / tip point load", 0, "kN"), lat: sel("Compression flange", [["1", "Laterally supported"], ["", "Laterally unsupported"]], "1"), Lun: n("Unbraced length (if unsupported)", 6, "m"),
       destab: sel("Load on top flange (destabilising)", [["", "No"], ["1", "Yes"]], ""), dl: n("Deflection limit span /", 300, ""), fy: n("fy", 250, "N/mm²") } },
     { id: "bolts", grp: "Steel", icon: "⊙", t: "Bolts & Welds", d: "Bearing bolts, fillet welds", code: "IS 800 Sec 10", fn: ST.bolts, f: {
-      Vu: n("Factored shear on bolt group", 120, "kN"), db: n("Bolt dia", 16, "mm"), grade: sel("Bolt grade", [["4.6", "4.6"], ["8.8", "8.8"], ["10.9", "10.9"]], "4.6"),
+      Vu: n("Factored shear on bolt group", 120, "kN"), db: bar("Bolt dia", 16, "bolt", "M"), grade: sel("Bolt grade", [["4.6", "4.6"], ["8.8", "8.8"], ["10.9", "10.9"]], "4.6"),
       nb: n("Number of bolts", 5, ""), nn: n("Shear planes through threads", 1, ""), ns: n("Shear planes through shank", 0, ""), t: n("Thinner plate thickness", 8, "mm"),
       fu: n("Plate fu", 410, "N/mm²"), pitch: n("Pitch", 50, "mm"), e: n("End distance", 30, "mm"), Fw: n("Force on weld", 120, "kN"), s: n("Weld size", 6, "mm"),
       Lw: n("Effective weld length", 160, "mm"), tw_thk: n("Thicker part joined", 8, "mm"), field: sel("Weld made", [["", "In shop"], ["1", "At site"]], "") } },
@@ -9342,14 +9577,15 @@ var SU = (function () {
   var GRP = { RCC: ["RCC design", "IS 456:2000 · IS 13920:2016"], Fdn: ["Foundations", "IS 2911 · IS 2950 · IS 456"], Steel: ["Steel design", "IS 800:2007"], Loads: ["Loads", "IS 875 · IS 1893"] }, homeFilter = "all";
   function home() {
     title.textContent = "IS StructDesign"; back.hidden = true;
-    var h = '<section class="hero"><div class="hero-t"><span class="eyebrow">IS 456 · IS 800 · IS 875 · IS 1893 · IS 13920</span><h2>Analyse, design and detail buildings to Indian Standards</h2>' +
-      '<p>Frame & shell FEA, seismic, mat foundations, bar bending schedules, drawings and estimates — all offline.</p><div class="hero-b"><a class="hbtn pri" href="#model">' + IC.svg("frame") + ' Frame & FE analysis</a><a class="hbtn" href="#projects">' + IC.svg("projects") + ' Projects</a></div></div>' +
+    var h = '<section class="hero"><div class="hero-t"><span class="eyebrow">IS 456 · IS 800 · IS 875 · IS 1893 · IS 13920</span><h2>Design and detail structural members to Indian Standards</h2>' +
+      '<p>Beams, slabs, columns, footings, piles, rafts, stairs and steel members — worked calculations, drawings, bar bending schedules and estimates, all offline.</p><div class="hero-b"><button type="button" class="hbtn pri" id="goDesign">' + IC.svg("beam") + ' Design a member</button><button type="button" class="hbtn" id="goFdn">' + IC.svg("pile") + ' Foundations</button></div></div>' +
       '<div class="hero-a">' + IC.hero() + '</div></section>';
-    if (window.PDB) { var pr = PDB.current(), sm = pr.summary, nf = sm ? sm.memberFails + (sm.detailFails || 0) : 0;
+    var projCard = "";
+    if (window.PDB) { var h0 = h; h = ""; var pr = PDB.current(), sm = pr.summary, nf = sm ? sm.memberFails + (sm.detailFails || 0) : 0;
       h += '<a class="card wide proj" href="#projects"><span class="ic">' + IC.svg("projects") + '</span><div class="pc"><b>' + esc(pr.name) + ' <small class="stchip">' + esc(pr.status) + '</small></b><small>Current project · ' + PDB.list().length + ' project(s) on this device' + (sm ? ' · last run ' + new Date(sm.date).toLocaleDateString() : ' · not analysed yet') + '</small>' +
-        (sm ? '<div class="kpis"><span class="' + (nf ? "bad" : "good") + '">' + (nf ? nf + " checks fail" : "All checks pass") + '</span>' + (sm.cost ? '<span>₹ ' + Math.round(sm.cost).toLocaleString("en-IN") + '</span>' : '') + (sm.steel_t ? '<span>' + sm.steel_t.toFixed(1) + ' t steel</span>' : '') + '</div>' : '') + '</div>' + IC.svg("chev", "go") + '</a>'; }
+        (sm ? '<div class="kpis"><span class="' + (nf ? "bad" : "good") + '">' + (nf ? nf + " checks fail" : "All checks pass") + '</span>' + (sm.cost ? '<span>₹ ' + Math.round(sm.cost).toLocaleString("en-IN") + '</span>' : '') + (sm.steel_t ? '<span>' + sm.steel_t.toFixed(1) + ' t steel</span>' : '') + '</div>' : '') + '</div>' + IC.svg("chev", "go") + '</a>'; projCard = h; h = h0; }
     h += '<label class="search">' + IC.svg("search") + '<input id="q" type="search" placeholder="Search — beam, footing, truss, seismic…" autocomplete="off"></label>';
-    h += '<div class="chips" id="fchips">' + [["all", "All"], ["RCC", "RCC"], ["Fdn", "Foundations"], ["Steel", "Steel"], ["Loads", "Loads"], ["Ref", "Reference"]].map(function (c) { return '<button type="button" data-g="' + c[0] + '"' + (homeFilter === c[0] ? ' class="on"' : '') + '>' + c[1] + '</button>'; }).join("") + '</div>';
+    h += '<div class="chips" id="fchips">' + [["all", "All"], ["RCC", "RCC"], ["Fdn", "Foundations"], ["Steel", "Steel"], ["Loads", "Loads"], ["Ana", "Analysis"], ["Ref", "Reference"]].map(function (c) { return '<button type="button" data-g="' + c[0] + '"' + (homeFilter === c[0] ? ' class="on"' : '') + '>' + c[1] + '</button>'; }).join("") + '</div>';
     ["RCC", "Fdn", "Steel", "Loads"].forEach(function (g) {
       h += '<div class="gsec" data-g="' + g + '"><h2 class="grp"><span>' + GRP[g][0] + '</span><em>' + GRP[g][1] + '</em></h2><div class="grid">';
       M.filter(function (m) { return m.grp === g; }).forEach(function (m) {
@@ -9357,6 +9593,10 @@ var SU = (function () {
       });
       h += '</div></div>';
     });
+    h += '<div class="gsec" data-g="Ana" id="secAna"><h2 class="grp"><span>Building analysis</span><em>Frame & shell FE · IS 1893 · IS 456 / 800</em></h2>' + projCard.replace('class="card wide proj"', 'class="card wide proj" data-s="project current analysis status"') + '<div class="grid">' +
+      '<a class="card mod g-ana" href="#model" data-s="frame fe finite element analysis 3d building seismic response spectrum pushover model"><span class="ic">' + IC.svg("frame") + '</span><b>Frame & FE analysis</b><small>Whole-building 3D model, seismic, auto design, detailing</small><em>FEA</em></a>' +
+      '<a class="card mod g-ana" href="#projects" data-s="projects revisions backup"><span class="ic">' + IC.svg("projects") + '</span><b>Projects</b><small>Saved buildings, revisions, backups</small><em>Offline</em></a>' +
+      '<a class="card mod g-ana" href="#report" data-s="calculation report building"><span class="ic">' + IC.svg("report") + '</span><b>Building report</b><small>Calculation report of the analysed building</small><em>PDF</em></a></div></div>';
     h += '<div class="gsec" data-g="Ref"><h2 class="grp"><span>Reference</span><em>SP 6(1) · IS 456 tables</em></h2><div class="grid"><a class="card mod g-ref" href="#tables" data-s="section tables isa ismb ismc tau"><span class="ic">' + IC.svg("tables") + '</span><b>Section tables</b><small>ISA, ISMB, ISMC properties, τc</small><em>SP 6(1)</em></a>' +
       '<a class="card mod g-ref" href="#about" data-s="about scope codes register"><span class="ic">' + IC.svg("about") + '</span><b>About & scope</b><small>Codes, assumptions, limits</small><em>engine ' + (window.REG ? REG.ENGINE : "") + '</em></a></div></div>';
     h += '<p class="empty" id="nores" hidden>No module matches your search.</p>';
@@ -9372,6 +9612,9 @@ var SU = (function () {
       document.getElementById("nores").hidden = any;
     }
     q.oninput = filt;
+    function goTo(id) { var el = document.querySelector('.gsec[data-g="' + id + '"]'); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    document.getElementById("goDesign").onclick = function () { goTo("RCC"); };
+    document.getElementById("goFdn").onclick = function () { goTo("Fdn"); };
     document.querySelectorAll("#fchips button").forEach(function (b) { b.onclick = function () { homeFilter = this.getAttribute("data-g"); document.querySelectorAll("#fchips button").forEach(function (x) { x.classList.toggle("on", x === b); }); filt(); }; });
     filt();
   }
@@ -9382,22 +9625,39 @@ var SU = (function () {
       '<form id="f" class="form" autocomplete="off"><div class="code">Inputs — leave a field blank to use the value shown in it</div>';
     Object.keys(m.f).forEach(function (k) {
       var f = m.f[k], v = saved[k] !== undefined && saved[k] !== "" ? saved[k] : (f.type === "select" ? f.def : "");
-      h += '<label class="fld"><span>' + f.label + '</span>';
+      if (f.type === "select" && !f.opts.some(function (o) { return o[0] === String(v); })) v = f.num && isFinite(parseFloat(v)) ? f.opts.reduce(function (a, o) { return Math.abs(+o[0] - v) < Math.abs(+a - v) ? o[0] : a; }, f.opts[0][0]) : f.def;
+      h += '<label class="fld" data-fk="' + k + '"><span>' + f.label + '</span>';
       if (f.type === "select") h += '<select name="' + k + '">' + f.opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(v) === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '</select>';
       else if (f.type === "text") h += '<textarea name="' + k + '" rows="4" placeholder="' + esc(f.def) + '">' + esc(v) + '</textarea>';
       else h += '<span class="inw"><input name="' + k + '" type="number" step="any" inputmode="decimal" placeholder="' + esc(f.def) + '" value="' + esc(v) + '">' + (f.unit ? '<em class="u">' + f.unit + '</em>' : '') + '</span>';
       if (f.help) h += '<small>' + f.help + '</small>';
-      h += '</label>';
+      h += '<small class="lim" hidden></small></label>';
     });
+    if (LIM.check(m.id, defaults(m)).length || ["RCC", "Fdn"].indexOf(m.grp) >= 0 || /tension|comp|bolts/.test(m.id))
+      h += '<label class="fld ck full"><span><input type="checkbox" id="exist"' + (saved.__exist ? " checked" : "") + '> Checking an existing structure — allow inputs outside the code limits (they are flagged in the report)</span></label>';
     h += '<div class="btns sticky"><button type="submit" class="pri">' + IC.svg("play") + ' Calculate</button><button type="button" id="rst">Reset</button></div></form><div id="out"></div>';
     app.innerHTML = h;
     var form = document.getElementById("f");
     form.onsubmit = function (e) { e.preventDefault(); run(m, form); };
+    var vt; form.addEventListener("input", function () { clearTimeout(vt); vt = setTimeout(function () { validate(m, form); }, 250); });
+    form.addEventListener("change", function () { validate(m, form); });
+    validate(m, form);
     document.getElementById("rst").onclick = function () { store(m.id, {}); moduleView(m); };
     if (saved.__ran) run(m, form, true);
   }
 
-  function read(m, form) {
+  function defaults(m) { var p = {}; Object.keys(m.f).forEach(function (k) { var f = m.f[k]; p[k] = f.type === "number" || f.num ? parseFloat(f.def) : f.def; }); return p; }
+  function validate(m, form) {
+    var p = read(m, form, true), iss = LIM.check(m.id, p), ex = document.getElementById("exist"), exist = !!(ex && ex.checked);
+    form.querySelectorAll(".fld[data-fk]").forEach(function (l) {
+      var k = l.getAttribute("data-fk"), mine = iss.filter(function (x) { return x.k === k; }), sm = l.querySelector(".lim");
+      sm.hidden = !mine.length; l.classList.toggle("bad", mine.some(function (x) { return x.hard && !exist; }));
+      sm.className = "lim " + (mine.some(function (x) { return x.hard; }) ? (exist ? "wn" : "hd") : "wn");
+      sm.textContent = mine.map(function (x) { return (x.hard ? (exist ? "Outside code: " : "Not allowed: ") : "Note: ") + x.msg + (x.ref ? " (" + x.ref + ")" : ""); }).join(" · ");
+    });
+    return { p: p, iss: iss, exist: exist };
+  }
+  function read(m, form, noStore) {
     var p = {}, raw = {}, defs = [];
     Object.keys(m.f).forEach(function (k) {
       var f = m.f[k], el = form.elements[k], v = String(el.value).trim(); raw[k] = v;
@@ -9412,17 +9672,27 @@ var SU = (function () {
     if (m.id === "purlin") p.sag = !!p.sag;
     if (m.id === "comp" && !p.Ly) p.Ly = p.L;
     if (m.id === "slab2") p.case_ = parseInt(p.case_, 10);
+    if (noStore) return p;
+    var ex = document.getElementById("exist"); raw.__exist = !!(ex && ex.checked);
     raw.__ran = true; store(m.id, raw);
     p.__defaults = defs;
     return p;
   }
 
   function run(m, form, quiet) {
-    var out = document.getElementById("out"), r;
+    var out = document.getElementById("out"), r, vd = validate(m, form), hardI = vd.iss.filter(function (x) { return x.hard; });
+    if (hardI.length && !vd.exist) {
+      out.innerHTML = '<section class="rep"><div class="err">Inputs against the IS code — correct them to calculate</div>' + hardI.map(function (x) { return '<div class="chk no"><span>✘ ' + esc(fl(m, x.k)) + ': ' + esc(x.msg) + (x.ref ? ' <i>' + esc(x.ref) + '</i>' : '') + '</span></div>'; }).join("") +
+        '<div class="note">Checking an existing building? Switch on <b>Checking an existing structure</b> above the Calculate button to run the design with these inputs.</div></section>';
+      var fe = form.querySelector('.fld[data-fk="' + hardI[0].k + '"]'); if (fe && !quiet) fe.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     try { r = m.fn(read(m, form)); } catch (err) { out.innerHTML = '<div class="err">Could not calculate: ' + esc(err.message) + '</div>'; return; }
     var pp = read(m, form);
-    out.innerHTML = render(r);
+    out.innerHTML = render(r); out.__rep = r;
     if (pp.__defaults.length) out.querySelector(".rh").insertAdjacentHTML("afterend", '<div class="note">Blank inputs taken at default: ' + esc(pp.__defaults.join(" · ")) + '</div>');
+    if (vd.iss.length) out.querySelector(".rh").insertAdjacentHTML("afterend", '<div class="note limn"><b>' + (hardI.length ? "Existing structure — inputs outside the code limits:" : "Code notes on the inputs:") + '</b> ' + vd.iss.map(function (x) { return esc(fl(m, x.k) + ": " + x.msg + (x.ref ? " (" + x.ref + ")" : "")); }).join("<br>") + '</div>');
+    if (!r.ok()) fixBox(m, form, pp, out);
     var pdf = document.getElementById("pdf");
     if (!window.AndroidBridge && window.self !== window.top) pdf.hidden = true;   /* printing is blocked inside embedded viewers */
     pdf.onclick = function () { if (window.AndroidBridge && AndroidBridge.print) AndroidBridge.print(m.t); else window.print(); };
@@ -9432,6 +9702,26 @@ var SU = (function () {
     if (!quiet) out.scrollIntoView({ behavior: "smooth" });
   }
 
+  function fl(m, k) { return m.f[k] ? m.f[k].label.replace(/<[^>]+>/g, "") : k; }
+  function fixBox(m, form, p, out) {
+    var rh = out.querySelector(".rh"); if (!rh) return;
+    rh.insertAdjacentHTML("afterend", '<div class="fixbox" id="fixbox"><b>' + IC.svg("bulb") + ' How to make it pass</b><div class="busy"><i></i>Trying changes to the inputs…</div></div>');
+    setTimeout(function () {
+      var box = document.getElementById("fixbox"); if (!box) return;
+      var q = Object.assign({}, p); delete q.__defaults;
+      var fx = LIM.fixes(m.id, q, function (z) { return m.fn(Object.assign({ __defaults: [] }, z)); }, { budget: /pile|raft/.test(m.id) ? 30 : 140 });
+      var fails = (out.__rep && out.__rep.checks || []).filter(function (c) { return !c.ok; }).map(function (c) { return c.l; });
+      var h = '<b>' + IC.svg("bulb") + ' How to make it pass</b>' + (fails.length ? '<small>Failing: ' + esc(fails.join(" · ")) + '</small>' : '');
+      if (fx.list.length) h += fx.list.map(function (s, i) { return '<div class="fx"><span>' + esc(s.text) + '</span><button type="button" data-i="' + i + '">Apply</button></div>'; }).join("") + '<small>Each option makes every check pass on its own; the first is the smallest change. Apply fills the input and recalculates.</small>';
+      else h += '<small>No single change of size, bars or grade within the usual range makes every check pass — review the loads, spans or support conditions' + (/beam|slab|stair/.test(m.id) ? ', or add an intermediate support' : '') + '.</small>';
+      box.innerHTML = h;
+      box.querySelectorAll("button[data-i]").forEach(function (b) { b.onclick = function () {
+        var set = fx.list[+b.getAttribute("data-i")].set;
+        Object.keys(set).forEach(function (k) { var el = form.elements[k], v = set[k]; if (!el) return; el.value = v === true ? "1" : v === false ? "" : String(v); });
+        run(m, form); toast("Applied: " + fx.list[+b.getAttribute("data-i")].text);
+      }; });
+    }, 30);
+  }
   function render(r) {
     var ok = r.ok(), h = '<section class="rep"><div class="rh"><div><h3>' + esc(r.title) + '</h3><small>' + esc(r.code) + ' • ' + new Date().toLocaleDateString("en-IN") + '</small></div><span class="badge ' + (ok ? "pass" : "fail") + '">' + (ok ? "ALL CHECKS PASS" : "CHECK FAILS") + '</span></div>';
     if (r.summary.length) h += '<div class="sum">' + r.summary.map(function (s) { return '<div><span>' + esc(s[0]) + '</span><b>' + esc(s[1]) + '</b></div>'; }).join("") + '</div>';
@@ -9502,7 +9792,7 @@ var SU = (function () {
   /* app chrome: logo, bottom tab bar, light / dark theme */
   var lg = document.getElementById("logo"); if (lg) lg.innerHTML = IC.logo(30);
   var tb = document.createElement("nav"); tb.className = "tabbar noprint";
-  tb.innerHTML = [["home", "#", "home", "Home"], ["model", "#model", "frame", "Analysis"], ["projects", "#projects", "projects", "Projects"], ["report", "#report", "report", "Report"], ["about", "#about", "about", "About"]].map(function (t) { return '<a href="' + t[1] + '" data-t="' + t[0] + '">' + IC.svg(t[2]) + '<span>' + t[3] + '</span></a>'; }).join("");
+  tb.innerHTML = [["home", "#", "home", "Home"], ["projects", "#projects", "projects", "Projects"], ["model", "#model", "frame", "Analysis"], ["report", "#report", "report", "Report"], ["about", "#about", "about", "About"]].map(function (t) { return '<a href="' + t[1] + '" data-t="' + t[0] + '">' + IC.svg(t[2]) + '<span>' + t[3] + '</span></a>'; }).join("");
   document.body.appendChild(tb);
   function theme(t) { try { if (t) localStorage.setItem("isd_theme", t); t = localStorage.getItem("isd_theme") || "auto"; } catch (e) { t = t || "auto"; } document.documentElement.setAttribute("data-theme", t); var b = document.getElementById("themeBtn"); if (b) b.innerHTML = IC.svg(t === "dark" ? "sun" : "moon"); }
   var thb = document.getElementById("themeBtn"); if (thb) thb.onclick = function () { var cur = document.documentElement.getAttribute("data-theme"), dark = cur === "dark" || (cur === "auto" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches); theme(dark ? "light" : "dark"); };

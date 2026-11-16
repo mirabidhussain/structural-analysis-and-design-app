@@ -578,5 +578,27 @@ console.log('\n== M. Pile and raft foundation modules');
   ok('Raft module M8: standalone raft from a column table — all checks pass, drawings, DXF, BBS', rr.ok() && rr.mat && rr.mat.L === 11.45 && /CIRCLE|LINE/.test(rr.dxf) && rr.items.some(it => it.k === 't' && it.head[1] === 'Description'), rr.mat.T + ' mm');
 })();
 
+console.log('\n== N. Input limits and fix suggestions');
+(function () {
+  const { LIM } = c;
+  ok('Limits N1: nominal cover IS 456 Table 16 with notes 1 and 3', LIM.nomCover('mild', 12, 20) === 15 && LIM.nomCover('mild', 16, 20) === 20 && LIM.nomCover('moderate', 10, 25) === 30 && LIM.nomCover('severe', 16, 35) === 40 && LIM.nomCover('extreme', 16, 40) === 75);
+  const hard = (id, p) => LIM.check(id, p).filter(x => x.hard).map(x => x.k);
+  const bm = { b: 230, D: 450, exp: 'mild', cover: 25, stir: 8, dia: 16, L: 5, support: 'ss', fck: 20 };
+  ok('Limits N2: beam defaults pass; cover 15 mm, M20 in moderate exposure and span/d beyond Fig 4 × Fig 5 are blocked', hard('beam', bm).length === 0 && hard('beam', Object.assign({}, bm, { cover: 15 })).join() === 'cover' && hard('beam', Object.assign({}, bm, { exp: 'moderate', cover: 30 })).join() === 'fck' && hard('beam', Object.assign({}, bm, { L: 18, D: 300 })).join() === 'D');
+  const sl = { L: 3, D: 150, exp: 'mild', cover: 20, dia: 10, support: 'ss', fck: 20 };
+  ok('Limits N3: slab bar dia ≤ D/8 (cl 26.5.2.2) and cover ≥ bar dia (cl 26.4.1)', hard('slab1', sl).length === 0 && hard('slab1', Object.assign({}, sl, { D: 100, dia: 16, cover: 20 })).indexOf('dia') >= 0 && hard('slab1', Object.assign({}, sl, { dia: 20, D: 200, cover: 18 })).indexOf('cover') >= 0);
+  const co = { b: 300, D: 450, L: 3, lex: 3, ley: 3, exp: 'mild', cover: 40, tie: 8, dia: 16, pmax: 4, fck: 20 };
+  ok('Limits N4: column — 40 mm to main bars, tie ≥ φ/4, steel ≤ 6 %, L ≤ 60 × least dimension', hard('column', co).length === 0 && hard('column', Object.assign({}, co, { cover: 25 })).indexOf('cover') >= 0 && hard('column', Object.assign({}, co, { dia: 32, tie: 6 })).indexOf('tie') >= 0 && hard('column', Object.assign({}, co, { pmax: 7 })).join() === 'pmax' && hard('column', Object.assign({}, co, { L: 20 })).join() === 'L');
+  ok('Limits N5: footings ≥ 50 mm cover and 150 mm edge; piles ≥ M25, spacing ≥ 2.5D; bolts pitch ≥ 2.5d, weld size Table 21', hard('footing', { P: 1000, sbc: 150, cb: 300, cd: 450, exp: 'moderate', cover: 40, dia: 12, fck: 25 }).join() === 'cover' && hard('strip', { w: 150, sbc: 150, tw: 350, Dmin: 100, exp: 'moderate', cover: 50, dia: 8, fck: 25 }).join() === 'Dmin' &&
+    hard('pile', { Dp: 500, Lp: 15, cb: 450, cd: 450, fos: 2.5, sp: 2, pcov: 75, edge: 150, Qg: 0, fck: 20 }).sort().join() === 'fck,sp' && hard('bolts', { db: 16, pitch: 35, e: 30, s: 4, tw_thk: 16, t: 8, Lw: 160 }).sort().join() === 'pitch,s');
+  ok('Limits N6: frame — grade below Table 5 and column < 300 mm in zone V blocked; zone II only a note', LIM.frame({ mat: 'rcc', exposure: 'moderate', fck: 20, colSec: '400x400', beamSec: '300x450', zone: 'V' }).filter(x => x.hard).length === 1 && LIM.frame({ mat: 'rcc', exposure: 'mild', fck: 25, colSec: '230x230', beamSec: '230x450', zone: 'V' }).filter(x => x.hard).length === 1 && LIM.frame({ mat: 'rcc', exposure: 'mild', fck: 25, colSec: '230x230', beamSec: '230x450', zone: 'II' }).filter(x => x.hard).length === 0);
+  const fb = { method: 'lsm', b: 230, D: 300, exp: 'mild', cover: 25, stir: 8, dia: 16, L: 6, support: 'ss', mode: 'load', wu: 45, Mu: 100, Vu: 80, fck: 20, fy: 500, __defaults: [] };
+  const fx = LIM.fixes('beam', fb, q => RCC.beam(q)), allPass = fx.list.every(s => RCC.beam(Object.assign({}, fb, s.set)).ok() && LIM.check('beam', Object.assign({}, fb, s.set)).every(x => !x.hard));
+  const dmin = fx.list.find(s => s.set.D), below = dmin && RCC.beam(Object.assign({}, fb, { D: dmin.set.D - 25 })).ok();
+  ok('Fixes N7: failing beam — every suggestion passes all checks and the code limits; the depth offered is the smallest in 25 mm steps', !RCC.beam(fb).ok() && fx.list.length >= 1 && allPass && dmin && !below, fx.list.map(s => s.text).join('; '));
+  const fc = { method: 'lsm', b: 300, D: 300, L: 3, lex: 3, ley: 3, Pu: 2500, Mux: 80, Muy: 40, exp: 'mild', cover: 40, tie: 8, dia: 16, arr: 'four', pmax: 4, fck: 20, fy: 500, __defaults: [] }, fxc = LIM.fixes('column', fc, q => RCC.column(q));
+  ok('Fixes N8: failing column — suggestions pass', !RCC.column(fc).ok() && fxc.list.length >= 1 && fxc.list.every(s => RCC.column(Object.assign({}, fc, s.set)).ok()), fxc.list.map(s => s.text).join('; '));
+})();
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;

@@ -6,7 +6,7 @@ var SU = (function () {
     src: "gen", bx: "4, 4, 4", by: "5, 5", hs: "3.5, 3.2, 3.2", slabs: true, walls: false, brace: false, mesh: 1,
     dmode: "3d", dunits: "auto", dmesh: 1, roles: {},
     method: "lsm", mat: "rcc", fck: 25, fy: 500, fys: 250, colSec: "400x400", beamSec: "300x450", braceSec: "ISA 75x75x6", tSlab: 150, tWall: 200,
-    crack: true, pcCol: 2, pcBeam: 1, kcol: 1.2,
+    crack: true, existing: false, pcCol: 2, pcBeam: 1, kcol: 1.2,
     ff: 1.5, ll: 3, ffRoof: 2.5, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0,
     eq: true, zone: "V", I: 1.2, R: 5, soil: "II", sys: "rc", wind: false, vbp: "Srinagar", terrain: 2, cf: 1.3, trib: 4,
     pdir: 0, ppat: "parabolic", pdrift: 4, ppd: true, pev: 80, secOver: "", loadOver: "",
@@ -155,7 +155,7 @@ var SU = (function () {
       txt("colSec", "Columns", "b×D mm (D along X) or ISMB…") + txt("beamSec", "Beams", "b×D mm or ISMB…") + txt("braceSec", "Braces", "ISA a×a×t or ISMB") +
       num("tSlab", "Slab thickness", "mm") + num("tWall", "Wall thickness", "mm") +
       sel("exposure", "Exposure condition (IS 456 Table 3)", [["mild", "Mild — cover 20, ≥ M20"], ["moderate", "Moderate — cover 30, ≥ M25"], ["severe", "Severe — cover 45, ≥ M30"], ["very severe", "Very severe — cover 50, ≥ M35"], ["extreme", "Extreme — cover 75, ≥ M40"]]) +
-      sel("fire", "Fire resistance (IS 456 Table 16A)", [["0.5", "0.5 h"], ["1", "1 h"], ["1.5", "1.5 h"], ["2", "2 h"], ["3", "3 h"], ["4", "4 h"]]) + chk("crack", "Cracked stiffness (IS 1893 cl 6.4.3.1: beams 0.35, columns 0.70)") +
+      sel("fire", "Fire resistance (IS 456 Table 16A)", [["0.5", "0.5 h"], ["1", "1 h"], ["1.5", "1.5 h"], ["2", "2 h"], ["3", "3 h"], ["4", "4 h"]]) + chk("crack", "Cracked stiffness (IS 1893 cl 6.4.3.1: beams 0.35, columns 0.70)") + chk("existing", "Checking an existing structure — allow member sizes and grades outside the code limits") +
       num("pcCol", "Column steel for hinges / P-M", "%") + num("pcBeam", "Beam steel (both faces) for hinges", "%") + num("kcol", "Column effective length factor", "", "IS 456 Table 28 / Annex E (1.2 for sway frames)") +
       area("secOver", "Member section overrides (optional)", "One rule per line: <i>which = section</i>. Which: member numbers (12, 1-12, F20), <i>columns / beams / braces / all</i>, optionally with <i>storey 1</i>, <i>storey 2-4</i>, <i>level 3.5</i> (m) or <i>layer NAME</i>. Later lines win. Tap a member in the 3D view to assign it directly.", "columns storey 1-2 = 450x450\nbeams storey 3 = 300x400\n15, 18-20 = ISMB 350") +
       '<div class="btns full"><button type="button" class="rstd" data-p="p2">Clear my entries (use defaults)</button></div><div class="note full">Priority: override rules › section written in the DXF layer name › the default sections above. Sections are standard-table values (SP 6).</div></div>';
@@ -247,11 +247,17 @@ var SU = (function () {
 
   /* ---------- analysis ---------- */
   function busy(t) { $("results").innerHTML = '<div class="rep"><div class="busy"><i></i>' + t + '</div></div>'; }
+  function codeBlock(p) {
+    var li = LIM.frame(p), hd = li.filter(function (x) { return x.hard; });
+    S.limits = li;
+    if (hd.length && !p.existing) { err("Inputs against the IS code — correct them in Properties (or switch on \u201cChecking an existing structure\u201d):\n" + hd.map(function (x) { return "• " + x.msg + " (" + x.ref + ")"; }).join("\n")); return true; }
+    return false;
+  }
   function runLinear(pd) {
     grab(document.getElementById("app"));
     try { if (P.src === "gen" && !S.geo) buildGen(true); } catch (e) { return err(e); }
     if (!S.m) return err("Build a model first");
-    var p = params(); S.p = p; MD._pm = {};
+    var p = params(); if (codeBlock(p)) return; S.p = p; MD._pm = {};
     S.m = MD.make(S.geo, p);
     busy("Assembling stiffness matrix and solving…");
     var t0 = Date.now(), steps = PIPE.steps(S, p, pd);
@@ -272,7 +278,7 @@ var SU = (function () {
     grab(document.getElementById("app"));
     try { if (P.src === "gen" && !S.geo) buildGen(true); } catch (e) { return err(e); }
     if (!S.m) return err("Build a model first");
-    var p = params(); MD._pm = {};
+    var p = params(); if (codeBlock(p)) return; MD._pm = {};
     busy("Automatic design: iteration 1…");
     AUTO.run(S.geo, p, { async: true, step: function (i, l) { busy("Automatic design: iteration " + (i + 2) + " — " + (Object.keys(l.fails.col).length + Object.keys(l.fails.beam).length) + " storey group(s) enlarged after iteration " + (i + 1) + "…"); } }).then(function (r) {
       Object.keys(r.S).forEach(function (k) { if (k !== "geo") S[k] = r.S[k]; });
@@ -554,6 +560,8 @@ var SU = (function () {
       if (qs && qs.shells) h += '<div><span>Mesh quality</span><b>' + qs.shells + ' shells · max aspect ' + f(qs.maxAR, 1) + ' · min angle ' + f(qs.minAng, 0) + '°</b></div>';
       h += '</div>';
       var dfl = used().filter(function (k) { return LBL[k]; }).map(function (k) { return LBL[k] + " " + dtxt(k); });
+      if (S.des.fails) h += '<div class="fixbox noprint"><b>' + IC.svg("bulb") + ' How to make it pass</b><small>' + S.des.fails + ' design check(s) fail.</small><div class="fx"><span>' + (S.autoRes && !S.autoRes.ok ? 'Run automatic design again from the enlarged sizes' : 'Run automatic design — enlarges the columns and beams of the failing storeys in 50 mm steps until every check passes') + '</span><button type="button" id="bFixAuto">Apply</button></div><small>Or edit the sizes in <b>Member section overrides</b>, raise the concrete grade, or add shear walls / bracing where drift governs.</small></div>';
+      if (S.limits && S.limits.length) h += '<div class="note"><b>' + (S.limits.some(function (x) { return x.hard; }) ? 'Existing structure — inputs outside the code limits:' : 'Code notes on the inputs:') + '</b> ' + S.limits.map(function (x) { return esc(x.msg + " (" + x.ref + ")"); }).join("<br>") + '</div>';
       if (dfl.length) h += '<div class="note"><b>Defaults used</b> (not entered): ' + esc(dfl.join(" · ")) + '</div>';
       if (S.L.notes.length) h += '<div class="note">' + S.L.notes.map(esc).join("<br>") + '</div>';
       if (r.warn && r.warn.length) h += '<div class="note"><b>Model warnings:</b> ' + r.warn.map(esc).join("<br>") + '</div>';
@@ -570,6 +578,7 @@ var SU = (function () {
     }
     if (S.po) h += poReport() + (S.res ? '' : '<div class="btns noprint"><button type="button" class="pri bXls">Excel: pushover & model</button></div>');
     $("results").innerHTML = h;
+    if ($("bFixAuto")) $("bFixAuto").onclick = runAuto;
     jumpBar($("results"));
     function handoff(id) {
       var cr = S.res && S.res.caseReac; if (!cr || !cr.DL) return toast("Run the analysis first");
