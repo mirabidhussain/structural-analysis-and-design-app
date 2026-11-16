@@ -3,7 +3,7 @@ name: Deploy web app to GitHub Pages
 on:
   push:
     branches: [ main ]
-    paths: [ 'www/**', 'build.py', '.github/workflows/pages.yml' ]
+    paths: [ 'www/**', 'build.py', 'versions/**', '.github/workflows/pages.yml' ]
   workflow_dispatch:
 
 permissions:
@@ -32,6 +32,7 @@ jobs:
           mkdir -p site
           cp -r www/* site/
           cp dist/index.html site/standalone.html
+          cp -r versions site/versions
       - uses: actions/configure-pages@v5
         with:
           enablement: true

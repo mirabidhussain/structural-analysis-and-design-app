@@ -24,6 +24,7 @@ jobs:
       - name: Version from the engine
         run: |
           ENG=$(sed -n 's/^REG.ENGINE = "\([0-9.]*\)".*/\1/p' www/js/reg.js | head -1)
+          echo "ENG=$ENG" >> $GITHUB_ENV
           echo "VERSION_NAME=$ENG.${{ github.run_number }}" >> $GITHUB_ENV
           echo "VERSION_CODE=$(( ${{ github.run_number }} + 100 ))" >> $GITHUB_ENV
           echo "BUILT=$(TZ=Asia/Kolkata date '+%d %b %Y %H:%M IST')" >> $GITHUB_ENV
@@ -44,3 +45,19 @@ jobs:
           git push origin :refs/tags/latest-apk || true
           printf 'IS StructDesign %s — built %s from commit %s.\n\nInstall: download IS-StructDesign.apk on your phone, open it, allow "Install unknown apps" for your browser / files app. It installs over the previous version (your projects are kept).\n' "$VERSION_NAME" "$BUILT" "${GITHUB_SHA::7}" > notes.md
           gh release create latest-apk IS-StructDesign.apk --target "$GITHUB_SHA" --title "IS StructDesign $VERSION_NAME (latest APK)" --notes-file notes.md --latest
+      # Permanent copy per version: release "v<engine>" with the APK and the offline HTML.
+      # Updated while that version is current; once the engine number moves on it is never touched again.
+      - name: Keep a release for this version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 build.py
+          cp IS-StructDesign.apk "IS-StructDesign-v$ENG.apk"
+          cp dist/index.html "IS-StructDesign-v$ENG.html"
+          printf 'IS StructDesign %s — saved copy of version %s (built %s, commit %s).\n\nAPK: install on Android (to go back from a newer version, uninstall the newer one first — back up projects).\nHTML: open in any browser, works offline. Also online at https://mirabidhussain.github.io/structural-analysis-and-design-app/versions/v%s/ when saved there.\n' "$VERSION_NAME" "$ENG" "$BUILT" "${GITHUB_SHA::7}" "$ENG" > vnotes.md
+          if gh release view "v$ENG" >/dev/null 2>&1; then
+            gh release upload "v$ENG" "IS-StructDesign-v$ENG.apk" "IS-StructDesign-v$ENG.html" --clobber
+            gh release edit "v$ENG" --notes-file vnotes.md --title "IS StructDesign v$ENG"
+          else
+            gh release create "v$ENG" "IS-StructDesign-v$ENG.apk" "IS-StructDesign-v$ENG.html" --target "$GITHUB_SHA" --title "IS StructDesign v$ENG" --notes-file vnotes.md --latest=false
+          fi
