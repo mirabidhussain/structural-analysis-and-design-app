@@ -515,5 +515,28 @@ console.log('\n== K. Detailed estimate (measurement sheet)');
   ok('Estimate: in-app / report measurement sheet with item headers, JKSOR codes and totals', (h.match(/class="ih"/g) || []).length === b.items.length && /JKSOR 5\.34\.2/.test(h) && (h.match(/class="it"/g) || []).length === b.items.length);
 })();
 
+console.log('\n== L. Missing-mass correction (IS 1893 cl 7.7.5.2)');
+(function () {
+  const { PIPE, SE } = c;
+  const base = { fck: 25, fy: 500, fys: 250, crack: true, pcCol: 2, pcBeam: 1, colSec: '400x400', beamSec: '300x450', braceSec: 'ISA 75x75x6', tSlab: 150, tWall: 200, ff: 1.5, ffRoof: 2.5, ll: 3, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0, eq: true, zone: 'V', I: 1.2, R: 5, soil: 'II', sys: 'rc', wind: false, vb: 39, terrain: 2, cf: 1.3, trib: 4, kcol: 1.2, accTor: false, rsa: true, nModes: 12, rsComb: 'cqc', method: 'lsm', sbc: 200, Df: 1.5, secOver: '', entered: [] };
+  /* L1 rigid structure: every mode above 33 Hz → the whole mass responds statically at the zero-period acceleration */
+  const Sr = PIPE.run(MD.generate({ bx: '3', hs: '1', twoD: true }), Object.assign({}, base, { colSec: '1500x1500', beamSec: '1500x1500', wall: 0, nModes: 6, mmc: true })), r1 = Sr.se.rs[0];
+  const A0 = 0.36 / 2 * 1 / (5 / 1.2), sr = Object.values(SE.reactions(Sr.m, r1.Ur)).reduce((a, v) => a + v[0], 0);
+  ok('MMC L1: rigid frame (all modes > 33 Hz) — no modes combined, Vb = total mass × A0·g, A0 = (Z/2)(1)/(R/I) = 0.0432', r1.modes.length === 0 && Sr.se.md.modes.every(mo => mo.f > 33) && Math.abs(r1.mmc.A0 - A0) < 1e-12 && Math.abs(r1.Vb - Sr.se.md.Mt[0] * A0 * 9.81) < 1e-9 && Math.abs(sr + r1.Vb) < 1e-6, r1.Vb.toFixed(3) + ' kN');
+  /* L2 truncated modes: residual = missing mass × A0·g, SRSS with the modal base shear, equilibrium of the residual */
+  const g2 = MD.generate({ bx: '4,4', hs: '3.5,3.2,3.2', twoD: true });
+  const S1 = PIPE.run(g2, Object.assign({}, base, { nModes: 1, mmc: true })), r2 = S1.se.rs[0], miss = S1.se.md.Mt[0] - S1.se.md.modes[0].Meff[0];
+  const s2 = Object.values(SE.reactions(S1.m, r2.Ur)).reduce((a, v) => a + v[0], 0);
+  ok('MMC L2: 1 mode — missing mass = Mt − Meff,1 (12.5 %), Vr = Mmiss·A0·g = −Σ residual reactions, Vb = √(Vmodal² + Vr²)', Math.abs(r2.mmc.M - miss) < 1e-12 && Math.abs(r2.mmc.V - miss * A0 * 9.81) < 1e-9 && Math.abs(s2 + r2.mmc.V) < 1e-6 && Math.abs(r2.Vb - Math.hypot(r2.VbModal, r2.mmc.V)) < 1e-9 && Math.abs(r2.mmc.pct - 0.1251) < 5e-4, (100 * r2.mmc.pct).toFixed(2) + ' % → ' + r2.mmc.V.toFixed(2) + ' kN');
+  /* L3 all modes extracted: the correction replaces exactly the modes above 33 Hz */
+  const Sa = PIPE.run(g2, Object.assign({}, base, { nModes: 30, mmc: true })), Sb = PIPE.run(g2, Object.assign({}, base, { nModes: 30, mmc: false })), ra = Sa.se.rs[0], rb = Sb.se.rs[0];
+  const hi = Sa.se.md.modes.filter(mo => mo.f > 33).reduce((a, mo) => a + mo.pct[0], 0);
+  ok('MMC L3: complete mode set — missing mass = Σ of the modes above 33 Hz; base shear within 0.5 % of the full CQC', Math.abs(ra.mmc.pct - hi) < 1e-9 && ra.mmc.rigid === Sa.se.md.modes.filter(mo => mo.f > 33).length && ra.mmc.rigid > 0 && Math.abs(ra.Vb / rb.Vb - 1) < 0.005, ra.mmc.rigid + ' rigid modes, ' + ra.Vb.toFixed(2) + ' vs ' + rb.Vb.toFixed(2) + ' kN');
+  /* L4 truncation error reduced */
+  const S0 = PIPE.run(g2, Object.assign({}, base, { nModes: 1, mmc: false })), e0 = Math.abs(S0.se.rs[0].Vb - rb.Vb), e1 = Math.abs(r2.Vb - rb.Vb);
+  ok('MMC L4: with one mode the correction brings the base shear closer to the full solution', e1 < e0, 'error ' + e0.toFixed(2) + ' → ' + e1.toFixed(2) + ' kN');
+  ok('MMC L5: drifts and wall/section envelopes include the residual; off switch restores the plain modal combination', S1.se.drift.length === 3 && !Sb.se.rs[0].mmc && Sb.se.rs[0].modes.length === Sb.se.md.modes.length);
+})();
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;

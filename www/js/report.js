@@ -694,10 +694,20 @@ var RX = (function () {
         { k: "My", h: "Meff Y", u: "kN·s²/m", s: "n2" }, { k: "Vy", h: "Modal Vb Y", u: "kN", f: "{My}*{Ak}*9.81", s: "f2" }].filter(function (c) { return !m.twoD || ["py", "pr", "My", "Vy"].indexOf(c.k) < 0; }),
         md.modes.map(function (mo) { return { k: mo.k, T: mo.T, kind: mo.kind, px: mo.pct[0], py: mo.pct[1], pr: mo.pctR, Mx: mo.Meff[0], My: mo.Meff[1] }; }), G, { freeze: false });
       var L = t.L, a = t.first, b = t.last;
-      sh.row(["Σ", "", "", "", { f: "=SUM(" + L.px + a + ":" + L.px + b + ")", v: rsX.cum, s: "pct" }].concat(m.twoD ? [] : [{ f: "=SUM(" + L.py + a + ":" + L.py + b + ")", v: rsY ? rsY.cum : 0, s: "pct" }]), "b");
+      sh.row(["Σ", "", "", "", { f: "=SUM(" + L.px + a + ":" + L.px + b + ")", v: rsX.cumAll !== undefined ? rsX.cumAll : rsX.cum, s: "pct" }].concat(m.twoD ? [] : [{ f: "=SUM(" + L.py + a + ":" + L.py + b + ")", v: rsY ? (rsY.cumAll !== undefined ? rsY.cumAll : rsY.cum) : 0, s: "pct" }]), "b");
       sh.row([{ v: "IS 1893 cl 7.7.5.2: the modes used must capture at least 90 % of the seismic mass in each direction.", s: "note" }]);
+      if (rsX.mmc) {
+        sh.row([]);
+        sh.row(["Missing-mass correction (cl 7.7.5.2): modes above 33 Hz and the mass not in the modes act statically at the zero-period acceleration"], "tb");
+        sh.row(["Direction", "Total mass", "Σ Meff, modes ≤ 33 Hz", "Missing mass", "A0 = (Z/2)(1)/(R/I)", "Vr = Mmiss·A0·g (kN)", "Vb modal (kN)", "Vb = √(Vmodal² + Vr²)"], "h", 22);
+        [0, 1].forEach(function (d) {
+          var rs = se.rs[d]; if (!rs || !rs.mmc) return; var rn = sh.next(), col = d ? L.My : L.Mx;
+          sh.row([d ? "Y" : "X", { v: md.Mt[d], s: "n2" }, { f: "=SUMIFS(" + col + a + ":" + col + b + "," + L.fr + a + ":" + L.fr + b + ',"<=33")', v: md.Mt[d] - rs.mmc.M, s: "f2" }, { f: "=MAX(0,B" + rn + "-C" + rn + ")", v: rs.mmc.M, s: "f2" },
+            { f: "=p_Zz/2*1/(p_Rr/p_Imp)", v: rs.mmc.A0, s: "f4" }, { f: "=D" + rn + "*E" + rn + "*9.81", v: rs.mmc.V, s: "f2" }, { v: rs.VbModal, s: "n2" }, { f: "=SQRT(G" + rn + "^2+F" + rn + "^2)", v: rs.Vb, s: "f2" }]);
+        });
+      }
       sh.row([]);
-      sh.row(["Direction", "Vb SRSS (kN)", "Vb " + (p.rsComb === "srss" ? "SRSS" : "CQC") + " (kN)", "Vb static (kN)", "Scale factor", "Applied to"], "h", 22);
+      sh.row(["Direction", "Vb SRSS (kN)", "Vb " + (p.rsComb === "srss" ? "SRSS" : "CQC") + (rsX.mmc ? " + missing mass" : "") + " (kN)", "Vb static (kN)", "Scale factor", "Applied to"], "h", 22);
       [0, 1].forEach(function (d) {
         var rs = se.rs[d]; if (!rs) return;
         var col = d ? L.Vy : L.Vx, rn = sh.next();

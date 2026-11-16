@@ -64,6 +64,11 @@ Home → **Frame & FE analysis**.
 - **Exposure and fire** — nominal covers from IS 456 Table 16 (mild 20 … extreme 75) and Table 16A for 0.5–4 h fire; effective depths of beams, slabs, columns and footings follow; minimum grade (Table 5) and minimum member sizes for the fire rating (Fig. 1) are checked and reported as failures.
 - **Whole-building BOQ priced with JKSOR 2022** — excavation (with extra lift), PCC, RCC by element and grade (M20 nominal; M25 design mix + extras for M30/M35/M40), formwork incl. extra height, reinforcement + wastage, structural steel, backfill, plinth filling, ground-floor base, DPC, plinth and superstructure masonry (under every beam line, less openings, + parapet), internal/external/ceiling plaster, vitrified flooring, anti-termite. Every default rate is the Jammu & Kashmir Schedule of Rates 2022 item (exclusive of GST), shown with its item number; your own rates override them. The abstract adds contingencies, labour welfare cess and GST (18 % by default). Doors, windows, roofing, painting, services and external works are not included.
 
+## Missing-mass correction (v3.4) — IS 1893 cl 7.7.5.2
+- On by default (panel 4). Only modes below 33 Hz are combined (CQC/SRSS); the seismic mass not carried by them — truncated modes and rigid modes above 33 Hz — is loaded statically with the zero-period acceleration A0 = (Z/2)(Sa/g at T = 0)/(R/I), and that residual response is added by SRSS to every quantity (base shear, displacements, drifts, member and shell forces, reactions, wall and mat envelopes) before scaling to the static base shear (cl 7.7.3).
+- Results, report and Excel show the modal and missing-mass base shears; Excel recomputes the missing mass, A0, Vr and the total with formulas. The 90 % participation warning still applies to the extracted modes.
+- Tests: a rigid frame reproduces the static ZPA solution exactly, residual shear = missing mass × A0·g = Σ residual reactions, with a complete mode set the correction replaces exactly the modes above 33 Hz.
+
 ## Look and use (v3.3)
 - New interface: Inter typeface (bundled, works offline), drawn icon set for every module, illustrated home screen with search and category filters, bottom tab bar (Home, Analysis, Projects, Report, About), light / dark theme switch, units shown inside the input fields, toggle switches, step-numbered analysis panels, sticky Calculate button, jump chips across long results, new app icon.
 - **Detailed estimate** as an option to the BOQ (switch in the results or *Estimate format* in panel 5): measurement sheet with No. × L × B × D/H lines for every JKSOR item (members grouped by size and storey, deductions for openings, footings, PCC and necks as negative lines, wastage as a percentage line), item totals, then the abstract of cost with contingencies, labour cess and GST. Excel gets a *Detailed Estimate* sheet whose every quantity is a formula; the BOQ quantities link to its totals. The calculation report prints the chosen format.
@@ -116,5 +121,5 @@ Run `npm test` (Node 18+) or let GitHub Actions run it on every push:
 - `test/smoke.js` — prints sample design reports (diagnostic).
 
 ## Limits
-No time-history analysis or missing-mass correction; floors are not modelled as rigid diaphragms (slab shells give in-plane stiffness), IS 13920 ductile detailing (notes only), pile/combined footings, retaining walls, plate girders or base plates.
+No time-history analysis; floors are not modelled as rigid diaphragms (slab shells give in-plane stiffness), IS 13920 ductile detailing (notes only), pile/combined footings, retaining walls, plate girders or base plates.
 Section properties are rounded SP 6(1) values. All designs must be checked by a qualified structural engineer.

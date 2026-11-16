@@ -10,7 +10,7 @@ var SU = (function () {
     ff: 1.5, ll: 3, ffRoof: 2.5, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0,
     eq: true, zone: "V", I: 1.2, R: 5, soil: "II", sys: "rc", wind: false, vbp: "Srinagar", terrain: 2, cf: 1.3, trib: 4,
     pdir: 0, ppat: "parabolic", pdrift: 4, ppd: true, pev: 80, secOver: "", loadOver: "",
-    accTor: true, rsa: true, nModes: 12, rsComb: "cqc", ortho: false, rsScaleDisp: false, sbc: 200, Df: 1.5,
+    accTor: true, rsa: true, mmc: true, nModes: 12, rsComb: "cqc", ortho: false, rsScaleDisp: false, sbc: 200, Df: 1.5,
     snow: false, s0: 1.5, mu: 0.8, snowW: 0, pattern: "auto", llRed: false, exposure: "moderate", fire: "1",
     found: "isolated", matT: 0, matOff: 0.5, ks: 0, gs: 18, setLim: 75, angLim: 500, matMesh: 0.5,
     estFmt: "boq", mT: 230, mOpen: 15, plinthH: 0.45, parH: 1.0, wastage: 3, cont: 3, cess: 1, gst: 18, sorOn: true
@@ -176,7 +176,7 @@ var SU = (function () {
       sel("I", "Importance factor I", [[1, "1.0 ordinary"], [1.2, "1.2 important / offices >200"], [1.5, "1.5 critical"]]) + sel("R", "Response reduction R", [[3, "3 OMRF"], [4, "4 braced steel"], [5, "5 SMRF / ductile"], [4.5, "4.5 dual (walls)"]]) +
       sel("soil", "Soil type", [["I", "I rock/hard"], ["II", "II medium"], ["III", "III soft"]]) + sel("sys", "Period formula", [["rc", "RC MRF 0.075h^0.75"], ["steel", "Steel MRF 0.085h^0.75"], ["other", "With infill/walls 0.09h/√d"]]) +
       chk("accTor", "Accidental torsion, design eccentricity 1.5esi ± 0.05bi (cl 7.8.2, 3D models)") +
-      chk("rsa", "Modal & response spectrum analysis (cl 7.7)") + num("nModes", "Number of modes", "", "cl 7.7.5.2: enough for ≥ 90 % mass participation") +
+      chk("rsa", "Modal & response spectrum analysis (cl 7.7)") + num("nModes", "Number of modes", "", "cl 7.7.5.2: enough for ≥ 90 % mass participation") + chk("mmc", "Missing-mass correction (cl 7.7.5.2): modes above 33 Hz and the mass not in the modes act statically at the zero-period acceleration") +
       sel("rsComb", "Modal combination", [["cqc", "CQC, 5 % damping (cl 7.7.5.4)"], ["srss", "SRSS"]]) + chk("ortho", "Orthogonal effects 100 % + 30 % (cl 6.3.4.2)") +
       chk("rsScaleDisp", "Also scale spectrum displacements to the static base shear (off = IS 1893 Amendment 2, cl 7.7.3.2)") +
       chk("wind", "Wind — IS 875 (Part 3):2015") + sel("vbp", "Basic wind speed", Object.keys(D.vb).filter(function (k) { return k !== "Custom"; }).map(function (k) { return [k, k + " — " + D.vb[k] + " m/s"]; })) +
@@ -719,7 +719,8 @@ var SU = (function () {
       var first2 = md.modes.slice(0, 2).map(function (mo) { return mo.kind; });
       if (!m.twoD) h += '<div class="note">First two modes: ' + first2.join(", ") + (first2.indexOf("Torsion") >= 0 ? ' — <b>a torsional mode is among the first two</b>; IS 1893 Table 5 (i) requires the configuration to be revised so that the first two modes are translational where torsional irregularity exists.' : ' — translational (preferred).') + ' Tap a mode in the viewer list to see its shape.</div>';
       h += '<h4>Response spectrum analysis (cl 7.7, ' + (se.rs[0].meth === "cqc" ? "CQC, ζ = 5 %" : "SRSS") + ')</h4>' +
-        tbl(["Direction", "Vb dynamic (kN)", "Vb static (kN)", "Scale factor", "Σ mass participation", "Displacements"], Object.keys(se.rs).map(function (d) { var r = se.rs[d]; return ["RS" + (+d ? "Y" : "X"), f(r.Vb, 1), f(r.VbS, 1), f(r.scale, 3), '<span class="' + (r.cum >= 0.9 ? "okt" : "not") + '">' + f(r.cum * 100, 1) + ' %</span>', r.sD > 1 ? "scaled" : "unscaled"]; })) +
+        tbl(["Direction", "Vb modal (kN)", "Missing mass", "Vb dynamic (kN)", "Vb static (kN)", "Scale factor", "Σ mass in modes", "Displacements"], Object.keys(se.rs).map(function (d) { var r = se.rs[d], ca = r.cumAll !== undefined ? r.cumAll : r.cum; return ["RS" + (+d ? "Y" : "X"), f(r.VbModal !== undefined ? r.VbModal : r.Vb, 1), r.mmc ? f(r.mmc.pct * 100, 1) + " % → " + f(r.mmc.V, 1) + " kN" + (r.mmc.rigid ? " (" + r.mmc.rigid + " modes > 33 Hz)" : "") : "off", f(r.Vb, 1), f(r.VbS, 1), f(r.scale, 3), '<span class="' + (ca >= 0.9 ? "okt" : "not") + '">' + f(ca * 100, 1) + ' %</span>', r.sD > 1 ? "scaled" : "unscaled"]; })) +
+        (se.rs[0] && se.rs[0].mmc ? '<div class="note">Missing-mass correction (IS 1893 cl 7.7.5.2): the mass not carried by the modes below 33 Hz is loaded statically with the zero-period acceleration A0 = Z/2 · (Sa/g at T = 0) / (R/I) = ' + f(se.rs[0].mmc.A0, 4) + ' g; its response is added to the CQC/SRSS modal response by SRSS before scaling to the static base shear.</div>' : '') +
         '<div class="note">Ak = (Z/2)(Sa/g)/(R/I) for each mode; modal responses combined by ' + (se.rs[0].meth === "cqc" ? "CQC (cl 7.7.5.4)" : "SRSS") + '. When the dynamic base shear is below the static Vb (Ta formula), member forces are scaled up by Vb/VBd (cl 7.7.3); ' + (S.p.rsScaleDisp ? "displacements are scaled as well." : "displacements are not scaled (Amendment 2, cl 7.7.3.2).") + (S.p.accTor && !m.twoD ? " Accidental torsion torques are added as absolute responses." : "") + (S.p.ortho ? " Orthogonal effects: 100 % + 30 % of the other direction." : "") + ' Response-spectrum combinations are added to the design: ' + S.cb.filter(function (c) { return c.rs; }).map(function (c) { return c.name; }).join(", ") + '.</div>';
     }
     if (!m.twoD && se.floors && se.floors.length && se.floors[0].cr) {

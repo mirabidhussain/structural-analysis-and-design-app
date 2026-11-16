@@ -2,7 +2,7 @@
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "3.3";
+REG.ENGINE = "3.4";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],
@@ -33,7 +33,8 @@ REG.CHECKS = [
   ["Seismic", "Response spectrum, CQC/SRSS, scaling (cl 7.7.3)", "Verified", "Single storey Vb = Ak·W, displacement Ak·g/ω², CQC ρ closed form"],
   ["Seismic", "Accidental torsion, CM / CR (cl 7.8.2)", "Verified", "Symmetric plan CR = CM, CR shift towards walls, torque = Qi·(0.5esi + 0.05bi)"],
   ["Seismic", "Irregularities (Table 5, 6), storey drift (cl 7.11)", "Calculated", "Soft storey / mass flags tested on constructed cases; drift at stacked nodes"],
-  ["Seismic", "Missing-mass correction, time-history analysis", "Not implemented", ""],
+  ["Seismic", "Missing-mass correction (cl 7.7.5.2): modes > 33 Hz and truncated mass static at ZPA, SRSS with the modal response", "Verified", "A rigid structure gives the static ZPA solution exactly; residual base shear = missing mass × A0·g and equals Σ reactions; with all modes no correction (acceptance.js L)"],
+  ["Seismic", "Time-history analysis", "Not implemented", ""],
   ["RCC design", "Beam flexure, shear, torsion (IS 456 cl 38, 40, 41)", "Verified", "Mu,lim (SP 16 Table C), τc (Table 19), τc,max (Table 20) and expected pass/fail designs in acceptance.js A, B"],
   ["RCC design", "Column biaxial (strain compatibility + Bresler cl 39.6)", "Calculated", "Spot check at P = 0 against 0.87fy·Ast·(d − d′) (verify.js), expected pass/fail cases, bars-provided re-check"],
   ["RCC design", "Slab elements (Wood–Armer)", "Calculated", "Plate moments verified; Wood–Armer per Wood (1968) formulae"],
@@ -64,14 +65,14 @@ REG.CHECKS = [
   ["Automation", "Automatic design (storey-wise enlargement until all checks pass)", "Calculated", "Converges on the test building in acceptance.js H; sizes are written as editable section rules"]
 ];
 /* stable ids of REG.CHECKS rows, used by the verification mode */
-REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "timehist",
+REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "mmc", "timehist",
   "rcbeam", "rccol", "rcslab", "rcwallel", "rcwall", "servic", "stfcd", "stltb", "stklen", "dtbeam", "dtcol", "scwb", "joint", "dtslab", "bbs",
   "foot", "footpress", "mat", "matsoil", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto"];
 REG.byId = function (id) { var i = REG.IDS.indexOf(id); return i >= 0 ? { id: id, area: REG.CHECKS[i][0], t: REG.CHECKS[i][1], st: REG.CHECKS[i][2], ev: REG.CHECKS[i][3] } : null; };
 REG.RANK = { "Not implemented": 0, Simplified: 1, Calculated: 2, Verified: 3 };
 /* checks behind each kind of result; the weakest decides the result's verification state */
 REG.KIND = { beam: ["frame", "rcbeam", "dtbeam", "servic"], column: ["frame", "rccol", "dtcol", "scwb", "joint"], slab: ["shell", "rcslab", "dtslab", "servic"],
-  wall: ["shell", "rcwall", "rcwallel"], steel: ["frame", "stfcd", "stltb", "stklen"], footing: ["foot", "footpress", "foundmore"], mat: ["mat", "matsoil"], seismic: ["spectrum", "statbase", "modal", "rsa", "torsion", "irreg"] };
+  wall: ["shell", "rcwall", "rcwallel"], steel: ["frame", "stfcd", "stltb", "stklen"], footing: ["foot", "footpress", "foundmore"], mat: ["mat", "matsoil"], seismic: ["spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "mmc"] };
 REG.state = function (ids) { var w = null; ids.forEach(function (id) { var r = REG.byId(id); if (r && (!w || REG.RANK[r.st] < REG.RANK[w.st])) w = r; }); return w; };
 REG.html = function (esc) {
   var col = { Verified: "okt", Calculated: "", Simplified: "warnt", "Not implemented": "not" };

@@ -2971,6 +2971,8 @@ if (typeof module !== "undefined") module.exports = MD;
    • Modal analysis: lumped translational masses, subspace iteration on the skyline-factored stiffness
    • Response spectrum analysis (cl 7.7): Ak = (Z/2)(Sa/g)/(R/I), CQC (5 % damping) or SRSS, scaling to the
      static base shear (cl 7.7.3), optional 100 % + 30 % orthogonal combination
+   • Missing-mass correction (cl 7.7.5.2): modes above 33 Hz and the truncated modes respond statically at the zero-period
+     acceleration; the residual response is added to the modal combination by SRSS
    • Irregularity indicators: torsion (Table 5 (i)), soft storey and mass irregularity (Table 6)
    Units kN, m, s; mass = W/g in kN·s²/m. */
 var SE = {};
@@ -3092,7 +3094,7 @@ SE.modes = function (m, W, nModes, opt) {
     var mx = Math.max(md.pct[0], md.pct[1] || 0, md.pctR);
     md.kind = mx < 0.01 ? "Local" : m.twoD ? "X" : md.pctR >= Math.max(md.pct[0], md.pct[1]) ? "Torsion" : md.pct[0] >= md.pct[1] ? "X" : "Y";
   });
-  return { modes: modes, Mt: Mt, conv: conv, iter: it + 1, q: q, nMassDof: nm };
+  return { modes: modes, Mt: Mt, conv: conv, iter: it + 1, q: q, nMassDof: nm, _A: A, _W: W };
 };
 /* generalized symmetric eigenproblem K x = λ M x (small, dense): Cholesky of M, Jacobi on L⁻¹ K L⁻ᵀ */
 SE.geneig = function (K, M) {
@@ -3142,24 +3144,44 @@ SE.combine = function (vals, modes, method) {   /* vals[k] = modal response of o
 /* modal response quantities and combined envelopes for direction d. Returns {Vb, VbStatic, scale, U (envelope),
    fr[k].dg (9-point envelope), sh[k], reac, Ak[], Vk[] } */
 SE.spectrum = function (m, res, md, d, p, sta) {
-  var modes = md.modes, Z = D.zone[p.zone], nM = modes.length, meth = p.rsComb || "cqc";
+  var all = md.modes, Z = D.zone[p.zone], meth = p.rsComb || "cqc", mmc = p.mmc !== false && p.mmc !== "off";
+  /* IS 1893 cl 7.7.5.2: with the missing-mass correction, only modes below 33 Hz are combined; the rest of the mass
+     (truncated and rigid modes) responds statically at the zero-period acceleration and is added by SRSS */
+  var modes = mmc ? all.filter(function (mo) { return mo.f <= 33; }) : all, nM = modes.length;
   var Ak = modes.map(function (mo) { return Z / 2 * LD.saG(mo.T, p.soil) / (p.R / p.I); });
   var amp = modes.map(function (mo, i) { return mo.Gam[d] * Ak[i] * SE.g / mo.w2; });   /* modal coordinate peak */
   var Vk = modes.map(function (mo, i) { return mo.Meff[d] * Ak[i] * SE.g; });
-  var Vb = SE.combine(Vk, modes, meth);
-  var VbS = sta ? sta.Vb : 0, scale = Vb > 0 && VbS > Vb ? VbS / Vb : 1;
+  var nU = 6 * m.nodes.length, Ur = null, mm = null;
+  if (mmc) {
+    var A0 = Z / 2 * LD.saG(0, p.soil) / (p.R / p.I), W = md._W || [], Fr = new Float64Array(m._neq), Mres = md.Mt[d];
+    modes.forEach(function (mo) { Mres -= mo.Meff[d]; });
+    /* residual inertia: (M r − Σ Γk M φk) × A0·g over the mass DOFs of both horizontal directions */
+    m.nodes.forEach(function (nd, i2) {
+      var mi = (W[i2] > 0 ? W[i2] : 0) / SE.g; if (!mi) return;
+      (m.twoD ? [0] : [0, 1]).forEach(function (dd) {
+        var e = m._eq[6 * i2 + dd]; if (e < 0) return;
+        var v = dd === d ? 1 : 0; modes.forEach(function (mo) { v -= mo.Gam[d] * mo.U[6 * i2 + dd]; });
+        Fr[e] += mi * v * A0 * SE.g;
+      });
+    });
+    Ur = FE.expand(m, FE.backsub(md._A, m._maxa, m._neq, Fr));
+    mm = { A0: A0, M: Math.max(Mres, 0), pct: md.Mt[d] > 0 ? Math.max(Mres, 0) / md.Mt[d] : 0, V: Math.max(Mres, 0) * A0 * SE.g, rigid: all.length - nM, used: nM };
+  }
+  function comb(vals, r) { var c = nM ? SE.combine(vals, modes, meth) : 0; return r ? Math.sqrt(c * c + r * r) : c; }
+  var Vb = comb(Vk, mm ? mm.V : 0), VbS = sta ? sta.Vb : 0, scale = Vb > 0 && VbS > Vb ? VbS / Vb : 1;
   var sD = p.rsScaleDisp ? scale : 1;
   /* displacements */
-  var nU = 6 * m.nodes.length, U = new Float64Array(nU), tmp = new Float64Array(nM);
-  for (var i = 0; i < nU; i++) { for (var k = 0; k < nM; k++) tmp[k] = modes[k].U[i] * amp[k]; U[i] = SE.combine(tmp, modes, meth) * sD; }
+  var U = new Float64Array(nU), tmp = new Float64Array(nM);
+  for (var i = 0; i < nU; i++) { for (var k = 0; k < nM; k++) tmp[k] = modes[k].U[i] * amp[k]; U[i] = comb(tmp, Ur ? Ur[i] : 0) * sD; }
   /* member diagrams */
   var comps = ["N", "Vy", "Vz", "T", "My", "Mz"], fr = [], sh = [];
-  var mdg = modes.map(function (mo, k) { return m.frames.map(function (e, j) { var Um = mo.U.map(function (v) { return v * amp[k]; }); return FE.frameDiagram(FE.frameForces(m, j, Um, null, 0), 8); }); });
+  var mdg = modes.map(function (mo, k) { var Um = mo.U.map(function (v) { return v * amp[k]; }); return m.frames.map(function (e, j) { return FE.frameDiagram(FE.frameForces(m, j, Um, null, 0), 8); }); });
+  var rdg = Ur ? m.frames.map(function (e, j) { return FE.frameDiagram(FE.frameForces(m, j, Ur, null, 0), 8); }) : null;
   m.frames.forEach(function (e, j) {
     var dg = [];
     for (var s = 0; s <= 8; s++) {
-      var pt = { x: mdg[0][j][s].x };
-      comps.forEach(function (c) { for (var k2 = 0; k2 < nM; k2++) tmp[k2] = mdg[k2][j][s][c]; pt[c] = SE.combine(tmp, modes, meth) * scale; });
+      var pt = { x: (nM ? mdg[0][j][s] : rdg[j][s]).x };
+      comps.forEach(function (c) { for (var k2 = 0; k2 < nM; k2++) tmp[k2] = mdg[k2][j][s][c]; pt[c] = comb(tmp, rdg ? rdg[j][s][c] : 0) * scale; });
       dg.push(pt);
     }
     fr.push(dg);
@@ -3167,14 +3189,15 @@ SE.spectrum = function (m, res, md, d, p, sta) {
   var sc = ["Nx", "Ny", "Nxy", "Mx", "My", "Mxy", "Qx", "Qy"];
   if (m.shells.length) {
     var msh = modes.map(function (mo, k) { var Um = mo.U.map(function (v) { return v * amp[k]; }); return m.shells.map(function (e, j) { return FE.shellForces(m, j, Um); }); });
-    m.shells.forEach(function (e, j) { var o = { R: msh[0][j].R }; sc.forEach(function (c) { for (var k2 = 0; k2 < nM; k2++) tmp[k2] = msh[k2][j][c]; o[c] = SE.combine(tmp, modes, meth) * scale; }); sh.push(o); });
+    var rsh = Ur ? m.shells.map(function (e, j) { return FE.shellForces(m, j, Ur); }) : null;
+    m.shells.forEach(function (e, j) { var o = { R: (nM ? msh[0][j] : rsh[j]).R }; sc.forEach(function (c) { for (var k2 = 0; k2 < nM; k2++) tmp[k2] = msh[k2][j][c]; o[c] = comb(tmp, rsh ? rsh[j][c] : 0) * scale; }); sh.push(o); });
   }
-  /* reactions: from modal displacements via element forces is costly; use modal base-shear distribution to supports */
+  /* reactions */
   var reac = {}; Object.keys(m.sup).forEach(function (v) { reac[v] = [0, 0, 0, 0, 0, 0]; });
-  var mreac = modes.map(function (mo, k) { var Um = mo.U.map(function (v) { return v * amp[k]; }); return SE.reactions(m, Um); });
-  Object.keys(reac).forEach(function (v) { for (var t = 0; t < 6; t++) { for (var k2 = 0; k2 < nM; k2++) tmp[k2] = mreac[k2][v] ? mreac[k2][v][t] : 0; reac[v][t] = SE.combine(tmp, modes, meth) * scale; } });
-  var cum = 0; modes.forEach(function (mo) { cum += mo.pct[d]; });
-  return { d: d, Ak: Ak, Vk: Vk, Vb: Vb, VbS: VbS, scale: scale, sD: sD, U: U, fr: fr, sh: sh, reac: reac, cum: cum, meth: meth, amp: amp };
+  var mreac = modes.map(function (mo, k) { var Um = mo.U.map(function (v) { return v * amp[k]; }); return SE.reactions(m, Um); }), rreac = Ur ? SE.reactions(m, Ur) : null;
+  Object.keys(reac).forEach(function (v) { for (var t = 0; t < 6; t++) { for (var k2 = 0; k2 < nM; k2++) tmp[k2] = mreac[k2][v] ? mreac[k2][v][t] : 0; reac[v][t] = comb(tmp, rreac && rreac[v] ? rreac[v][t] : 0) * scale; } });
+  var cum = 0, cumAll = 0; modes.forEach(function (mo) { cum += mo.pct[d]; }); all.forEach(function (mo) { cumAll += mo.pct[d]; });
+  return { cumAll: cumAll, d: d, Ak: Ak, Vk: Vk, Vb: Vb, VbS: VbS, scale: scale, sD: sD, U: U, fr: fr, sh: sh, reac: reac, cum: cum, meth: meth, amp: amp, modes: modes, Ur: Ur, mmc: mm, VbModal: nM ? SE.combine(Vk, modes, meth) : 0 };
 };
 /* support reactions for a displacement vector (no member loads) */
 SE.reactions = function (m, U) {
@@ -3194,7 +3217,7 @@ SE.reactions = function (m, U) {
 };
 /* storey drift for the spectrum: modal drift of every stacked node pair, combined (CQC), largest per storey */
 SE.rsDrift = function (m, md, rs) {
-  var lv = MD.floorLevels(m), out = [], modes = md.modes, d = rs.d, tmp = new Float64Array(modes.length);
+  var lv = MD.floorLevels(m), out = [], modes = rs.modes || md.modes, d = rs.d, tmp = new Float64Array(modes.length);
   for (var i = 1; i < lv.length; i++) {
     var h = lv[i] - lv[i - 1], top = [], bot = [];
     m.nodes.forEach(function (n, j) { if (Math.abs(n.z - lv[i]) < 0.01) top.push(j); else if (Math.abs(n.z - lv[i - 1]) < 0.01) bot.push(j); });
@@ -3203,7 +3226,7 @@ SE.rsDrift = function (m, md, rs) {
       var A = m.nodes[j], k = -1; bot.forEach(function (q) { var B = m.nodes[q]; if (Math.hypot(A.x - B.x, A.y - B.y) < 0.01) k = q; });
       if (k < 0) return;
       for (var t = 0; t < modes.length; t++) tmp[t] = (modes[t].U[6 * j + d] - modes[t].U[6 * k + d]) * rs.amp[t];
-      var dr = SE.combine(tmp, modes, rs.meth) * rs.sD / h;
+      var c0 = modes.length ? SE.combine(tmp, modes, rs.meth) : 0, rr = rs.Ur ? rs.Ur[6 * j + d] - rs.Ur[6 * k + d] : 0, dr = Math.sqrt(c0 * c0 + rr * rr) * rs.sD / h;
       if (!best || dr > best.dr) best = { dr: dr, top: j, bot: k };
     });
     if (best) out.push({ c: "RS" + (d ? "Y" : "X"), z: lv[i], zb: lv[i - 1], h: h, dr: best.dr, top: best.top, bot: best.bot, ut: rs.U[6 * best.top + d], ub: rs.U[6 * best.bot + d], stacked: true, tr: 1, ok: best.dr <= 0.004, lim: 0.004, rs: true });
@@ -3261,11 +3284,11 @@ SE.run = function (m, S, p) {
 SE.respEnv = function (m, S, p, fn) {
   var se = S.se, out = {};
   if (!se || !se.rs || !se.md) return out;
-  var modes = se.md.modes, cache = {};
+  var cache = {};
   function modal(d) {
     if (cache[d]) return cache[d];
-    var a = se.rs[d], per = modes.map(function (mo, k) { var Um = mo.U.map(function (v) { return v * a.amp[k]; }); return fn(Um); }), n = per[0].length, r = [];
-    for (var c = 0; c < n; c++) r.push(SE.combine(per.map(function (q) { return q[c]; }), modes, a.meth) * a.scale);
+    var a = se.rs[d], modes = a.modes || se.md.modes, per = modes.map(function (mo, k) { var Um = mo.U.map(function (v) { return v * a.amp[k]; }); return fn(Um); }), rr = a.Ur ? fn(a.Ur) : null, n = per.length ? per[0].length : rr.length, r = [];
+    for (var c = 0; c < n; c++) { var c0 = modes.length ? SE.combine(per.map(function (q) { return q[c]; }), modes, a.meth) : 0, c1 = rr ? rr[c] : 0; r.push(Math.sqrt(c0 * c0 + c1 * c1) * a.scale); }
     return (cache[d] = r);
   }
   Object.keys(se.rs).forEach(function (dk) {
@@ -4944,7 +4967,7 @@ if (typeof module !== "undefined") module.exports = MAT;
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "3.3";
+REG.ENGINE = "3.4";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],
@@ -4975,7 +4998,8 @@ REG.CHECKS = [
   ["Seismic", "Response spectrum, CQC/SRSS, scaling (cl 7.7.3)", "Verified", "Single storey Vb = Ak·W, displacement Ak·g/ω², CQC ρ closed form"],
   ["Seismic", "Accidental torsion, CM / CR (cl 7.8.2)", "Verified", "Symmetric plan CR = CM, CR shift towards walls, torque = Qi·(0.5esi + 0.05bi)"],
   ["Seismic", "Irregularities (Table 5, 6), storey drift (cl 7.11)", "Calculated", "Soft storey / mass flags tested on constructed cases; drift at stacked nodes"],
-  ["Seismic", "Missing-mass correction, time-history analysis", "Not implemented", ""],
+  ["Seismic", "Missing-mass correction (cl 7.7.5.2): modes > 33 Hz and truncated mass static at ZPA, SRSS with the modal response", "Verified", "A rigid structure gives the static ZPA solution exactly; residual base shear = missing mass × A0·g and equals Σ reactions; with all modes no correction (acceptance.js L)"],
+  ["Seismic", "Time-history analysis", "Not implemented", ""],
   ["RCC design", "Beam flexure, shear, torsion (IS 456 cl 38, 40, 41)", "Verified", "Mu,lim (SP 16 Table C), τc (Table 19), τc,max (Table 20) and expected pass/fail designs in acceptance.js A, B"],
   ["RCC design", "Column biaxial (strain compatibility + Bresler cl 39.6)", "Calculated", "Spot check at P = 0 against 0.87fy·Ast·(d − d′) (verify.js), expected pass/fail cases, bars-provided re-check"],
   ["RCC design", "Slab elements (Wood–Armer)", "Calculated", "Plate moments verified; Wood–Armer per Wood (1968) formulae"],
@@ -5006,14 +5030,14 @@ REG.CHECKS = [
   ["Automation", "Automatic design (storey-wise enlargement until all checks pass)", "Calculated", "Converges on the test building in acceptance.js H; sizes are written as editable section rules"]
 ];
 /* stable ids of REG.CHECKS rows, used by the verification mode */
-REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "timehist",
+REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "mmc", "timehist",
   "rcbeam", "rccol", "rcslab", "rcwallel", "rcwall", "servic", "stfcd", "stltb", "stklen", "dtbeam", "dtcol", "scwb", "joint", "dtslab", "bbs",
   "foot", "footpress", "mat", "matsoil", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto"];
 REG.byId = function (id) { var i = REG.IDS.indexOf(id); return i >= 0 ? { id: id, area: REG.CHECKS[i][0], t: REG.CHECKS[i][1], st: REG.CHECKS[i][2], ev: REG.CHECKS[i][3] } : null; };
 REG.RANK = { "Not implemented": 0, Simplified: 1, Calculated: 2, Verified: 3 };
 /* checks behind each kind of result; the weakest decides the result's verification state */
 REG.KIND = { beam: ["frame", "rcbeam", "dtbeam", "servic"], column: ["frame", "rccol", "dtcol", "scwb", "joint"], slab: ["shell", "rcslab", "dtslab", "servic"],
-  wall: ["shell", "rcwall", "rcwallel"], steel: ["frame", "stfcd", "stltb", "stklen"], footing: ["foot", "footpress", "foundmore"], mat: ["mat", "matsoil"], seismic: ["spectrum", "statbase", "modal", "rsa", "torsion", "irreg"] };
+  wall: ["shell", "rcwall", "rcwallel"], steel: ["frame", "stfcd", "stltb", "stklen"], footing: ["foot", "footpress", "foundmore"], mat: ["mat", "matsoil"], seismic: ["spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "mmc"] };
 REG.state = function (ids) { var w = null; ids.forEach(function (id) { var r = REG.byId(id); if (r && (!w || REG.RANK[r.st] < REG.RANK[w.st])) w = r; }); return w; };
 REG.html = function (esc) {
   var col = { Verified: "okt", Calculated: "", Simplified: "warnt", "Not implemented": "not" };
@@ -5039,7 +5063,7 @@ PIPE.steps = function (S, p, pd) {
       if (!p.eq) return;
       S.se = SE.run(S.m, S, p);
       S.se.irr = SE.irregular(S.m, S, S.se); S.se.tc = SE.torsionCheck(S.m, S, S.se);
-      if (S.se.md) { var low = S.se.md.modes.length; ["X", "Y"].forEach(function (D0, d) { var rs = S.se.rs[d]; if (rs && rs.cum < 0.9) S.res.warn.push("Modal mass participation in " + D0 + " is " + (rs.cum * 100).toFixed(1) + " % with " + low + " modes — IS 1893 cl 7.7.5.2 requires ≥ 90 %: increase the number of modes."); }); }
+      if (S.se.md) { var low = S.se.md.modes.length; ["X", "Y"].forEach(function (D0, d) { var rs = S.se.rs[d], ca = rs ? (rs.cumAll !== undefined ? rs.cumAll : rs.cum) : 1; if (rs && ca < 0.9) S.res.warn.push("Modal mass participation in " + D0 + " is " + (ca * 100).toFixed(1) + " % with " + low + " modes — IS 1893 cl 7.7.5.2 requires ≥ 90 %: increase the number of modes" + (rs.mmc ? " (the missing-mass correction adds the remaining " + (rs.mmc.pct * 100).toFixed(1) + " % statically meanwhile)." : ".")); }); }
     }],
     ["Designing and detailing members (IS 456 / IS 800 / IS 13920)…", function () {
       S.des = MD.design(S.m, S.res, p); S.det = null;
@@ -5698,7 +5722,7 @@ var RPT = (function () {
     body += H("Analysis results");
     if (S.se && S.se.md) {
       body += '<h3>Modal analysis</h3>' + tbl(["Mode", "T (s)", "f (Hz)", "Mass X %", "Mass Y %", "Torsion %", "Type"], S.se.md.modes.slice(0, 12).map(function (q) { return [q.k, f(q.T, 3), f(q.f, 3), f(100 * q.pct[0], 1), f(100 * (q.pct[1] || 0), 1), f(100 * q.pctR, 1), q.kind]; }));
-      body += '<h3>Response spectrum (IS 1893 cl 7.7)</h3>' + tbl(["Direction", "Dynamic VB (kN)", "Static VB (kN)", "Scale factor", "Mass captured"], Object.keys(S.se.rs).map(function (d) { var r = S.se.rs[d]; return [+d ? "Y" : "X", f(r.Vb, 1), f(r.VbS, 1), f(r.scale, 3), f(100 * r.cum, 1) + " %"]; }));
+      body += '<h3>Response spectrum (IS 1893 cl 7.7)</h3>' + tbl(["Direction", "Modal VB (kN)", "Missing-mass VB (kN)", "Dynamic VB (kN)", "Static VB (kN)", "Scale factor", "Mass in modes"], Object.keys(S.se.rs).map(function (d) { var r = S.se.rs[d]; return [+d ? "Y" : "X", f(r.VbModal !== undefined ? r.VbModal : r.Vb, 1), r.mmc ? f(r.mmc.V, 1) + " (" + f(100 * r.mmc.pct, 1) + " %)" : "—", f(r.Vb, 1), f(r.VbS, 1), f(r.scale, 3), f(100 * (r.cumAll !== undefined ? r.cumAll : r.cum), 1) + " %"]; })) + (S.se.rs[0] && S.se.rs[0].mmc ? '<p class="note">Missing-mass correction (IS 1893 cl 7.7.5.2): modes above 33 Hz and the mass not in the extracted modes respond statically at the zero-period acceleration A0 = ' + f(S.se.rs[0].mmc.A0, 4) + ' g; the residual response is combined with the modal response by SRSS before scaling.</p>' : '');
     }
     if (S.drift && S.drift.length) { var dm = {}; S.drift.forEach(function (q) { if (!dm[q.c] || q.dr > dm[q.c].dr) dm[q.c] = q; }); body += '<h3>Storey drift (cl 7.11.1, limit 0.004)</h3>' + tbl(["Case", "Storey (m)", "Max drift", "Δmax/Δave", "Status"], Object.keys(dm).map(function (k) { var q = dm[k]; return [esc(k), f(q.zb, 2) + "–" + f(q.z, 2), f(q.dr, 5), m.twoD ? "—" : f(q.tr, 2), q.lim ? (q.ok ? '<span class="ok">OK</span>' : '<span class="no">EXCEEDS</span>') : ""]; })); }
     if (S.se && S.se.irr) { var soft = S.se.irr.filter(function (r) { return r.soft; }).length, mass = S.se.irr.filter(function (r) { return r.mass; }).length, tor = (S.se.tc || []).filter(function (r) { return r.ave > 1.2; }).length; body += '<p>Irregularities (IS 1893 Tables 5, 6): soft storey ' + (soft ? '<span class="no">' + soft + ' flags</span>' : '<span class="ok">none</span>') + ', mass ' + (mass ? '<span class="no">' + mass + '</span>' : '<span class="ok">none</span>') + ', torsional (Δmax/Δave > 1.2) ' + (tor ? '<span class="no">' + tor + '</span>' : '<span class="ok">none</span>') + '.</p>'; }
@@ -5880,7 +5904,7 @@ var PRO = (function () {
   function vItems(S) {
     var m = S.m, items = [], has = { wall: m.shells.some(function (s) { return s.kind === "wall"; }), slab: m.shells.some(function (s) { return s.kind === "slab"; }), steel: m.frames.some(function (e) { return e.sec.kind === "steel"; }), rcc: m.frames.some(function (e) { return e.sec.kind === "rcc"; }), eq: !!(S.p && S.p.eq), wsm: S.p && S.p.method === "wsm", wind: !!(S.p && S.p.wind) };
     var app = { pdelta: !!(S.res && S.res.pd), pushover: !!S.po, rcwall: has.wall, rcwallel: has.wall, rcslab: has.slab, dtslab: has.slab, stfcd: has.steel, stltb: has.steel, stklen: has.steel, rcbeam: has.rcc, rccol: has.rcc, dtbeam: has.rcc, dtcol: has.rcc, scwb: has.rcc && has.eq, joint: has.rcc && has.eq,
-      spectrum: has.eq, statbase: has.eq, modal: has.eq && S.p.rsa, rsa: has.eq && S.p.rsa, torsion: has.eq, irreg: has.eq, timehist: has.eq, wind: has.wind, wsmwall: has.wsm && has.wall, foot: has.rcc && !(S.det && S.det.mat), footpress: has.rcc && !(S.det && S.det.mat), mat: !!(S.det && S.det.mat), matsoil: !!(S.det && S.det.mat), foundmore: has.rcc, servic: has.rcc, bbs: has.rcc, snow: !!(S.p && S.p.snow), pattern: !!(S.L && S.L.cases && S.L.cases.LP1), llred: !!(S.p && S.p.llRed), cover: has.rcc, boq: !!S.boq, auto: !!S.autoRes };
+      spectrum: has.eq, statbase: has.eq, modal: has.eq && S.p.rsa, rsa: has.eq && S.p.rsa, torsion: has.eq, irreg: has.eq, mmc: has.eq && S.p.rsa && S.p.mmc !== false, timehist: has.eq, wind: has.wind, wsmwall: has.wsm && has.wall, foot: has.rcc && !(S.det && S.det.mat), footpress: has.rcc && !(S.det && S.det.mat), mat: !!(S.det && S.det.mat), matsoil: !!(S.det && S.det.mat), foundmore: has.rcc, servic: has.rcc, bbs: has.rcc, snow: !!(S.p && S.p.snow), pattern: !!(S.L && S.L.cases && S.L.cases.LP1), llred: !!(S.p && S.p.llRed), cover: has.rcc, boq: !!S.boq, auto: !!S.autoRes };
     REG.IDS.forEach(function (id) {
       var r = REG.byId(id); if (!r) return;
       if (app[id] === false || (app[id] === undefined && ["frame", "shell", "modelchk"].indexOf(id) < 0)) return;
@@ -6014,7 +6038,7 @@ var PRO = (function () {
     }
     var dr = (S.drift || []).filter(function (q) { return q.ok === false; });
     if (dr.length) { var dm = dr.slice().sort(function (a, b) { return b.dr - a.dr; })[0]; add(3, "Storey drift exceeds 0.004h", dm.c + " storey " + f(dm.zb, 1) + "–" + f(dm.z, 1) + " m: " + f(dm.dr, 5), "Stiffen: larger columns, shear walls or bracing.", "IS 1893 cl 7.11.1"); }
-    if (S.se && S.se.rs) [0, 1].forEach(function (d) { var r = S.se.rs[d]; if (r && r.cum < 0.9) add(2, "Mass participation " + f(100 * r.cum, 1) + " % in " + (d ? "Y" : "X"), "Fewer than 90 % of the mass is captured.", "Increase the number of modes.", "IS 1893 cl 7.7.5.2"); });
+    if (S.se && S.se.rs) [0, 1].forEach(function (d) { var r = S.se.rs[d], ca = r ? (r.cumAll !== undefined ? r.cumAll : r.cum) : 1; if (r && ca < 0.9) add(2, "Mass participation " + f(100 * ca, 1) + " % in " + (d ? "Y" : "X"), "Fewer than 90 % of the mass is in the extracted modes" + (r.mmc ? "; the missing-mass correction covers the rest statically." : "."), "Increase the number of modes" + (r.mmc ? "" : ", or switch on the missing-mass correction") + ".", "IS 1893 cl 7.7.5.2"); });
     if (S.se && S.se.tc) { var t2 = S.se.tc.filter(function (r) { return r.ave > 1.2; }); if (t2.length) add(2, "Torsional irregularity (Δmax/Δave up to " + f(Math.max.apply(null, t2.map(function (r) { return r.ave; })), 2) + ")", "Plan stiffness is unbalanced.", "Add stiffness on the flexible side or redistribute walls.", "IS 1893 Table 5 (i)"); }
     if (S.se && S.se.irr) { var sf = S.se.irr.filter(function (r) { return r.soft; }); if (sf.length) add(2, "Soft storey at storey " + (sf[0].i + 1), "Stiffness less than the storey above.", "Stiffen that storey or design to cl 7.10.", "IS 1893 Table 6"); }
     var dfl = p.entered ? ["sbc", "zone", "soil", "ll", "fck"].filter(function (k) { return p.entered.indexOf(k) < 0; }) : [];
@@ -7619,10 +7643,20 @@ var RX = (function () {
         { k: "My", h: "Meff Y", u: "kN·s²/m", s: "n2" }, { k: "Vy", h: "Modal Vb Y", u: "kN", f: "{My}*{Ak}*9.81", s: "f2" }].filter(function (c) { return !m.twoD || ["py", "pr", "My", "Vy"].indexOf(c.k) < 0; }),
         md.modes.map(function (mo) { return { k: mo.k, T: mo.T, kind: mo.kind, px: mo.pct[0], py: mo.pct[1], pr: mo.pctR, Mx: mo.Meff[0], My: mo.Meff[1] }; }), G, { freeze: false });
       var L = t.L, a = t.first, b = t.last;
-      sh.row(["Σ", "", "", "", { f: "=SUM(" + L.px + a + ":" + L.px + b + ")", v: rsX.cum, s: "pct" }].concat(m.twoD ? [] : [{ f: "=SUM(" + L.py + a + ":" + L.py + b + ")", v: rsY ? rsY.cum : 0, s: "pct" }]), "b");
+      sh.row(["Σ", "", "", "", { f: "=SUM(" + L.px + a + ":" + L.px + b + ")", v: rsX.cumAll !== undefined ? rsX.cumAll : rsX.cum, s: "pct" }].concat(m.twoD ? [] : [{ f: "=SUM(" + L.py + a + ":" + L.py + b + ")", v: rsY ? (rsY.cumAll !== undefined ? rsY.cumAll : rsY.cum) : 0, s: "pct" }]), "b");
       sh.row([{ v: "IS 1893 cl 7.7.5.2: the modes used must capture at least 90 % of the seismic mass in each direction.", s: "note" }]);
+      if (rsX.mmc) {
+        sh.row([]);
+        sh.row(["Missing-mass correction (cl 7.7.5.2): modes above 33 Hz and the mass not in the modes act statically at the zero-period acceleration"], "tb");
+        sh.row(["Direction", "Total mass", "Σ Meff, modes ≤ 33 Hz", "Missing mass", "A0 = (Z/2)(1)/(R/I)", "Vr = Mmiss·A0·g (kN)", "Vb modal (kN)", "Vb = √(Vmodal² + Vr²)"], "h", 22);
+        [0, 1].forEach(function (d) {
+          var rs = se.rs[d]; if (!rs || !rs.mmc) return; var rn = sh.next(), col = d ? L.My : L.Mx;
+          sh.row([d ? "Y" : "X", { v: md.Mt[d], s: "n2" }, { f: "=SUMIFS(" + col + a + ":" + col + b + "," + L.fr + a + ":" + L.fr + b + ',"<=33")', v: md.Mt[d] - rs.mmc.M, s: "f2" }, { f: "=MAX(0,B" + rn + "-C" + rn + ")", v: rs.mmc.M, s: "f2" },
+            { f: "=p_Zz/2*1/(p_Rr/p_Imp)", v: rs.mmc.A0, s: "f4" }, { f: "=D" + rn + "*E" + rn + "*9.81", v: rs.mmc.V, s: "f2" }, { v: rs.VbModal, s: "n2" }, { f: "=SQRT(G" + rn + "^2+F" + rn + "^2)", v: rs.Vb, s: "f2" }]);
+        });
+      }
       sh.row([]);
-      sh.row(["Direction", "Vb SRSS (kN)", "Vb " + (p.rsComb === "srss" ? "SRSS" : "CQC") + " (kN)", "Vb static (kN)", "Scale factor", "Applied to"], "h", 22);
+      sh.row(["Direction", "Vb SRSS (kN)", "Vb " + (p.rsComb === "srss" ? "SRSS" : "CQC") + (rsX.mmc ? " + missing mass" : "") + " (kN)", "Vb static (kN)", "Scale factor", "Applied to"], "h", 22);
       [0, 1].forEach(function (d) {
         var rs = se.rs[d]; if (!rs) return;
         var col = d ? L.Vy : L.Vx, rn = sh.next();
@@ -7911,7 +7945,7 @@ var SU = (function () {
     ff: 1.5, ll: 3, ffRoof: 2.5, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0,
     eq: true, zone: "V", I: 1.2, R: 5, soil: "II", sys: "rc", wind: false, vbp: "Srinagar", terrain: 2, cf: 1.3, trib: 4,
     pdir: 0, ppat: "parabolic", pdrift: 4, ppd: true, pev: 80, secOver: "", loadOver: "",
-    accTor: true, rsa: true, nModes: 12, rsComb: "cqc", ortho: false, rsScaleDisp: false, sbc: 200, Df: 1.5,
+    accTor: true, rsa: true, mmc: true, nModes: 12, rsComb: "cqc", ortho: false, rsScaleDisp: false, sbc: 200, Df: 1.5,
     snow: false, s0: 1.5, mu: 0.8, snowW: 0, pattern: "auto", llRed: false, exposure: "moderate", fire: "1",
     found: "isolated", matT: 0, matOff: 0.5, ks: 0, gs: 18, setLim: 75, angLim: 500, matMesh: 0.5,
     estFmt: "boq", mT: 230, mOpen: 15, plinthH: 0.45, parH: 1.0, wastage: 3, cont: 3, cess: 1, gst: 18, sorOn: true
@@ -8077,7 +8111,7 @@ var SU = (function () {
       sel("I", "Importance factor I", [[1, "1.0 ordinary"], [1.2, "1.2 important / offices >200"], [1.5, "1.5 critical"]]) + sel("R", "Response reduction R", [[3, "3 OMRF"], [4, "4 braced steel"], [5, "5 SMRF / ductile"], [4.5, "4.5 dual (walls)"]]) +
       sel("soil", "Soil type", [["I", "I rock/hard"], ["II", "II medium"], ["III", "III soft"]]) + sel("sys", "Period formula", [["rc", "RC MRF 0.075h^0.75"], ["steel", "Steel MRF 0.085h^0.75"], ["other", "With infill/walls 0.09h/√d"]]) +
       chk("accTor", "Accidental torsion, design eccentricity 1.5esi ± 0.05bi (cl 7.8.2, 3D models)") +
-      chk("rsa", "Modal & response spectrum analysis (cl 7.7)") + num("nModes", "Number of modes", "", "cl 7.7.5.2: enough for ≥ 90 % mass participation") +
+      chk("rsa", "Modal & response spectrum analysis (cl 7.7)") + num("nModes", "Number of modes", "", "cl 7.7.5.2: enough for ≥ 90 % mass participation") + chk("mmc", "Missing-mass correction (cl 7.7.5.2): modes above 33 Hz and the mass not in the modes act statically at the zero-period acceleration") +
       sel("rsComb", "Modal combination", [["cqc", "CQC, 5 % damping (cl 7.7.5.4)"], ["srss", "SRSS"]]) + chk("ortho", "Orthogonal effects 100 % + 30 % (cl 6.3.4.2)") +
       chk("rsScaleDisp", "Also scale spectrum displacements to the static base shear (off = IS 1893 Amendment 2, cl 7.7.3.2)") +
       chk("wind", "Wind — IS 875 (Part 3):2015") + sel("vbp", "Basic wind speed", Object.keys(D.vb).filter(function (k) { return k !== "Custom"; }).map(function (k) { return [k, k + " — " + D.vb[k] + " m/s"]; })) +
@@ -8620,7 +8654,8 @@ var SU = (function () {
       var first2 = md.modes.slice(0, 2).map(function (mo) { return mo.kind; });
       if (!m.twoD) h += '<div class="note">First two modes: ' + first2.join(", ") + (first2.indexOf("Torsion") >= 0 ? ' — <b>a torsional mode is among the first two</b>; IS 1893 Table 5 (i) requires the configuration to be revised so that the first two modes are translational where torsional irregularity exists.' : ' — translational (preferred).') + ' Tap a mode in the viewer list to see its shape.</div>';
       h += '<h4>Response spectrum analysis (cl 7.7, ' + (se.rs[0].meth === "cqc" ? "CQC, ζ = 5 %" : "SRSS") + ')</h4>' +
-        tbl(["Direction", "Vb dynamic (kN)", "Vb static (kN)", "Scale factor", "Σ mass participation", "Displacements"], Object.keys(se.rs).map(function (d) { var r = se.rs[d]; return ["RS" + (+d ? "Y" : "X"), f(r.Vb, 1), f(r.VbS, 1), f(r.scale, 3), '<span class="' + (r.cum >= 0.9 ? "okt" : "not") + '">' + f(r.cum * 100, 1) + ' %</span>', r.sD > 1 ? "scaled" : "unscaled"]; })) +
+        tbl(["Direction", "Vb modal (kN)", "Missing mass", "Vb dynamic (kN)", "Vb static (kN)", "Scale factor", "Σ mass in modes", "Displacements"], Object.keys(se.rs).map(function (d) { var r = se.rs[d], ca = r.cumAll !== undefined ? r.cumAll : r.cum; return ["RS" + (+d ? "Y" : "X"), f(r.VbModal !== undefined ? r.VbModal : r.Vb, 1), r.mmc ? f(r.mmc.pct * 100, 1) + " % → " + f(r.mmc.V, 1) + " kN" + (r.mmc.rigid ? " (" + r.mmc.rigid + " modes > 33 Hz)" : "") : "off", f(r.Vb, 1), f(r.VbS, 1), f(r.scale, 3), '<span class="' + (ca >= 0.9 ? "okt" : "not") + '">' + f(ca * 100, 1) + ' %</span>', r.sD > 1 ? "scaled" : "unscaled"]; })) +
+        (se.rs[0] && se.rs[0].mmc ? '<div class="note">Missing-mass correction (IS 1893 cl 7.7.5.2): the mass not carried by the modes below 33 Hz is loaded statically with the zero-period acceleration A0 = Z/2 · (Sa/g at T = 0) / (R/I) = ' + f(se.rs[0].mmc.A0, 4) + ' g; its response is added to the CQC/SRSS modal response by SRSS before scaling to the static base shear.</div>' : '') +
         '<div class="note">Ak = (Z/2)(Sa/g)/(R/I) for each mode; modal responses combined by ' + (se.rs[0].meth === "cqc" ? "CQC (cl 7.7.5.4)" : "SRSS") + '. When the dynamic base shear is below the static Vb (Ta formula), member forces are scaled up by Vb/VBd (cl 7.7.3); ' + (S.p.rsScaleDisp ? "displacements are scaled as well." : "displacements are not scaled (Amendment 2, cl 7.7.3.2).") + (S.p.accTor && !m.twoD ? " Accidental torsion torques are added as absolute responses." : "") + (S.p.ortho ? " Orthogonal effects: 100 % + 30 % of the other direction." : "") + ' Response-spectrum combinations are added to the design: ' + S.cb.filter(function (c) { return c.rs; }).map(function (c) { return c.name; }).join(", ") + '.</div>';
     }
     if (!m.twoD && se.floors && se.floors.length && se.floors[0].cr) {

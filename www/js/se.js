@@ -4,6 +4,8 @@
    • Modal analysis: lumped translational masses, subspace iteration on the skyline-factored stiffness
    • Response spectrum analysis (cl 7.7): Ak = (Z/2)(Sa/g)/(R/I), CQC (5 % damping) or SRSS, scaling to the
      static base shear (cl 7.7.3), optional 100 % + 30 % orthogonal combination
+   • Missing-mass correction (cl 7.7.5.2): modes above 33 Hz and the truncated modes respond statically at the zero-period
+     acceleration; the residual response is added to the modal combination by SRSS
    • Irregularity indicators: torsion (Table 5 (i)), soft storey and mass irregularity (Table 6)
    Units kN, m, s; mass = W/g in kN·s²/m. */
 var SE = {};
@@ -125,7 +127,7 @@ SE.modes = function (m, W, nModes, opt) {
     var mx = Math.max(md.pct[0], md.pct[1] || 0, md.pctR);
     md.kind = mx < 0.01 ? "Local" : m.twoD ? "X" : md.pctR >= Math.max(md.pct[0], md.pct[1]) ? "Torsion" : md.pct[0] >= md.pct[1] ? "X" : "Y";
   });
-  return { modes: modes, Mt: Mt, conv: conv, iter: it + 1, q: q, nMassDof: nm };
+  return { modes: modes, Mt: Mt, conv: conv, iter: it + 1, q: q, nMassDof: nm, _A: A, _W: W };
 };
 /* generalized symmetric eigenproblem K x = λ M x (small, dense): Cholesky of M, Jacobi on L⁻¹ K L⁻ᵀ */
 SE.geneig = function (K, M) {
@@ -175,24 +177,44 @@ SE.combine = function (vals, modes, method) {   /* vals[k] = modal response of o
 /* modal response quantities and combined envelopes for direction d. Returns {Vb, VbStatic, scale, U (envelope),
    fr[k].dg (9-point envelope), sh[k], reac, Ak[], Vk[] } */
 SE.spectrum = function (m, res, md, d, p, sta) {
-  var modes = md.modes, Z = D.zone[p.zone], nM = modes.length, meth = p.rsComb || "cqc";
+  var all = md.modes, Z = D.zone[p.zone], meth = p.rsComb || "cqc", mmc = p.mmc !== false && p.mmc !== "off";
+  /* IS 1893 cl 7.7.5.2: with the missing-mass correction, only modes below 33 Hz are combined; the rest of the mass
+     (truncated and rigid modes) responds statically at the zero-period acceleration and is added by SRSS */
+  var modes = mmc ? all.filter(function (mo) { return mo.f <= 33; }) : all, nM = modes.length;
   var Ak = modes.map(function (mo) { return Z / 2 * LD.saG(mo.T, p.soil) / (p.R / p.I); });
   var amp = modes.map(function (mo, i) { return mo.Gam[d] * Ak[i] * SE.g / mo.w2; });   /* modal coordinate peak */
   var Vk = modes.map(function (mo, i) { return mo.Meff[d] * Ak[i] * SE.g; });
-  var Vb = SE.combine(Vk, modes, meth);
-  var VbS = sta ? sta.Vb : 0, scale = Vb > 0 && VbS > Vb ? VbS / Vb : 1;
+  var nU = 6 * m.nodes.length, Ur = null, mm = null;
+  if (mmc) {
+    var A0 = Z / 2 * LD.saG(0, p.soil) / (p.R / p.I), W = md._W || [], Fr = new Float64Array(m._neq), Mres = md.Mt[d];
+    modes.forEach(function (mo) { Mres -= mo.Meff[d]; });
+    /* residual inertia: (M r − Σ Γk M φk) × A0·g over the mass DOFs of both horizontal directions */
+    m.nodes.forEach(function (nd, i2) {
+      var mi = (W[i2] > 0 ? W[i2] : 0) / SE.g; if (!mi) return;
+      (m.twoD ? [0] : [0, 1]).forEach(function (dd) {
+        var e = m._eq[6 * i2 + dd]; if (e < 0) return;
+        var v = dd === d ? 1 : 0; modes.forEach(function (mo) { v -= mo.Gam[d] * mo.U[6 * i2 + dd]; });
+        Fr[e] += mi * v * A0 * SE.g;
+      });
+    });
+    Ur = FE.expand(m, FE.backsub(md._A, m._maxa, m._neq, Fr));
+    mm = { A0: A0, M: Math.max(Mres, 0), pct: md.Mt[d] > 0 ? Math.max(Mres, 0) / md.Mt[d] : 0, V: Math.max(Mres, 0) * A0 * SE.g, rigid: all.length - nM, used: nM };
+  }
+  function comb(vals, r) { var c = nM ? SE.combine(vals, modes, meth) : 0; return r ? Math.sqrt(c * c + r * r) : c; }
+  var Vb = comb(Vk, mm ? mm.V : 0), VbS = sta ? sta.Vb : 0, scale = Vb > 0 && VbS > Vb ? VbS / Vb : 1;
   var sD = p.rsScaleDisp ? scale : 1;
   /* displacements */
-  var nU = 6 * m.nodes.length, U = new Float64Array(nU), tmp = new Float64Array(nM);
-  for (var i = 0; i < nU; i++) { for (var k = 0; k < nM; k++) tmp[k] = modes[k].U[i] * amp[k]; U[i] = SE.combine(tmp, modes, meth) * sD; }
+  var U = new Float64Array(nU), tmp = new Float64Array(nM);
+  for (var i = 0; i < nU; i++) { for (var k = 0; k < nM; k++) tmp[k] = modes[k].U[i] * amp[k]; U[i] = comb(tmp, Ur ? Ur[i] : 0) * sD; }
   /* member diagrams */
   var comps = ["N", "Vy", "Vz", "T", "My", "Mz"], fr = [], sh = [];
-  var mdg = modes.map(function (mo, k) { return m.frames.map(function (e, j) { var Um = mo.U.map(function (v) { return v * amp[k]; }); return FE.frameDiagram(FE.frameForces(m, j, Um, null, 0), 8); }); });
+  var mdg = modes.map(function (mo, k) { var Um = mo.U.map(function (v) { return v * amp[k]; }); return m.frames.map(function (e, j) { return FE.frameDiagram(FE.frameForces(m, j, Um, null, 0), 8); }); });
+  var rdg = Ur ? m.frames.map(function (e, j) { return FE.frameDiagram(FE.frameForces(m, j, Ur, null, 0), 8); }) : null;
   m.frames.forEach(function (e, j) {
     var dg = [];
     for (var s = 0; s <= 8; s++) {
-      var pt = { x: mdg[0][j][s].x };
-      comps.forEach(function (c) { for (var k2 = 0; k2 < nM; k2++) tmp[k2] = mdg[k2][j][s][c]; pt[c] = SE.combine(tmp, modes, meth) * scale; });
+      var pt = { x: (nM ? mdg[0][j][s] : rdg[j][s]).x };
+      comps.forEach(function (c) { for (var k2 = 0; k2 < nM; k2++) tmp[k2] = mdg[k2][j][s][c]; pt[c] = comb(tmp, rdg ? rdg[j][s][c] : 0) * scale; });
       dg.push(pt);
     }
     fr.push(dg);
@@ -200,14 +222,15 @@ SE.spectrum = function (m, res, md, d, p, sta) {
   var sc = ["Nx", "Ny", "Nxy", "Mx", "My", "Mxy", "Qx", "Qy"];
   if (m.shells.length) {
     var msh = modes.map(function (mo, k) { var Um = mo.U.map(function (v) { return v * amp[k]; }); return m.shells.map(function (e, j) { return FE.shellForces(m, j, Um); }); });
-    m.shells.forEach(function (e, j) { var o = { R: msh[0][j].R }; sc.forEach(function (c) { for (var k2 = 0; k2 < nM; k2++) tmp[k2] = msh[k2][j][c]; o[c] = SE.combine(tmp, modes, meth) * scale; }); sh.push(o); });
+    var rsh = Ur ? m.shells.map(function (e, j) { return FE.shellForces(m, j, Ur); }) : null;
+    m.shells.forEach(function (e, j) { var o = { R: (nM ? msh[0][j] : rsh[j]).R }; sc.forEach(function (c) { for (var k2 = 0; k2 < nM; k2++) tmp[k2] = msh[k2][j][c]; o[c] = comb(tmp, rsh ? rsh[j][c] : 0) * scale; }); sh.push(o); });
   }
-  /* reactions: from modal displacements via element forces is costly; use modal base-shear distribution to supports */
+  /* reactions */
   var reac = {}; Object.keys(m.sup).forEach(function (v) { reac[v] = [0, 0, 0, 0, 0, 0]; });
-  var mreac = modes.map(function (mo, k) { var Um = mo.U.map(function (v) { return v * amp[k]; }); return SE.reactions(m, Um); });
-  Object.keys(reac).forEach(function (v) { for (var t = 0; t < 6; t++) { for (var k2 = 0; k2 < nM; k2++) tmp[k2] = mreac[k2][v] ? mreac[k2][v][t] : 0; reac[v][t] = SE.combine(tmp, modes, meth) * scale; } });
-  var cum = 0; modes.forEach(function (mo) { cum += mo.pct[d]; });
-  return { d: d, Ak: Ak, Vk: Vk, Vb: Vb, VbS: VbS, scale: scale, sD: sD, U: U, fr: fr, sh: sh, reac: reac, cum: cum, meth: meth, amp: amp };
+  var mreac = modes.map(function (mo, k) { var Um = mo.U.map(function (v) { return v * amp[k]; }); return SE.reactions(m, Um); }), rreac = Ur ? SE.reactions(m, Ur) : null;
+  Object.keys(reac).forEach(function (v) { for (var t = 0; t < 6; t++) { for (var k2 = 0; k2 < nM; k2++) tmp[k2] = mreac[k2][v] ? mreac[k2][v][t] : 0; reac[v][t] = comb(tmp, rreac && rreac[v] ? rreac[v][t] : 0) * scale; } });
+  var cum = 0, cumAll = 0; modes.forEach(function (mo) { cum += mo.pct[d]; }); all.forEach(function (mo) { cumAll += mo.pct[d]; });
+  return { cumAll: cumAll, d: d, Ak: Ak, Vk: Vk, Vb: Vb, VbS: VbS, scale: scale, sD: sD, U: U, fr: fr, sh: sh, reac: reac, cum: cum, meth: meth, amp: amp, modes: modes, Ur: Ur, mmc: mm, VbModal: nM ? SE.combine(Vk, modes, meth) : 0 };
 };
 /* support reactions for a displacement vector (no member loads) */
 SE.reactions = function (m, U) {
@@ -227,7 +250,7 @@ SE.reactions = function (m, U) {
 };
 /* storey drift for the spectrum: modal drift of every stacked node pair, combined (CQC), largest per storey */
 SE.rsDrift = function (m, md, rs) {
-  var lv = MD.floorLevels(m), out = [], modes = md.modes, d = rs.d, tmp = new Float64Array(modes.length);
+  var lv = MD.floorLevels(m), out = [], modes = rs.modes || md.modes, d = rs.d, tmp = new Float64Array(modes.length);
   for (var i = 1; i < lv.length; i++) {
     var h = lv[i] - lv[i - 1], top = [], bot = [];
     m.nodes.forEach(function (n, j) { if (Math.abs(n.z - lv[i]) < 0.01) top.push(j); else if (Math.abs(n.z - lv[i - 1]) < 0.01) bot.push(j); });
@@ -236,7 +259,7 @@ SE.rsDrift = function (m, md, rs) {
       var A = m.nodes[j], k = -1; bot.forEach(function (q) { var B = m.nodes[q]; if (Math.hypot(A.x - B.x, A.y - B.y) < 0.01) k = q; });
       if (k < 0) return;
       for (var t = 0; t < modes.length; t++) tmp[t] = (modes[t].U[6 * j + d] - modes[t].U[6 * k + d]) * rs.amp[t];
-      var dr = SE.combine(tmp, modes, rs.meth) * rs.sD / h;
+      var c0 = modes.length ? SE.combine(tmp, modes, rs.meth) : 0, rr = rs.Ur ? rs.Ur[6 * j + d] - rs.Ur[6 * k + d] : 0, dr = Math.sqrt(c0 * c0 + rr * rr) * rs.sD / h;
       if (!best || dr > best.dr) best = { dr: dr, top: j, bot: k };
     });
     if (best) out.push({ c: "RS" + (d ? "Y" : "X"), z: lv[i], zb: lv[i - 1], h: h, dr: best.dr, top: best.top, bot: best.bot, ut: rs.U[6 * best.top + d], ub: rs.U[6 * best.bot + d], stacked: true, tr: 1, ok: best.dr <= 0.004, lim: 0.004, rs: true });
@@ -294,11 +317,11 @@ SE.run = function (m, S, p) {
 SE.respEnv = function (m, S, p, fn) {
   var se = S.se, out = {};
   if (!se || !se.rs || !se.md) return out;
-  var modes = se.md.modes, cache = {};
+  var cache = {};
   function modal(d) {
     if (cache[d]) return cache[d];
-    var a = se.rs[d], per = modes.map(function (mo, k) { var Um = mo.U.map(function (v) { return v * a.amp[k]; }); return fn(Um); }), n = per[0].length, r = [];
-    for (var c = 0; c < n; c++) r.push(SE.combine(per.map(function (q) { return q[c]; }), modes, a.meth) * a.scale);
+    var a = se.rs[d], modes = a.modes || se.md.modes, per = modes.map(function (mo, k) { var Um = mo.U.map(function (v) { return v * a.amp[k]; }); return fn(Um); }), rr = a.Ur ? fn(a.Ur) : null, n = per.length ? per[0].length : rr.length, r = [];
+    for (var c = 0; c < n; c++) { var c0 = modes.length ? SE.combine(per.map(function (q) { return q[c]; }), modes, a.meth) : 0, c1 = rr ? rr[c] : 0; r.push(Math.sqrt(c0 * c0 + c1 * c1) * a.scale); }
     return (cache[d] = r);
   }
   Object.keys(se.rs).forEach(function (dk) {

@@ -11,7 +11,7 @@ PIPE.steps = function (S, p, pd) {
       if (!p.eq) return;
       S.se = SE.run(S.m, S, p);
       S.se.irr = SE.irregular(S.m, S, S.se); S.se.tc = SE.torsionCheck(S.m, S, S.se);
-      if (S.se.md) { var low = S.se.md.modes.length; ["X", "Y"].forEach(function (D0, d) { var rs = S.se.rs[d]; if (rs && rs.cum < 0.9) S.res.warn.push("Modal mass participation in " + D0 + " is " + (rs.cum * 100).toFixed(1) + " % with " + low + " modes — IS 1893 cl 7.7.5.2 requires ≥ 90 %: increase the number of modes."); }); }
+      if (S.se.md) { var low = S.se.md.modes.length; ["X", "Y"].forEach(function (D0, d) { var rs = S.se.rs[d], ca = rs ? (rs.cumAll !== undefined ? rs.cumAll : rs.cum) : 1; if (rs && ca < 0.9) S.res.warn.push("Modal mass participation in " + D0 + " is " + (ca * 100).toFixed(1) + " % with " + low + " modes — IS 1893 cl 7.7.5.2 requires ≥ 90 %: increase the number of modes" + (rs.mmc ? " (the missing-mass correction adds the remaining " + (rs.mmc.pct * 100).toFixed(1) + " % statically meanwhile)." : ".")); }); }
     }],
     ["Designing and detailing members (IS 456 / IS 800 / IS 13920)…", function () {
       S.des = MD.design(S.m, S.res, p); S.det = null;
