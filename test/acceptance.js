@@ -538,5 +538,45 @@ console.log('\n== L. Missing-mass correction (IS 1893 cl 7.7.5.2)');
   ok('MMC L5: drifts and wall/section envelopes include the residual; off switch restores the plain modal combination', S1.se.drift.length === 3 && !Sb.se.rs[0].mmc && Sb.se.rs[0].modes.length === Sb.se.md.modes.length);
 })();
 
+console.log('\n== M. Pile and raft foundation modules');
+(function () {
+  const { FD } = c;
+  const base = { cols: "C1, 0, 0, 1800, 40, 30, 35, 25\nC2, 6, 0, 2600, 20, 60, 40, 30\nC3, 0, 5, 2200, 50, 20, 30, 35\nC4, 6, 5, 3200, 30, 40, 45, 40", cb: 450, cd: 450, ptype: 'bored', Dp: 500, Lp: 15, zc: 1.5, soil: "clay, 4, 35, 8\nsand, 6, 30, 9\nsand, 10, 34, 10", Qg: 0, Qupg: 0, K: 0, fos: 2.5, nh: 0, head: 'fixed', ylim: 5, seis: 0, nsf: 0, sp: 3, edge: 150, capT: 0, pcov: 75, lf: 1.5, zone: 4, fck: 25, fy: 500 };
+  const r = FD.pile(Object.assign({}, base)), fd = r.fd, cap = fd.cap, Ap = Math.PI * 0.25 / 4;
+  /* M1 capacity by hand */
+  const q1 = 1.0 * 35 * Math.PI * 0.5 * 2.5, s2 = 4 * 8 + 3 * 9, q2 = 1.0 * Math.tan(30 * Math.PI / 180) * s2 * Math.PI * 0.5 * 6;
+  const zc3 = Math.min(13.25, 1.5 + 17 * 0.5), s3 = 32 + 54 + (zc3 - 10) * 10, q3 = Math.tan(34 * Math.PI / 180) * s3 * Math.PI * 0.5 * 6.5;
+  const PD = 32 + 54 + 0 * 10, Qb = Ap * (0.5 * 0.5 * 10 * FD.Ng(34) + PD * FD.Nq(34));
+  near('Pile M1: skin friction clay α·c·πD·h (α = 1 for c = 35 kPa)', cap.rows[0].Q, q1, 1e-9);
+  near('Pile M1: skin friction sand K·tanδ·PD·πD·h (PD at mid-layer)', cap.rows[1].Q, q2, 1e-9);
+  near('Pile M1: deeper sand with PD capped at the critical depth 17D', cap.rows[2].Q, q3, 1e-9);
+  near('Pile M1: end bearing Ap(½DγNγ + PD·Nq) with PD at the critical depth', cap.Qb, Qb, 1e-9);
+  near('Pile M1: Qsafe = (Qs + Qb)/2.5', cap.Qsafe, (q1 + q2 + q3 + Qb) / 2.5, 1e-9);
+  ok('Pile M1: adhesion factor 1.0 → 0.5 between 40 and 70 kPa; Nq bored < driven', FD.alpha(40) === 1 && Math.abs(FD.alpha(55) - 0.75) < 1e-12 && FD.alpha(90) === 0.5 && FD.Nq(30, true) === 2 * FD.Nq(30));
+  /* M2 lateral: long pile in uniform clay against Hetényi (k = 0.2·k1, k1 = 360 c) */
+  const pl = Object.assign({}, base, { Lp: 30, Dp: 600, zc: 0 }), Lay = FD.soil("clay, 40, 50, 8"), k = 0.2 * 360 * 50, EI = 5000 * 5 * 1000 * Math.PI * Math.pow(0.6, 4) / 64, lam = Math.pow(k / (4 * EI), 0.25);
+  const fr = FD.lateral(pl, Lay, 100, false), fx = FD.lateral(pl, Lay, 100, true);
+  ok('Pile M2: free head y0 = 2Hλ/k (Hetényi) within 1 %', Math.abs(fr.y0 / (2 * 100 * lam / k) - 1) < 0.01, (fr.y0 * 1000).toFixed(2) + ' mm');
+  ok('Pile M2: fixed head y0 = Hλ/k and M0 = H/(2λ) within 1 %', Math.abs(fx.y0 / (100 * lam / k) - 1) < 0.01 && Math.abs(fx.Mtop / (100 / (2 * lam)) - 1) < 0.01, (fx.y0 * 1000).toFixed(2) + ' mm, ' + fx.Mtop.toFixed(1) + ' kNm');
+  /* M3 pile loads with moments at the pile heads */
+  const g4 = fd.res[3], T = g4.T / 1000, Wc = 25 * g4.Lx * g4.Ly * T / 1e6, My = 40 + 45 * T, Mx = 30 + 40 * T, sx = g4.pl.reduce((a, q) => a + q[0] * q[0] / 1e6, 0), sy = g4.pl.reduce((a, q) => a + q[1] * q[1] / 1e6, 0);
+  const Pm = Math.max(...g4.pl.map(q => (3200 + Wc) / g4.n + My * q[0] / 1000 / sx + Mx * q[1] / 1000 / sy));
+  ok('Pile M3: Pi = (P + Wcap)/n ± My·x/Σx² ± Mx·y/Σy² with H × cap depth added; ≤ Qsafe', Math.abs(g4.Pmax - Pm) < 1e-9 && g4.Pmax <= cap.Qsafe && g4.n === 5, g4.Pmax.toFixed(1) + ' kN on ' + g4.n + ' piles');
+  /* M4 cap flexure at the column face */
+  const g3 = fd.res[2], lever = (g3.s / 2 - 225) / 1000, Mh = Math.max(...[1, -1].map(sg => g3.pl.reduce((a, q, i) => a + (sg * q[0] > 225 ? g3.fr[i] * (sg * q[0] - 225) / 1000 : 0), 0)));
+  ok('Pile M4: 4-pile cap — Mu = Σ factored pile loads × (s/2 − a/2) at the column face; Ast from Annex G', g3.n === 4 && Math.abs(g3.mx.Mu - Mh) < 1e-9 && Math.abs(Mh - lever * Math.max(g3.fr[0] + g3.fr[2], g3.fr[1] + g3.fr[3])) < 1e-9 && Math.abs(g3.mx.req - Math.max(RCC.astFlex(Mh, g3.Ly, g3.mx.d, 25, 500), 0.0012 * g3.Ly * g3.T)) < 1e-6, Mh.toFixed(1) + ' kNm');
+  /* M5 circular section */
+  const cc = FD.circCap(500, 83, 8, 16, 25, 500, 0), As = 8 * Math.PI * 64, P0 = 0.446 * 25 * (Math.PI * 250 * 250 - As) / 1000 + RCC.fs(0.002, 500) * As / 1000;
+  ok('Pile M5: circular section — pure axial limit 0.446fck(Ag − As) + fs(0.002)As, moment capacity at P = 0 positive', Math.abs(cc.Pmax / P0 - 1) < 0.01 && cc.M > 50 && cc.M < 150, cc.Pmax.toFixed(0) + ' vs ' + P0.toFixed(0) + ' kN, M0 = ' + cc.M.toFixed(1));
+  ok('Pile M5: bars ≥ 0.4 %, ≥ 6 bars, capacity ≥ demand', fd.pb.pct >= 0.4 - 1e-9 && fd.pb.nb >= 6 && fd.pb.c1.M >= 1.5 * Math.max(...fd.res.map(g => g.lat.M)) - 1e-9);
+  /* M6 BOQ / BBS / drawings */
+  const np = fd.res.reduce((a, g) => a + g.n, 0);
+  ok('Pile M6: BOQ pile length = n × L at JKSOR 21.2.1.2 (Ø500 M25 ₹2275.50); steel = BBS + 3 %; drawings and DXF', fd.boq.items[0].q === np * 15 && fd.boq.items[0].rate === 2275.50 && Math.abs(fd.boq.items[5].q - fd.bbs.kg * 1.03) < 1e-9 && (r.svg.match(/<svg/g) || []).length >= 1 + 2 * fd.marks.length + 2 && /CIRCLE/.test(r.dxf) && r.ok(), np + ' piles, ' + fd.marks.length + ' cap types');
+  const rg = FD.pile(Object.assign({}, base, { Qg: 1000 }));
+  ok('Pile M7: a load-test capacity governs and fewer piles result', rg.fd.CAP.Qsafe === 1000 && rg.fd.res.reduce((a, g) => a + g.n, 0) < np);
+  const rr = FD.raft({ cols: "C1, 0, 0, 600, 200, 0, 0\nC2, 5, 0, 900, 300, 0, 0\nC3, 10, 0, 600, 200, 0, 0\nC4, 0, 5, 900, 300, 0, 0\nC5, 5, 5, 1300, 450, 0, 0\nC6, 10, 5, 900, 300, 0, 0", cb: 450, cd: 450, sbc: 200, ks: 0, Df: 1.5, matT: 0, matOff: 0.5, setLim: 75, matMesh: 0.5, lf: 1.5, fck: 25, fy: 500 });
+  ok('Raft module M8: standalone raft from a column table — all checks pass, drawings, DXF, BBS', rr.ok() && rr.mat && rr.mat.L === 11.45 && /CIRCLE|LINE/.test(rr.dxf) && rr.items.some(it => it.k === 't' && it.head[1] === 'Description'), rr.mat.T + ' mm');
+})();
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;

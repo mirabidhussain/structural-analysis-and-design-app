@@ -2,7 +2,7 @@
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "3.4";
+REG.ENGINE = "3.5";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],
@@ -13,6 +13,7 @@ REG.STANDARDS = [
   ["IS 875 (Part 3):2015", "Wind loads", "In use", "Vz = Vb·k1·k2·k3·k4, pressure on the building frontal area (no building pressure-coefficient workflow)"],
   ["IS 2950 (Part 1):1981", "Design and construction of raft foundations — Part 1 Design", "In use", "Mat foundations: flexible-plate method on Winkler springs, rigidity criterion 1.75/λ, rigid method as a check"],
   ["IS 1904:1986", "Design and construction of foundations in soils — general requirements", "In use", "Permissible settlement and angular distortion (raft: 75 mm sand / 100 mm clay, 1/500) — editable"],
+  ["IS 2911 (Part 1/Sec 2):2010", "Pile foundations — bored cast-in-situ concrete piles (Sec 1: driven cast-in-situ)", "In use", "Pile module: capacity (Annex B), lateral moduli (Annex C), reinforcement, spacing, caps"],
   ["IS 875 (Part 4):2021", "Snow loads (Third Revision)", "In use", "Roof snow s = μ·s0 (flat roof μ = 0.8), designed for the more severe of snow and roof imposed load (cl 1); drift, unbalanced and the exposure/thermal effects are not modelled — enter an adjusted s0 where they matter"],
   ["IS 1200", "Method of measurement of building and civil engineering works", "In use", "Measurement rules of the bill of quantities"],
   ["JKSOR 2022", "Jammu & Kashmir Schedule of Rates 2022 (PW(R&B) Department)", "In use", "Default BOQ rates (exclusive of GST); project rates override them; apply the cost index / premium of your work"],
@@ -54,7 +55,10 @@ REG.CHECKS = [
   ["Foundations", "Footing soil pressure distribution", "Simplified", "Rigid footing, full contact (no partial-uplift redistribution), +10 % self weight"],
   ["Foundations", "Mat (raft): plate on compression-only Winkler springs; punching, one-way shear, Wood–Armer flexure (IS 2950 Pt 1, IS 456)", "Verified", "Hertz point load on a plate on springs and Hetényi's beam on an elastic foundation within 1 %; a stiff mat reproduces the rigid method; punching and shear recomputed (acceptance.js J)"],
   ["Foundations", "Mat soil model and design simplifications", "Simplified", "Winkler springs (ks from the soil report, else 120 × SBC), net pressures, punching without the moment-transfer part, settlement from springs only (indicative)"],
-  ["Foundations", "Combined footings, piles, settlement analysis, soil–structure interaction", "Not implemented", "Overlapping isolated footings are flagged (choose Auto or Mat)"],
+  ["Foundations", "Pile capacity, IS 2911 Annex B static formula (α from Fig 2, Nq from Fig 1 read approximately, K = 1.0 bored / 1.5 driven), uplift, block failure", "Simplified", "Capacity terms recomputed by hand (acceptance.js M); Nq is a digitised approximation of Fig 1 — a load-test value overrides it"],
+  ["Foundations", "Laterally loaded pile: beam on Winkler springs (IS 2911 Annex C moduli), fixed or free head", "Verified", "Long pile in uniform soil against Hetényi: free head y0 = 2Hλ/k, fixed head y0 = Hλ/k and M0 = H/(2λ), within 1 % (acceptance.js M)"],
+  ["Foundations", "Pile groups and caps: pile loads with moments, cap flexure, one-way shear (2d/av), punching at the column and the piles; circular pile section P–M (IS 456)", "Calculated", "Pile loads, cap moment and section capacity recomputed (acceptance.js M)"],
+  ["Foundations", "Combined footings, piled raft, consolidation settlement, soil–structure interaction", "Not implemented", "Overlapping isolated footings are flagged (choose Auto or Mat); piled raft is the next step"],
   ["Loads", "Wind on buildings (IS 875-3): pressure coefficients, internal pressure, torsion cases", "Simplified", "Frontal-area pressure with a single force coefficient"],
   ["Loads", "Working stress projects: walls designed by limit state with 1.5 × service forces", "Simplified", "Stated in the wall results"],
   ["Loads", "Snow on roofs (IS 875 Pt 4): s = μ·s0, the larger of snow and roof imposed load", "Simplified", "Uniform balanced snow only — no drift at parapets or steps; s0 is a user input (acceptance.js I)"],
@@ -67,7 +71,7 @@ REG.CHECKS = [
 /* stable ids of REG.CHECKS rows, used by the verification mode */
 REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "mmc", "timehist",
   "rcbeam", "rccol", "rcslab", "rcwallel", "rcwall", "servic", "stfcd", "stltb", "stklen", "dtbeam", "dtcol", "scwb", "joint", "dtslab", "bbs",
-  "foot", "footpress", "mat", "matsoil", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto"];
+  "foot", "footpress", "mat", "matsoil", "pilecap", "pilelat", "pilegrp", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto"];
 REG.byId = function (id) { var i = REG.IDS.indexOf(id); return i >= 0 ? { id: id, area: REG.CHECKS[i][0], t: REG.CHECKS[i][1], st: REG.CHECKS[i][2], ev: REG.CHECKS[i][3] } : null; };
 REG.RANK = { "Not implemented": 0, Simplified: 1, Calculated: 2, Verified: 3 };
 /* checks behind each kind of result; the weakest decides the result's verification state */

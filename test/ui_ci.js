@@ -17,6 +17,13 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   await pg.fill('#q', ''); await pg.evaluate(() => document.querySelector('#fchips [data-g=Steel]').click());
   ok('Home category chips', await pg.evaluate(() => [...document.querySelectorAll('.card.mod')].filter(c => !c.hidden).length === 6));
   await pg.evaluate(() => document.querySelector('#fchips [data-g=all]').click());
+  for (const id of ['pile', 'raft']) {
+    await pg.evaluate(id => { location.hash = '#' + id; }, id); await pg.waitForSelector('#f'); await pg.evaluate(() => document.querySelector('button.pri').click());
+    await pg.waitForSelector('#out .rep', { timeout: 60000 });
+    const mv = await pg.evaluate(() => ({ dw: document.querySelectorAll('#out svg.dwg').length, dxf: !!document.getElementById('dxf'), pass: !!document.querySelector('#out .badge.pass'), bbs: /Bar bending schedule/.test(document.querySelector('#out').textContent), est: /JKSOR/.test(document.querySelector('#out').textContent) }));
+    ok('Module ' + id + ': design passes with drawings, DXF, bar bending schedule and JKSOR estimate', mv.dw >= 3 && mv.dxf && mv.pass && mv.bbs && mv.est, JSON.stringify(mv));
+  }
+  await pg.evaluate(() => { location.hash = ''; }); await pg.waitForTimeout(300);
   await pg.evaluate(() => document.getElementById('themeBtn').click()); const th = await pg.evaluate(() => document.documentElement.getAttribute('data-theme'));
   await pg.evaluate(() => document.getElementById('themeBtn').click());
   ok('Theme switch (light / dark) is remembered', th === 'dark' || th === 'light', th);
@@ -71,6 +78,7 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   ok('Detailed estimate: measurement sheet + abstract of cost, rates still editable', de.ih > 20 && de.ab && de.rate > 20 && de.on, JSON.stringify(de));
   await pg.evaluate(() => document.querySelector('[data-est=boq]').click()); await pg.waitForTimeout(300);
   ok('Results: jump chips to the main sections and the bottom tab bar', await pg.evaluate(() => document.querySelectorAll('#results .jump a').length >= 6 && document.querySelector('.tabbar a.on') && document.querySelector('.tabbar a.on').getAttribute('data-t') === 'model'));
+  ok('Frame results offer the pile and raft hand-off', await pg.evaluate(() => !!document.getElementById('bToPile') && !!document.getElementById('bToRaft')));
   ok('Load inputs: snow, pattern load, imposed-load reduction, exposure and fire are on the form', await pg.evaluate(() => ['snow', 's0', 'mu', 'pattern', 'llRed', 'exposure', 'fire', 'gst', 'sorOn'].every(k => document.querySelector('[data-k=' + k + ']'))));
   /* mat foundation */
   const setK = (k, v) => pg.evaluate(([k, v]) => { const e = document.querySelector('[data-k=' + k + ']'); e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }, [k, v]);

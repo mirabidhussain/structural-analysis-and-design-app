@@ -33,6 +33,8 @@ var IC = (function () {
     loads: '<path d="M6 3v9M12 3v9M18 3v9"/><path d="M3.5 9.5L6 12l2.5-2.5M9.5 9.5L12 12l2.5-2.5M15.5 9.5L18 12l2.5-2.5"/><path d="M2.5 15.5h19v3h-19z"/>',
     estimate: '<rect x="4.5" y="2.5" width="15" height="19" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 14.5h2M12 14.5h2M8 18h2M12 18h4"/>',
     analyse: '<path d="M3.5 20.5h17"/><path d="M5.5 17V11M10 17V6.5M14.5 17v-8M19 17V4"/>',
+    pile: '<path d="M3.5 4.5h17v4h-17z"/><path d="M7 8.5v12M12 8.5v12M17 8.5v12"/><path d="M6 20.5l1 1.5 1-1.5M11 20.5l1 1.5 1-1.5M16 20.5l1 1.5 1-1.5" opacity=".7"/>',
+    raft: '<path d="M2.5 14l6-3.5h13l-6 3.5z"/><path d="M2.5 14v2.5h13V14M15.5 16.5l6-3.5V10.5"/><path d="M8 11V4.5M14.5 11V4.5" opacity=".75"/>',
     mat: '<path d="M2.5 14l6-3.5h13l-6 3.5z"/><path d="M2.5 14v2.5h13V14M15.5 16.5l6-3.5V10.5"/><path d="M8 11V4.5M14.5 11V4.5" opacity=".75"/>',
     check: '<path d="M4.5 12.5l5 5 10-11"/>',
     warn: '<path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5M12 17v.2"/>',

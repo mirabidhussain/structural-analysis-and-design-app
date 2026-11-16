@@ -571,6 +571,18 @@ var SU = (function () {
     if (S.po) h += poReport() + (S.res ? '' : '<div class="btns noprint"><button type="button" class="pri bXls">Excel: pushover & model</button></div>');
     $("results").innerHTML = h;
     jumpBar($("results"));
+    function handoff(id) {
+      var cr = S.res && S.res.caseReac; if (!cr || !cr.DL) return toast("Run the analysis first");
+      var g = DT.grid(S.m), lines = [];
+      Object.keys(S.m.sup).map(Number).forEach(function (n) {
+        var c = DT.colAt(S.m, n); if (!c) return; var nd = S.m.nodes[n], d = cr.DL[n] || [0, 0, 0, 0, 0, 0], l = cr.LL && cr.LL[n] || [0, 0, 0, 0, 0, 0], nm = "C-" + g.gy(nd.y) + g.gx(nd.x), r1 = function (v) { return Math.round(v * 10) / 10; };
+        lines.push(id === "pile" ? [nm, r1(nd.x), r1(nd.y), r1(d[2] + l[2]), r1(Math.abs(d[3] + l[3])), r1(Math.abs(d[4] + l[4])), r1(Math.abs(d[0] + l[0])), r1(Math.abs(d[1] + l[1]))].join(", ") : [nm, r1(nd.x), r1(nd.y), r1(d[2]), r1(l[2]), r1(Math.abs(d[3] + l[3])), r1(Math.abs(d[4] + l[4]))].join(", "));
+      });
+      var st = (window.ISD && ISD.store(id)) || {}; st.cols = lines.join("\n"); st.__ran = false; if (id === "pile" && S.p.zone) st.zone = String({ II: 2, III: 3, IV: 4, V: 5 }[S.p.zone] || 4); if (S.p.fck) st.fck = String(S.p.fck); if (S.p.fy) st.fy = String(S.p.fy); if (id === "raft" && S.p.sbc) st.sbc = String(S.p.sbc);
+      ISD.store(id, st); location.hash = "#" + id; toast("Base reactions (DL + LL) sent — add seismic loads if they govern");
+    }
+    if ($("bToPile")) $("bToPile").onclick = function () { handoff("pile"); };
+    if ($("bToRaft")) $("bToRaft").onclick = function () { handoff("raft"); };
     document.querySelectorAll(".bXls").forEach(function (b) { b.onclick = exportXlsx; });
     if ($("bPrint")) { if (!window.AndroidBridge && window.self !== window.top) $("bPrint").hidden = true; $("bPrint").onclick = function () { document.querySelectorAll("details").forEach(function (x) { x.open = true; }); if (window.AndroidBridge && AndroidBridge.print) AndroidBridge.print("Frame analysis"); else window.print(); }; }
     if ($("bCSV")) $("bCSV").onclick = csv;
@@ -626,6 +638,7 @@ var SU = (function () {
     var jb = (dt.joints || []).filter(function (q) { return !q.ok || !q.anch; });
     if (dt.joints && dt.joints.length) h += '<div class="note"><b>Beam–column joints</b> (IS 13920 cl 9: Vj = 1.25fy(Ast,top + Ast,bot) − Vcol ≤ k√fck·Aej; column depth ≥ 20 × beam bar φ): ' + (jb.length ? '<span class="not">' + jb.length + ' of ' + dt.joints.length + ' joint checks fail</span> — ' + jb.slice(0, 8).map(function (q) { return esc(q.col) + " +" + f(q.z, 2) + " " + q.dir + (q.ok ? "" : " (Vj/cap " + f(q.r, 2) + ")") + (q.anch ? "" : " (hc < 20φ)"); }).join(", ") + (jb.length > 8 ? " …" : "") + '.' : '<span class="okt">all ' + dt.joints.length + ' joint checks OK</span> (max Vj/capacity ' + f(Math.max.apply(null, dt.joints.map(function (q) { return q.r; })), 2) + ')') + '</div>';
     if (dt.warn.length) h += '<div class="note">' + dt.warn.map(esc).join("<br>") + '</div>';
+    if (!S.m.twoD) h += '<div class="btns noprint"><button type="button" id="bToPile">Design these foundations on piles →</button><button type="button" id="bToRaft">Standalone raft module →</button></div>';
     var opts = [];
     dt.gB.forEach(function (G, i) { opts.push(["b" + i, "Beam " + G.id + ": " + G.rep.name + (G.n > 1 ? " (×" + G.n + ")" : "") + (G.rep.checks.some(function (c) { return !c.ok; }) ? " ⚠" : "")]); });
     dt.gC.forEach(function (G, i) { opts.push(["c" + i, "Column " + G.id + ": " + G.list.map(function (c) { return c.name; }).slice(0, 4).join(", ") + (G.n > 4 ? " … (×" + G.n + ")" : "") + (G.rep.checks.some(function (c) { return !c.ok; }) || G.rep.msg.length ? " ⚠" : "")]); });
