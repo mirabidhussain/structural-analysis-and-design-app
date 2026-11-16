@@ -208,6 +208,13 @@ table.etb td{white-space:nowrap}table.etb td:nth-child(2){white-space:normal;tex
 .zoomv{position:fixed;inset:0;z-index:100;background:rgba(10,18,32,.94);display:flex;flex-direction:column}.zoomv .zt{display:flex;align-items:center;gap:10px;padding:10px 12px;color:#fff}.zoomv .zt b{flex:1;font-size:14px}.zoomv .zt button{background:rgba(255,255,255,.14);color:#fff;border:0;width:40px;height:40px;border-radius:12px;font-size:18px;margin-left:6px}.zoomv .zs{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y pinch-zoom}.zoomv img{display:block;width:100%;background:#fff}
 table.ldt td small{color:var(--mut);font-size:10.5px}table.ldt td{text-align:right}
 .hero-b .hbtn{white-space:nowrap}
+.estd{margin:10px 0;border:1px solid color-mix(in srgb,var(--acc) 40%,var(--line));border-radius:14px;background:var(--card);box-shadow:var(--sh1);overflow:hidden}.estd>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer}.estd>summary::-webkit-details-marker{display:none}.estd>summary .ico{width:24px;height:24px;color:var(--acc);flex:none}.estd>summary span{flex:1;display:flex;flex-direction:column}.estd>summary b{font-size:14.5px}.estd>summary small{color:var(--mut);font-size:12px}.estd>summary em{font-style:normal;font-weight:700;font-size:15px;color:var(--ink);white-space:nowrap}.estd>summary:after{content:"";width:8px;height:8px;border-right:2px solid var(--mut);border-bottom:2px solid var(--mut);transform:rotate(-45deg);margin-left:4px}.estd[open]>summary:after{transform:rotate(45deg)}.estd[open]{padding-bottom:6px}.estd>h4,.estd>.tw,.estd>.note,.estd>.btns{margin-left:12px;margin-right:12px}
+#estSeg{margin:10px 0}
+#estB .seg[role=tablist]{display:none}
+@media (max-width:600px){table.etb.est td:nth-child(2){min-width:0}}
+table.jk tr.sb td{background:color-mix(in srgb,var(--acc) 7%,transparent);font-weight:600;font-size:12px;color:var(--ink);text-align:left}table.jk tr.gt td{text-align:right}table.jk tr.gt td:nth-child(2){text-align:left}table.jk tr.gt.b td{font-weight:700;background:var(--eq)}table.jk td:nth-child(n+3){text-align:right}
+@media (max-width:600px){table.jk.ab th:nth-child(n+3):not(:last-child),table.jk.ab td:nth-child(n+3):not(:last-child){display:none}table.jk tr.gt td[colspan]{display:none}}
+table.jk tr.ih td,table.jk tr.sb td{white-space:normal}table.jk th:nth-child(2){text-align:left}
 </style>
 </head>
 <body>
@@ -235,6 +242,7 @@ table.ldt td small{color:var(--mut);font-size:10.5px}table.ldt td{text-align:rig
 <script src="js/pipe.js"></script>
 <script src="js/boq.js"></script>
 <script src="js/elem.js"></script>
+<script src="js/est.js"></script>
 <script src="js/aids.js"></script>
 <script src="js/auto.js"></script>
 <script src="js/pdb.js"></script>

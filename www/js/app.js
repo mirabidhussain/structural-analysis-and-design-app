@@ -285,6 +285,17 @@
     document.getElementById("share").onclick = function () { share(r); };
     if (r.dxf) document.getElementById("dxf").onclick = function () { saveText(r.dxfName || (m.id + ".dxf"), r.dxf); };
     document.getElementById("addp").onclick = function () { addSheet(m, r, pp); };
+    try {
+      var ex = EL.EXTRA[m.id], xx = {}; if (ex) xx[ex[0]] = 1;
+      var tk = EL.take(m.id, pp, r, xx);
+      if (tk.items.length) {
+        var ed1 = mkData([], [{ mark: nextMark(m.id), nos: 1, title: m.t, take: tk }], m.t + " — detailed estimate (JKSOR 2022)"), c1 = ed1.cb, anchor = out.querySelector(".sum") || out.querySelector(".rh");
+        anchor.insertAdjacentHTML("afterend", '<details class="estd noprint" id="estd"><summary>' + IC.svg("estimate") + '<span><b>Detailed estimate</b><small>' + (ex ? 'per 1 m ' + (ex[0] === "len" ? "length" : "width") : '1 no.') + ' · ' + (c1.kg ? (c1.kg).toFixed(0) + ' kg steel · ' : '') + 'JKSOR 2022 incl. GST</small></span><em>' + inr(ed1.model.total) + '</em></summary>' + elemEstHtml(ed1, "detailed") +
+          '<div class="btns"><button type="button" class="pri" id="addp2">' + IC.svg("projects") + ' Add to project with the number of elements' + (ex ? ' and the ' + (ex[0] === "len" ? "length" : "width") : '') + '</button></div></details>');
+        document.getElementById("addp2").onclick = function () { addSheet(m, r, pp); };
+        out.querySelectorAll("#estd .estx").forEach(function (b) { b.onclick = function () { estExcel(ed1, m.t); }; });
+      }
+    } catch (e) {}
     document.getElementById("xls").onclick = function () { toast("Preparing Excel…"); RX.save(RX.fromRep(r, m, read(m, form)), m.id + "-design.xlsx", function (ok) { if (!ok) toast("Excel export not available here"); }); };
     if (!quiet) out.scrollIntoView({ behavior: "smooth" });
   }
@@ -308,7 +319,7 @@
       if (ex) { var xv = parseFloat(document.getElementById("aX").value); x[ex[0]] = isFinite(xv) && xv > 0 ? UN.toSI(xv, ex[2]) : ex[3]; }
       var dup = elems().filter(function (e) { return e.mark === mark && (asNew || !ed || e.id !== ed.id); })[0];
       if (dup) return toast("Mark " + mark + " is already used in this project");
-      var t = EL.take(m.id, p, r, x), cost = t.items.reduce(function (a, q) { return a + q.q * (q.rate || 0); }, 0) * nos;
+      var t = EL.take(m.id, p, r, x), cost = EST.fromTakes([{ mark: mark, nos: nos, title: m.t, take: t }]).total;
       var el = { id: ed && !asNew ? ed.id : "e" + Date.now().toString(36), mod: m.id, title: m.t, mark: mark, nos: nos, x: x, inputs: store(m.id) || {}, ok: r.ok(), sum: r.summary.slice(0, 4), cost: cost, kg: t.bars.reduce(function (a, q) { return a + q.kg; }, 0) * nos, units: UN.sys(), date: new Date().toISOString() };
       var arr = elems().slice();
       if (ed && !asNew) arr = arr.map(function (e) { return e.id === ed.id ? el : e; }); else arr.push(el);
@@ -325,32 +336,68 @@
   function modById(id) { return M.filter(function (x) { return x.id === id; })[0]; }
   function runEl(e) { var m = modById(e.mod); if (!m) return null; try { var p = parse(m, e.inputs || {}), r = m.fn(p); return { m: m, p: p, r: r, t: EL.take(m.id, p, r, e.x) }; } catch (er) { return null; } }
   function inr(v) { return "₹ " + Math.round(v).toLocaleString("en-IN"); }
+  function etb(head, rows, cls) { return '<div class="tw"><table class="etb ' + (cls || "") + '"><tr>' + head.map(function (x) { return '<th>' + x + '</th>'; }).join("") + '</tr>' + rows.map(function (r) { return '<tr>' + r.map(function (x) { return '<td>' + x + '</td>'; }).join("") + '</tr>'; }).join("") + '</table></div>'; }
+  function elemData(list, title) { var runs = list.map(function (e) { return { e: e, x: runEl(e) }; }), okRuns = runs.filter(function (q) { return q.x; }); return mkData(runs, okRuns.map(function (q) { return { mark: q.e.mark, nos: q.e.nos, title: q.e.title, take: q.x.t }; }), title); }
+  function mkData(runs, els, title) { return { runs: runs, okRuns: runs.filter(function (q) { return q.x; }), els: els, cb: EL.combine(els), model: EST.fromTakes(els, title || ((window.PDB && PDB.current() ? PDB.current().name + " — " : "") + "detailed estimate of the designed elements (JKSOR 2022)")) }; }
+  function elemEstHtml(ed, view) {
+    var cb = ed.cb, h = view === "detailed" ? '<h4>Detailed estimate</h4>' + EST.html(ed.model, esc) : '<h4>Abstract of cost</h4>' + EST.abstractHtml(ed.model, esc);
+    if (view === "detailed" && cb.bbs.length) h += '<h4>Reinforcement — bar bending schedule</h4>' + etb(["Bar mark", "Description", "φ", "No.", "Length (m)", "kg"], cb.bbs.map(function (q) { return ["<b>" + esc(q.mark) + "</b>", esc(q.desc) + '<div class="dims">' + q.n + " nos " + q.dia + "φ × " + (q.L / 1000).toFixed(2) + ' m</div>', String(q.dia), String(q.n), (q.L / 1000).toFixed(2), q.kg.toFixed(1)]; }).concat([["", "<b>Total</b>", "", "", "", "<b>" + cb.kg.toFixed(1) + "</b>"]]), "est");
+    return h + '<div class="note">J&K R&B format: items of work in order, measurement No. × L × B × D/H, totals carried to Quantity × Rate = Amount. Rates JKSOR 2022 (excl. GST); carriage of aggregate (' + EST.CARRIAGE.agg[2] + ') and sand (' + EST.CARRIAGE.sand[2] + ') as in the reference format — change the leads and rates in the Excel. Excavation, backfill and finishes are not part of the element take-off.</div>' +
+      '<div class="btns noprint"><button type="button" class="pri estx">' + IC.svg("estimate") + ' Excel — detailed estimate</button></div>';
+  }
+  function estExcel(ed, name) {
+    var wb = XL.book(); EST.sheet(wb, ed.model, "Detailed Estimate", "Rates JKSOR 2022 (excl. GST) — edit any rate in column O; carriage leads as in the reference format.");
+    if (ed.cb.bbs.length) { var b = wb.sheet("BBS", { cols: [10, 52, 7, 8, 12, 10, 12] }); b.row(["Bar bending schedule"], "t"); b.row(["Bar mark", "Description", "φ (mm)", "No.", "Cut length (m)", "kg/m", "Weight (kg)"], "h"); var f0 = b.next(); ed.cb.bbs.forEach(function (q) { var r = b.next(); b.row([q.mark, q.desc, { v: q.dia, s: "n0" }, { v: q.n, s: "n0" }, { v: q.L / 1000, s: "n3" }, { f: "=C" + r + "^2/162", v: q.dia * q.dia / 162, s: "f4" }, { f: "=D" + r + "*E" + r + "*F" + r, v: q.kg, s: "f2" }]); }); var lr = b.next(); b.row(["", "Total", "", "", "", "", { f: "=SUM(G" + f0 + ":G" + (lr - 1) + ")", v: ed.cb.kg, s: "f2" }], "b"); }
+    toast("Preparing Excel…"); RX.save(wb, name.replace(/[^\w\- ]+/g, "_") + "-detailed-estimate.xlsx", function (ok) { if (!ok) toast("Excel export not available here"); });
+  }
+  /* ---------- estimate hub: building (frame model) and designed elements ---------- */
+  function estimateView() {
+    title.textContent = "Estimate"; back.hidden = false;
+    var pr = window.PDB ? PDB.current() : null, S = window.SU && SU.state ? SU.state() : null, list = elems();
+    var v = (window.PRO && PRO.estView()) || "detailed"; if (window.PRO) PRO.estView(v);
+    var h = '<div class="mhead g-ana"><span class="mic">' + IC.svg("estimate") + '</span><div><b>Estimate</b><small>' + esc(pr ? pr.name : "") + ' · quantities and cost, JKSOR 2022</small></div></div>';
+    h += '<span class="seg etabs" id="estSeg">' + [["detailed", "Detailed estimate"], ["boq", "Abstract / BOQ"]].map(function (t) { return '<button type="button" data-v="' + t[0] + '"' + (v === t[0] ? ' class="on"' : '') + '>' + t[1] + '</button>'; }).join("") + '</span>';
+    h += '<div class="rep" id="estB"><div class="rh"><div><h3>Building — frame & FE model</h3><small>Structure, masonry, plaster, flooring and plinth of the whole building (IS 1200 style measurement)</small></div></div>';
+    if (S && S.boq) h += PRO.boqBlock(S);
+    else h += '<p>The building estimate is prepared from the analysed and detailed frame model.' + (pr && pr.summary && pr.summary.cost ? ' Last run: <b>' + inr(pr.summary.cost) + '</b> (' + new Date(pr.summary.date).toLocaleDateString("en-IN") + ').' : '') + '</p><div class="btns"><button type="button" class="pri" id="estRun">' + IC.svg("play") + ' Analyse the building and prepare the estimate</button><a class="btnl" href="#model">Open the model ›</a></div>';
+    h += '</div><div class="rep" id="estE"><div class="rh"><div><h3>Designed elements</h3><small>' + list.length + ' element(s) added from the design modules</small></div><a class="btnl" href="#elements">Elements ›</a></div>';
+    var ed = null;
+    if (list.length) { ed = elemData(list); h += '<div class="sum"><div><span>Reinforcement</span><b>' + (ed.cb.kg / 1000).toFixed(2) + ' t</b></div><div><span>Estimated cost incl. GST</span><b>' + inr(ed.model.total) + '</b></div></div>' + elemEstHtml(ed, v) + '<div class="btns noprint"><button type="button" id="estCsv">Estimate CSV</button><button type="button" id="estPrint">Print / Save PDF</button></div>'; }
+    else h += '<p>No elements yet — design a beam, slab, column, footing, pile group or raft and tap <b>Add to project</b>.</p>';
+    h += '</div>';
+    app.innerHTML = h;
+    app.querySelectorAll("#estSeg button").forEach(function (b) { b.onclick = function () { PRO.estView(b.getAttribute("data-v")); estimateView(); }; });
+    if (S && S.boq && window.SU) SU.bindBoq(estimateView);
+    app.querySelectorAll("#estE .estx").forEach(function (b) { b.onclick = function () { estExcel(ed, (pr && pr.name) || "project"); }; });
+    if (S && S.boq) { var bx = document.createElement("div"); bx.className = "btns noprint"; bx.innerHTML = '<button type="button" class="pri" id="estBx">' + IC.svg("estimate") + ' Excel — building detailed estimate</button>'; document.getElementById("estB").appendChild(bx);
+      document.getElementById("estBx").onclick = function () { var wb = XL.book(); EST.sheet(wb, EST.fromBoq(S.boq, ((pr && pr.name) || "Building") + " — detailed estimate (JKSOR 2022)"), "Detailed Estimate", "Measured from the designed model (IS 1200 style); rates JKSOR 2022 or your own; carriage leads as in the reference format."); toast("Preparing Excel…"); RX.save(wb, ((pr && pr.name) || "building").replace(/[^\w\- ]+/g, "_") + "-building-detailed-estimate.xlsx", function (ok) { if (!ok) toast("Excel export not available here"); }); }; }
+    var er = document.getElementById("estRun"); if (er) er.onclick = function () { location.hash = "#model"; setTimeout(function () { SU.analyseThen("estimate"); }, 150); };
+    var ep = document.getElementById("estPrint"); if (ep) ep.onclick = function () { if (window.AndroidBridge && AndroidBridge.print) AndroidBridge.print("Estimate"); else window.print(); };
+    var ec = document.getElementById("estCsv"); if (ec) ec.onclick = function () { location.hash = "#elements"; setTimeout(function () { var b = document.getElementById("eCsv"); if (b) b.click(); }, 300); };
+  }
   function elementsView() {
     title.textContent = "Project elements"; back.hidden = false;
-    var pr = PDB.current(), list = elems(), tab = elementsView.tab || "sched";
+    var pr = PDB.current(), list = elems(), tab = elementsView.tab || "est";
     var h = '<div class="mhead g-ana"><span class="mic">' + IC.svg("projects") + '</span><div><b>' + esc(pr.name) + '</b><small>Individually designed elements · ' + list.length + ' element(s)</small></div><a class="cchip" href="#projects">Project ›</a></div>';
     if (!list.length) { app.innerHTML = h + '<div class="rep"><p>No elements yet. Design a beam, slab, column, footing, pile group or steel member and tap <b>Add to project</b> under the result.</p><div class="btns"><a class="btnl pri" href="#">Design a member ›</a></div></div>'; return; }
-    var runs = list.map(function (e) { return { e: e, x: runEl(e) }; }), okRuns = runs.filter(function (q) { return q.x; });
-    var cb = EL.combine(okRuns.map(function (q) { return { mark: q.e.mark, nos: q.e.nos, take: q.x.t }; })), nf = okRuns.filter(function (q) { return !q.x.r.ok(); }).length;
-    h += '<div class="sum"><div><span>Elements</span><b>' + list.length + ' types · ' + list.reduce(function (a, e) { return a + e.nos; }, 0) + ' nos</b></div><div><span>Checks</span><b class="' + (nf ? "bad" : "good") + '">' + (nf ? nf + " failing" : "All pass") + '</b></div><div><span>Reinforcement</span><b>' + (cb.kg / 1000).toFixed(2) + ' t</b></div><div><span>Estimate (JKSOR 2022, excl. GST)</span><b>' + inr(cb.sum) + '</b></div></div>';
+    var ed = elemData(list), runs = ed.runs, okRuns = ed.okRuns, cb = ed.cb, nf = okRuns.filter(function (q) { return !q.x.r.ok(); }).length;
+    h += '<div class="sum"><div><span>Elements</span><b>' + list.length + ' types · ' + list.reduce(function (a, e) { return a + e.nos; }, 0) + ' nos</b></div><div><span>Checks</span><b class="' + (nf ? "bad" : "good") + '">' + (nf ? nf + " failing" : "All pass") + '</b></div><div><span>Reinforcement</span><b>' + (cb.kg / 1000).toFixed(2) + ' t</b></div><div><span>Estimate (JKSOR 2022, incl. GST)</span><b>' + inr(ed.model.total) + '</b></div></div>';
     h += '<div class="elist">' + runs.map(function (q) {
       var e = q.e, ok = q.x ? q.x.r.ok() : e.ok, sm = (q.x ? q.x.r.summary : e.sum).slice(0, 3);
       return '<div class="ecard"><div class="eh"><span class="emk">' + esc(e.mark) + '</span><div><b>' + esc(e.title) + (e.nos > 1 ? ' × ' + e.nos : '') + '</b><small>' + sm.map(function (s) { return esc(s[0] + ": " + s[1]); }).join(" · ") + '</small></div><span class="badge ' + (ok ? "pass" : "fail") + '">' + (ok ? "PASS" : "FAIL") + '</span></div>' +
         '<div class="eb"><button type="button" data-eo="' + e.id + '">Open</button><button type="button" data-er="' + e.id + '">Remove</button></div></div>';
     }).join("") + '</div>';
-    h += '<span class="seg etabs">' + [["sched", "Schedule"], ["bbs", "Bar bending schedule"], ["est", "Estimate"]].map(function (t) { return '<button type="button" data-t="' + t[0] + '"' + (tab === t[0] ? ' class="on"' : '') + '>' + t[1] + '</button>'; }).join("") + '</span>';
-    function tb(head, rows, cls) { return '<div class="tw"><table class="etb ' + (cls || "") + '"><tr>' + head.map(function (x) { return '<th>' + x + '</th>'; }).join("") + '</tr>' + rows.map(function (r) { return '<tr>' + r.map(function (x) { return '<td>' + x + '</td>'; }).join("") + '</tr>'; }).join("") + '</table></div>'; }
-    var body = "";
+    h += '<span class="seg etabs">' + [["est", "Detailed estimate"], ["sched", "Schedule"], ["bbs", "Bar bending schedule"]].map(function (t) { return '<button type="button" data-t="' + t[0] + '"' + (tab === t[0] ? ' class="on"' : '') + '>' + t[1] + '</button>'; }).join("") + '</span>';
+    var tb = etb, body = "";
     if (tab === "sched") body = '<h4>Schedule of elements</h4>' + tb(["Mark", "Element", "Nos", "Size & reinforcement", "Status"], runs.map(function (q) { var e = q.e, sm = q.x ? q.x.r.summary : e.sum; return ["<b>" + esc(e.mark) + "</b>", esc(e.title), String(e.nos), sm.map(function (s) { return esc(s[0] + ": " + s[1]); }).join("<br>"), q.x && q.x.r.ok() ? '<span class="okt">pass</span>' : '<span class="bad">fail</span>']; }));
     else if (tab === "bbs") body = '<h4>Bar bending schedule (IS 2502)</h4>' + tb(["Bar mark", "Description", "Dia (mm)", "No.", "Cut length (m)", "Weight (kg)"], cb.bbs.map(function (q) { return ["<b>" + esc(q.mark) + "</b>", esc(q.desc), String(q.dia), String(q.n), (q.L / 1000).toFixed(2), q.kg.toFixed(1)]; }).concat([["", "<b>Total</b>", "", "", "", "<b>" + cb.kg.toFixed(1) + "</b>"]])) +
       '<h4>Steel by diameter</h4>' + tb(["Dia (mm)", "Weight (kg)", "Weight + 3 % (kg)"], Object.keys(cb.byDia).sort(function (a, b) { return a - b; }).map(function (d) { return [d, cb.byDia[d].toFixed(1), (cb.byDia[d] * 1.03).toFixed(1)]; })) + '<div class="note">Cut lengths: span + Ld/3 anchorage at each support (IS 456 cl 26.2.3.3), 50φ laps in columns, stirrups and ties 2(a + b) + 20φ hooks. Pile and raft schedules are taken from their own designs.</div>';
-    else body = '<h4>Detailed measurement</h4>' + tb(["Element", "Description", "No.", "L (m)", "B (m)", "D/H (m)", "Qty"], cb.meas.map(function (q) { return ["<b>" + esc(q.el) + "</b>", esc(q.d), String(q.n), String(q.L), String(q.B), String(q.H), q.q.toFixed(3)]; })) +
-      '<h4>Abstract of cost (JKSOR 2022)</h4>' + tb(["Item", "Description", "Qty", "Unit", "Rate (₹)", "Amount (₹)"], cb.items.map(function (q, i) { return [String(i + 1), esc(q.d) + ' <i>[' + esc(q.sor) + ']</i><br><small>' + esc(q.from.join(", ")) + '</small>', q.q.toFixed(2), q.u, (q.rate || 0).toFixed(2), Math.round(q.q * (q.rate || 0)).toLocaleString("en-IN")]; }).concat([["", "<b>Total (excluding GST, cess and contingencies)</b>", "", "", "", "<b>" + Math.round(cb.sum).toLocaleString("en-IN") + "</b>"]])) +
-      '<div class="note">Quantities of individually designed elements; excavation, backfill and finishes of the building are not included (use the whole-building estimate in Frame & FE analysis for those).</div>';
+    else body = elemEstHtml(ed, "detailed");
     h += '<div class="rep">' + body + '</div>';
     h += '<div class="btns noprint"><button type="button" class="pri" id="eRep">Combined calculation report (print / PDF)</button><button type="button" id="eCsv">Estimate CSV</button></div><div id="eAll"></div>';
     app.innerHTML = h;
     app.querySelectorAll(".etabs button").forEach(function (b) { b.onclick = function () { elementsView.tab = b.getAttribute("data-t"); elementsView(); }; });
+    app.querySelectorAll(".estx").forEach(function (b) { b.onclick = function () { estExcel(ed, pr.name || "project"); }; });
     app.querySelectorAll("[data-eo]").forEach(function (b) { b.onclick = function () { var e = list.filter(function (q) { return q.id === b.getAttribute("data-eo"); })[0]; var inp = Object.assign({}, e.inputs, { __ran: true }); store(e.mod, inp); editEl = { id: e.id, mod: e.mod }; location.hash = "#" + e.mod; }; });
     app.querySelectorAll("[data-er]").forEach(function (b) { b.onclick = function () {
       if (b.getAttribute("data-arm") !== "1") { b.setAttribute("data-arm", "1"); b.textContent = "Tap again to remove"; setTimeout(function () { b.removeAttribute("data-arm"); b.textContent = "Remove"; }, 3000); return; }
@@ -487,10 +534,10 @@
     var id = (location.hash || "").replace(/^#\/?/, "");
     var m = M.filter(function (x) { return x.id === id; })[0];
     var ctx = window.SU ? SU.ctx() : null;
-    if ((!m && id !== "elements") || (m && editEl && editEl.mod !== m.id)) editEl = null;
-    if (id === "elements" && window.PDB) elementsView(); else if (m) moduleView(m); else if (id === "model" && window.SU) SU.view(app, title, back); else if (id === "projects" && window.PRO) PRO.projectsView(app, title, back, ctx); else if (id === "report" && window.RPT) RPT.view(app, title, back, ctx);
+    if ((!m && id !== "elements" && id !== "estimate") || (m && editEl && editEl.mod !== m.id)) editEl = null;
+    if (id === "estimate") estimateView(); else if (id === "elements" && window.PDB) elementsView(); else if (m) moduleView(m); else if (id === "model" && window.SU) SU.view(app, title, back); else if (id === "projects" && window.PRO) PRO.projectsView(app, title, back, ctx); else if (id === "report" && window.RPT) RPT.view(app, title, back, ctx);
     else if (id === "tables") tables(); else if (id === "aids") aidsView(); else if (id === "about") about(); else home();
-    var tab = m ? "" : id === "model" ? "model" : id === "projects" || id === "elements" ? "projects" : id === "report" ? "report" : id === "about" || id === "tables" || id === "aids" ? "about" : id ? "" : "home";
+    var tab = m ? "" : id === "estimate" ? "estimate" : id === "model" ? "model" : id === "projects" || id === "elements" ? "projects" : id === "report" ? "report" : id === "about" || id === "tables" || id === "aids" ? "about" : id ? "" : "home";
     document.querySelectorAll(".tabbar a").forEach(function (a) { a.classList.toggle("on", a.getAttribute("data-t") === tab); });
     window.scrollTo(0, 0);
   }
@@ -498,7 +545,7 @@
   /* app chrome: logo, bottom tab bar, light / dark theme */
   var lg = document.getElementById("logo"); if (lg) lg.innerHTML = IC.logo(30);
   var tb = document.createElement("nav"); tb.className = "tabbar noprint";
-  tb.innerHTML = [["home", "#", "home", "Home"], ["projects", "#projects", "projects", "Projects"], ["model", "#model", "frame", "Analysis"], ["report", "#report", "report", "Report"], ["about", "#about", "about", "About"]].map(function (t) { return '<a href="' + t[1] + '" data-t="' + t[0] + '">' + IC.svg(t[2]) + '<span>' + t[3] + '</span></a>'; }).join("");
+  tb.innerHTML = [["home", "#", "home", "Home"], ["projects", "#projects", "projects", "Projects"], ["estimate", "#estimate", "estimate", "Estimate"], ["model", "#model", "frame", "Analysis"], ["report", "#report", "report", "Report"]].map(function (t) { return '<a href="' + t[1] + '" data-t="' + t[0] + '">' + IC.svg(t[2]) + '<span>' + t[3] + '</span></a>'; }).join("");
   document.body.appendChild(tb);
   function theme(t) { try { if (t) localStorage.setItem("isd_theme", t); t = localStorage.getItem("isd_theme") || "auto"; } catch (e) { t = t || "auto"; } document.documentElement.setAttribute("data-theme", t); var b = document.getElementById("themeBtn"); if (b) b.innerHTML = IC.svg(t === "dark" ? "sun" : "moon"); }
   var thb = document.getElementById("themeBtn"); if (thb) thb.onclick = function () { var cur = document.documentElement.getAttribute("data-theme"), dark = cur === "dark" || (cur === "auto" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches); theme(dark ? "light" : "dark"); };

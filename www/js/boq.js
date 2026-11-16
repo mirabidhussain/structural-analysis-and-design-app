@@ -24,14 +24,14 @@ BOQ.ITEMS = [
   ["rcb", "RCC {g} in beams (below slab)", "m³", "beam"],
   ["rcs", "RCC {g} in suspended slabs", "m³", "beam"],
   ["rcw", "RCC {g} in walls", "m³", "col"],
+  ["stl", "Reinforcement Fe {fy} — cut, bent, tied and placed (bar bending schedule + {w} % wastage)", "kg", "stl"],
+  ["sst", "Structural steel in single sections, fixed in position incl. primer", "kg", "sst"],
   ["fwf", "Centering & shuttering — footings, raft edges and bases", "m²", "fwf"],
   ["fwc", "Centering & shuttering — columns", "m²", "fwc"],
   ["fwb", "Centering & shuttering — beams", "m²", "fwb"],
   ["fws", "Centering & shuttering — suspended slabs", "m²", "fws"],
   ["fww", "Centering & shuttering — walls", "m²", "fww"],
   ["fwh", "Extra for centering above 3.5 m height, per metre or part (slab soffit area)", "m²", "fwh"],
-  ["stl", "Reinforcement Fe {fy} — cut, bent, tied and placed (bar bending schedule + {w} % wastage)", "kg", "stl"],
-  ["sst", "Structural steel in single sections, fixed in position incl. primer", "kg", "sst"],
   ["bfl", "Refilling excavated earth around foundations in 20 cm layers, rammed", "m³", "bfl"],
   ["pfl", "Filling local earth in plinth (incl. carriage), rammed & watered", "m³", "pfl"],
   ["gfb", "PCC 1:4:8 in ground-floor base, 100 mm thick", "m³", "gfb"],
@@ -174,6 +174,14 @@ BOQ.run = function (m, S, p) {
   var items = BOQ.ITEMS.map(function (it) {
     return { id: it[0], desc: it[1].replace("{g}", gr).replace("{fy}", p.fy).replace("{w}", wst), unit: it[2], qty: q[it[0]], sor: BOQ.sorFor(it, p), rows: R[it[0]], br: R[it[0]].map(function (r) { return [r.d, r.q]; }), grade: /^rc/.test(it[0]) ? gr : "" };
   }).filter(function (it) { return it.qty > 1e-9; });
+  /* carriage of aggregate and sand for the concrete items (format of the J&K reference estimate) */
+  if (p.carriage !== false && typeof EST !== "undefined") {
+    var cit = items.filter(function (it) { return it.id === "pcc" || it.id === "gfb" || /^rc/.test(it.id); }), cv = cit.reduce(function (a, it) { return a + it.qty; }, 0), nos = cit.map(function (it) { return items.indexOf(it) + 1; }).join(", "), C = EST.CARRIAGE;
+    if (cv > 0) [["car1", "stone aggregate", C.agg], ["car2", "sand", C.sand]].forEach(function (k) {
+      var rw = [{ d: "Concrete of items " + nos + " = " + cv.toFixed(2) + " m³ @ " + k[2][0] + " m³ of " + k[1] + " per m³", n: 1, L: cv, H: k[2][0], hU: "m³/m³", q: cv * k[2][0], refIds: cit.map(function (it) { return it.id; }) }];
+      items.push({ id: k[0], desc: "Carriage of " + k[1] + " by mechanical transport, lead " + k[2][2] + " (concrete items " + nos + ")", unit: "m³", qty: rw[0].q, sor: ["carriage, lead " + k[2][2], k[2][1]], rows: rw, br: [[rw[0].d, rw[0].q]] });
+    });
+  }
   return { items: items, conc: conc, steelKg: kg, steelWithWaste: q.stl, byDia: byDia, ratio: conc > 0 ? kg / conc : 0, Df: Df, ts: ts, schedules: BOQ.schedules(S), amount: 0, footprint: foot,
     inp: { mT: mT * 1000, open: open * 100, pH: pH, parH: parH, wst: wst, cont: p.cont >= 0 ? +p.cont : 3, cess: p.cess >= 0 ? +p.cess : 1, gst: p.gst >= 0 ? +p.gst : 18, sorOn: p.sorOn !== false, fmt: p.estFmt === "detailed" ? "detailed" : "boq" } };
 };

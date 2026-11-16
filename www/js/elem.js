@@ -104,12 +104,13 @@ var EL = (function () {
     }
     if (!T.own) {
       var cq = T.conc.reduce(function (a, q) { return a + q.q; }, 0), fq = T.fw.reduce(function (a, q) { return a + q.q; }, 0), pq = T.pcc.reduce(function (a, q) { return a + q.q; }, 0), kg = T.bars.reduce(function (a, q) { return a + q.kg; }, 0), cr = concRate(T.kind, +p.fck || 20);
-      if (pq) T.items.push({ d: "PCC 1:4:8 levelling course", q: pq, u: "m³", sor: sor("pcc")[0], rate: sor("pcc")[1] });
-      if (cq) T.items.push({ d: "RCC M" + (p.fck || 20) + " in " + ({ f: "foundations", c: "columns", b: id === "beam" ? "beams" : id === "stair" ? "stairs" : "slabs" })[T.kind], q: cq, u: "m³", sor: cr[0], rate: cr[1] });
+      var where = ({ f: "foundations (footings, bases, rafts) up to plinth", c: "columns", b: id === "beam" ? "beams" : id === "stair" ? "stairs (waist slab and steps)" : "suspended slabs" })[T.kind];
+      if (pq) T.items.push({ cat: "pcc", d: "Providing and laying in position cement concrete 1:4:8 (40 mm graded stone aggregate) in levelling course under foundations, excluding shuttering", q: pq, u: "m³", sor: sor("pcc")[0], rate: sor("pcc")[1], rows: T.pcc });
+      if (cq) T.items.push({ cat: "rcc", d: "Reinforced cement concrete M" + (p.fck || 20) + " in " + where + ", including compaction and curing, excluding reinforcement and shuttering", q: cq, u: "m³", sor: cr[0], rate: cr[1], rows: T.conc });
       var fk = T.kind === "f" ? "fwf" : T.kind === "c" ? "fwc" : id === "beam" ? "fwb" : id === "stair" ? "fws" : "fws";
-      if (fq) T.items.push({ d: "Centering and shuttering", q: fq, u: "m²", sor: sor(fk)[0], rate: sor(fk)[1] });
-      if (kg) T.items.push({ d: "Reinforcement Fe " + (p.fy || 500) + " (BBS + 3 % wastage)", q: kg * 1.03, u: "kg", sor: sor(+p.fy >= 500 ? "stl500" : "stl415")[0], rate: 123.20 });
-    }
+      if (fq) T.items.push({ cat: "fw", d: "Centering and shuttering including strutting, propping and removal — " + ({ fwf: "foundations, footings and bases", fwc: "columns", fwb: "beams", fws: id === "stair" ? "stairs (soffit and risers)" : "suspended slabs" })[fk], q: fq, u: "m²", sor: sor(fk)[0], rate: sor(fk)[1], rows: T.fw });
+      if (kg) T.items.push({ cat: "stl", d: "Reinforcement Fe " + (p.fy || 500) + " for RCC work including straightening, cutting, bending, placing in position and binding (bar bending schedule + 3 % wastage)", q: kg * 1.03, u: "kg", sor: sor(+p.fy >= 500 ? "stl500" : "stl415")[0], rate: 123.20, rows: T.bars.map(function (q) { return { d: q.mark + " — " + q.desc, n: q.n, L: q.L / 1000, H: DT.wpm(q.dia), hU: "kg/m", q: q.kg, dia: q.dia }; }), wastage: 3 });
+    } else T.items.forEach(function (q) { q.cat = q.cat || (q.u === "kg" && /einforcement/.test(q.d) ? "stl" : /RCC|concrete/i.test(q.d) && q.u === "m³" ? "rcc" : "own"); q.rows = q.rows || [{ d: q.d, src: "", q: q.q }]; });
     return T;
   };
   /* combine elements [{mark, nos, take}] → schedule, BBS and estimate */

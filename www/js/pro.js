@@ -160,6 +160,11 @@ var PRO = (function () {
 
   /* ================================================================ BOQ & SCHEDULES */
   var estView = null;
+  function bindBoq(ctx) {
+    document.querySelectorAll("[data-est]").forEach(function (bt) { bt.onclick = function () { estView = this.getAttribute("data-est"); setTimeout(ctx.rerender, 0); }; });
+    if ($("bBoq")) $("bBoq").onclick = function () { var S = ctx.S(); try { S.boq = BOQ.run(S.m, S, Object.assign({}, S.p, ctx.params ? ctx.params() : {}, { fck: S.p.fck, fy: S.p.fy, tSlab: S.p.tSlab, Df: S.p.Df })); ctx.toast("BOQ recalculated"); } catch (e) { ctx.toast(e.message); } setTimeout(ctx.rerender, 0); };
+    document.querySelectorAll("input.rate").forEach(function (inp) { inp.onchange = function () { var p = proj(), r = Object.assign({}, p.rates || {}); var v = parseFloat(this.value); if (v > 0) r[this.getAttribute("data-ri")] = v; else delete r[this.getAttribute("data-ri")]; PDB.setRates(r); setTimeout(ctx.rerender, 0); }; });
+  }
   function boqBlock(S) {
     var b = S.boq; if (!b) return "";
     var p = proj(), rates = (p && p.rates) || {}; BOQ.price(b, rates);
@@ -169,7 +174,7 @@ var PRO = (function () {
     var view = estView || (S.p && S.p.estFmt === "detailed" ? "detailed" : "boq");
     h += '<div class="seg noprint" role="tablist"><button type="button" data-est="boq" class="' + (view === "boq" ? "on" : "") + '">Bill of quantities</button><button type="button" data-est="detailed" class="' + (view === "detailed" ? "on" : "") + '">Detailed estimate</button></div>';
     h += '<div class="btns noprint"><button type="button" id="bBoq">Recalculate with the current estimate inputs</button></div>';
-    if (view === "detailed") h += BOQ.detailedHtml(b, esc) + '<h4>Abstract of cost</h4>';
+    if (view === "detailed") h += '<h4>Detailed estimate</h4>' + EST.html(EST.fromBoq(b, (p ? p.name + " — " : "") + "detailed estimate"), esc) + '<h4>Abstract of cost (edit rates here)</h4>';
     h += tblL(["No.", "Description", "Unit", "Quantity", "Rate (₹)", "Source", "Amount (₹)"], b.items.map(function (it, i) {
       var how = view === "boq" && it.br && it.br.length ? '<div class="mbr">' + it.br.map(function (x) { return esc(x[0]) + " = " + f(x[1], it.unit === "kg" ? 0 : 2); }).join("<br>") + '</div>' : "";
       return [i + 1, esc(it.desc) + how, it.unit, f(it.qty, it.unit === "kg" ? 0 : 2), '<input class="rate" data-ri="' + it.id + '" type="number" step="any" inputmode="decimal" value="' + (rates[it.id] || "") + '" placeholder="' + (I.sorOn && it.sor ? it.sor[1] : "rate") + '">', esc(it.src || "—"), it.amt ? inr(it.amt) : ""];
@@ -317,7 +322,7 @@ var PRO = (function () {
     h += '<div class="btns noprint"><button type="button" id="vMode" class="' + (vm ? "pri" : "") + '">Engineering verification mode: ' + (vm ? "ON" : "OFF") + '</button></div>';
     if (vm) h += '<section class="sub">' + vBlock(S) + '</section>';
     else { var v = verifyState(p, S), c = vClass(v); h += '<div class="vbox ' + c[0] + '"><b>' + c[1] + '</b><br><small>' + esc(c[2]) + ' — switch the mode on to review.</small></div>'; }
-    h += '<details class="sub"' + (S.boq ? '' : '') + '><summary><b>Bill of quantities & reinforcement schedules</b></summary>' + boqBlock(S) + '</details>';
+    h += '<details class="sub"' + (S.boq ? '' : '') + '><summary><b>Estimate — detailed estimate / bill of quantities & reinforcement schedules</b></summary>' + boqBlock(S) + '</details>';
     h += '<details class="sub"><summary><b>Engineering assistant</b> (' + advise(S).filter(function (a) { return a.sev >= 2; }).length + ' important findings)</summary>' + asstBlock(S) + '</details>';
     h += '<h4>Reports & CAD</h4><div class="btns noprint"><a class="btnl pri" href="#report">Calculation report ›</a><button type="button" id="bGA">Drawing set DXF</button></div><div class="btns noprint"><button type="button" id="bStd">STAAD.Pro input (.std)</button><button type="button" id="bProj">Projects ›</button></div>';
     h += '<div class="note">Drawing set: general-arrangement plans with grids, column and beam marks, footing layout, column / beam / footing schedules and title blocks, plus all reinforcement details (layers for CAD). STAAD.Pro input: the same nodes, members, shells, sections, supports, load cases and combinations, for an independent cross-check.</div></div>';
@@ -330,9 +335,7 @@ var PRO = (function () {
       if (st && !by) { ctx.toast("Enter the reviewer's name first"); if ($("vBy")) $("vBy").focus(); return; }
       var note = st === "query" || st === "na" ? (window.prompt ? window.prompt(st === "query" ? "Query (what needs answering?)" : "Why is it not applicable?", "") || "" : "") : "";
       PDB.setReview(k, st ? { state: st, by: by, date: new Date().toISOString(), note: note } : null); ctx.rerender(); }; });
-    document.querySelectorAll("[data-est]").forEach(function (bt) { bt.onclick = function () { estView = this.getAttribute("data-est"); setTimeout(ctx.rerender, 0); }; });
-    if ($("bBoq")) $("bBoq").onclick = function () { var S = ctx.S(); try { S.boq = BOQ.run(S.m, S, Object.assign({}, S.p, ctx.params ? ctx.params() : {}, { fck: S.p.fck, fy: S.p.fy, tSlab: S.p.tSlab, Df: S.p.Df })); ctx.toast("BOQ recalculated"); } catch (e) { ctx.toast(e.message); } setTimeout(ctx.rerender, 0); };
-    document.querySelectorAll("input.rate").forEach(function (inp) { inp.onchange = function () { var p = proj(), r = Object.assign({}, p.rates || {}); var v = parseFloat(this.value); if (v > 0) r[this.getAttribute("data-ri")] = v; else delete r[this.getAttribute("data-ri")]; PDB.setRates(r); setTimeout(ctx.rerender, 0); }; });
+    bindBoq(ctx);
     if ($("aGo")) { var go = function () { var q = $("aQ").value.trim(); if (q) ask(S, q, $("aOut")); }; $("aGo").onclick = go; $("aQ").onkeydown = function (e) { if (e.key === "Enter") go(); }; }
     if ($("bGA")) $("bGA").onclick = function () { try { ctx.download(fname("drawings") + ".dxf", CAD.drawingSet(S, proj())); } catch (e) { ctx.toast(e.message); } };
     if ($("bStd")) $("bStd").onclick = function () { ctx.download(fname("model") + ".std", CAD.staad(S, proj())); };
@@ -340,7 +343,7 @@ var PRO = (function () {
   }
   function fname(k) { var p = proj(); return ((p && p.name) || "project").replace(/[^\w\- ]+/g, "_").replace(/\s+/g, "-") + "-" + k; }
 
-  return { projectsView: projectsView, summary: summary, vItems: vItems, verifyState: verifyState, vClass: vClass, chips: chips, block: block, bind: bind, advise: advise, memberInfo: memberInfo, context: context, kbFind: kbFind, offlineAnswer: offlineAnswer,
+  return { boqBlock: boqBlock, bindBoq: bindBoq, estView: function (v) { if (v) estView = v; return estView; }, projectsView: projectsView, summary: summary, vItems: vItems, verifyState: verifyState, vClass: vClass, chips: chips, block: block, bind: bind, advise: advise, memberInfo: memberInfo, context: context, kbFind: kbFind, offlineAnswer: offlineAnswer,
     _set: function (k, v) { this[k] = v; } };
 })();
 if (typeof module !== "undefined") module.exports = PRO;

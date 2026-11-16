@@ -622,5 +622,18 @@ console.log('\n== O. Units, project elements, design aids');
   ok('Design aids O6: chart routine at Pu = 0 (p/fck 0.10, d\'/D 0.05, Fe 415) equals a hand strain-compatibility solution within 1 %; circular capacity grows with p', Math.abs(M0 / Mh - 1) < 0.01 && cm[0] < cm[1] && cm[1] < cm[2], M0.toFixed(4) + ' vs ' + Mh.toFixed(4));
 })();
 
+console.log('\n== P. Detailed estimate in the J&K R&B format');
+(function () {
+  const { EST, EL } = c;
+  const bp = { method: 'lsm', b: 230, D: 450, exp: 'mild', cover: 25, stir: 8, dia: 16, L: 5, support: 'ss', mode: 'load', wu: 30, Mu: 100, Vu: 80, fck: 20, fy: 500, __defaults: [] }, bt = EL.take('beam', bp, RCC.beam(bp), {});
+  const fp = { P: 1000, Mx: 0, sbc: 150, sw: 10, cb: 300, cd: 450, shape: 'rect', exp: 'moderate', cover: 50, dia: 12, fck: 25, fy: 500, __defaults: [] }, ft = EL.take('footing', fp, RCC.footing(fp), {});
+  const m = EST.fromTakes([{ mark: 'B1', nos: 4, title: 'RCC Beam', take: bt }, { mark: 'F1', nos: 6, title: 'Isolated Footing', take: ft }]);
+  const cats = m.items.map(it => it.cat).join(','), conc = m.items.filter(it => it.cat === 'pcc' || it.cat === 'rcc').reduce((a, it) => a + it.qty, 0), car = m.items.filter(it => it.cat === 'carr');
+  ok('Estimate P1: items in the order of work — PCC, RCC, steel, shuttering, carriage — each with element sub-heads and No. × L × B × D lines', cats === 'pcc,rcc,rcc,stl,fw,fw,carr,carr' && m.items[1].rows[0].sub === 'B1 (4 nos) — RCC Beam' && m.items[1].rows[1].n === 4, cats);
+  ok('Estimate P2: carriage = 0.87 (aggregate) and 0.46 (sand) m³ per m³ of the concrete items, as in the reference format', Math.abs(car[0].qty - 0.87 * conc) < 1e-9 && Math.abs(car[1].qty - 0.46 * conc) < 1e-9);
+  const stl = m.items.find(it => it.cat === 'stl'), base = stl.rows.filter(r => !r.sub && r.pct === undefined).reduce((a, r) => a + r.q, 0);
+  ok('Estimate P3: steel lines No. × L × kg/m with a 3 % wastage line; totals = Σ amounts; grand total adds contingencies, cess and GST', Math.abs(stl.qty - base * 1.03) < 1e-9 && Math.abs(m.sub - m.items.reduce((a, it) => a + it.qty * it.rate, 0)) < 1e-6 && Math.abs(m.total - m.sub * 1.22) < 1e-6, '₹ ' + Math.round(m.total));
+})();
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;

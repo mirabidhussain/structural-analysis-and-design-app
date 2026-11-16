@@ -79,10 +79,17 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   await pg.evaluate(() => { location.hash = '#elements'; }); await pg.waitForSelector('.ecard', { timeout: 60000 });
   const ev = await pg.evaluate(() => ({ n: document.querySelectorAll('.ecard').length, marks: [...document.querySelectorAll('.emk')].map(x => x.textContent).join(','), est: document.querySelector('.sum').textContent }));
   await pg.click('.etabs [data-t=bbs]'); await pg.waitForTimeout(500); const bbsRows = await pg.evaluate(() => document.querySelectorAll('.rep table.etb tr').length);
-  await pg.click('.etabs [data-t=est]'); await pg.waitForTimeout(500); const estOk = await pg.evaluate(() => /Abstract of cost/.test(document.querySelector('.rep').textContent) && /5\.34\.1/.test(document.querySelector('.rep').textContent));
+  await pg.click('.etabs [data-t=est]'); await pg.waitForTimeout(500); const estOk = await pg.evaluate(() => !!document.querySelector('.rep table.jk tr.ih') && /Grand total/.test(document.querySelector('.rep').textContent) && /5\.34\.1/.test(document.querySelector('.rep').textContent));
   ok('Add to project: elements listed with schedule, bar bending schedule and JKSOR estimate', ev.n === 2 && ev.marks === 'B1,F1' && /₹/.test(ev.est) && bbsRows >= 6 && estOk, JSON.stringify(ev));
   await pg.click('[data-eo]'); await pg.waitForSelector('#addp', { timeout: 30000 });
   ok('Opening an element restores its inputs and offers Update', await pg.evaluate(() => /Update B1/.test(document.getElementById('addp').textContent)));
+  await pg.evaluate(() => { location.hash = '#column'; }); await pg.waitForSelector('#f'); await pg.click('button.pri'); await pg.waitForSelector('#estd');
+  ok('Every design result has a one-tap detailed estimate (L × B × D, bar schedule, JKSOR abstract)', await pg.evaluate(() => { const d = document.getElementById('estd'); d.open = true; return /₹/.test(d.querySelector('summary').textContent) && !!d.querySelector('table.jk tr.ih') && !!d.querySelector('table.jk tr.gt') && d.querySelectorAll('table.est').length === 2; }));
+  await pg.click('.tabbar a[data-t=estimate]'); await pg.waitForSelector('#estE');
+  const eh = await pg.evaluate(() => ({ on: document.querySelector('.tabbar a.on').getAttribute('data-t'), det: document.querySelector('#estSeg .on').getAttribute('data-v'), el: !!document.querySelector('#estE table.jk tr.sb') && /Grand total/.test(document.getElementById('estE').textContent), run: !!document.getElementById('estRun') }));
+  ok('Estimate tab: detailed estimate first, designed elements and a button to estimate the building', eh.on === 'estimate' && eh.det === 'detailed' && eh.el && eh.run, JSON.stringify(eh));
+  const [xd] = await Promise.all([pg.waitForEvent('download', { timeout: 30000 }), pg.click('#estE .estx')]);
+  ok('Detailed estimate exports to Excel in the J&K R&B format', /detailed-estimate\.xlsx$/.test(xd.suggestedFilename()), xd.suggestedFilename());
   await pg.evaluate(() => { location.hash = '#aids'; }); await pg.waitForSelector('.acard img'); await pg.waitForTimeout(800);
   const av = await pg.evaluate(() => ({ n: document.querySelectorAll('.acard').length, loaded: [...document.querySelectorAll('.acard img')].filter(i => i.complete && i.naturalWidth > 1000).length, ld: !!document.querySelector('table.ldt') }));
   await pg.click('.acard'); await pg.waitForSelector('.zoomv img'); const zv = await pg.evaluate(() => document.querySelector('.zoomv img').naturalWidth > 1000); await pg.click('.zoomv [data-z=x]');
@@ -123,6 +130,7 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   const bq = await pg.evaluate(() => { const t = document.querySelector('#results').textContent; return { sor: /JKSOR 5\.34\.2/.test(t), own: /own rate/.test(t), gst: /GST 18 %/.test(t), total: /Estimated cost incl\. GST/.test(t), mas: /Brick masonry/.test(t) }; });
   ok('BOQ: whole-building items priced with JKSOR 2022, own rate overrides, abstract with GST', bq.sor && bq.own && bq.gst && bq.total && bq.mas, JSON.stringify(bq));
   const vol = async () => pg.evaluate(() => { const r = [...document.querySelectorAll('#results tr')].find(tr => /Brick masonry \(class 7\.5\) in CM 1:6 in superstructure/.test(tr.textContent)); return r ? parseFloat(r.children[3].textContent.replace(/,/g, '')) : null; });
+  await pg.evaluate(() => { const b = document.querySelector('#results [data-est=boq]'); if (b) b.click(); }); await pg.waitForTimeout(600);
   const v230 = await vol();
   await pg.evaluate(() => { const e = document.querySelector('[data-k=mT]'); e.value = '115'; e.dispatchEvent(new Event('change', { bubbles: true })); });
   await pg.evaluate(() => document.querySelector('#bBoq').click()); await pg.waitForTimeout(600); const v115 = await vol();

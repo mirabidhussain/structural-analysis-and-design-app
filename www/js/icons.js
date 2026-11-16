@@ -27,6 +27,7 @@ var IC = (function () {
     search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5l5 5"/>',
     play: '<path d="M7 4.5l13 7.5-13 7.5z"/>',
     aids: '<path d="M4 20V4M4 20h16"/><path d="M5 17c4-1 7-4 9-11M5 13c3-1 5-3 6-7"/><circle cx="16" cy="9" r="1.2"/>',
+    estimate: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8.5 7.5h7M8.5 11h7M8.5 14.5h3.5M14 14.5h1.5M8.5 18h3.5M14 18h1.5"/>',
     bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.4 1.1 2.2h5c0-.8.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
     analysis: '<path d="M4 20V9l8-5 8 5v11"/><path d="M4 9h16M4 14.5h16M12 4v16"/>',
     moon: '<path d="M20 14.5A8.5 8.5 0 019.5 4 8.5 8.5 0 1020 14.5z"/>',

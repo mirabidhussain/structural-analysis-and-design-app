@@ -13,7 +13,7 @@ var SU = (function () {
     accTor: true, rsa: true, mmc: true, nModes: 12, rsComb: "cqc", ortho: false, rsScaleDisp: false, sbc: 200, Df: 1.5,
     snow: false, s0: 1.5, mu: 0.8, snowW: 0, pattern: "auto", llRed: false, exposure: "moderate", fire: "1",
     found: "isolated", matT: 0, matOff: 0.5, ks: 0, gs: 18, setLim: 75, angLim: 500, matMesh: 0.5,
-    estFmt: "boq", mT: 230, mOpen: 15, plinthH: 0.45, parH: 1.0, wastage: 3, cont: 3, cess: 1, gst: 18, sorOn: true
+    estFmt: "detailed", mT: 230, mOpen: 15, plinthH: 0.45, parH: 1.0, wastage: 3, cont: 3, cess: 1, gst: 18, sorOn: true
   };
   /* defaults that depend on the frame material */
   var MATDEF = { rcc: { colSec: "400x400", beamSec: "300x450", sys: "rc" }, steel: { colSec: "ISMB 300", beamSec: "ISMB 250", sys: "steel" } };
@@ -255,6 +255,7 @@ var SU = (function () {
     if (hd.length && !p.existing) { err("Inputs against the IS code — correct them in Properties (or switch on \u201cChecking an existing structure\u201d):\n" + hd.map(function (x) { return "• " + x.msg + " (" + x.ref + ")"; }).join("\n")); return true; }
     return false;
   }
+  var afterRun = null;
   function runLinear(pd) {
     grab(document.getElementById("app"));
     try { if (P.src === "gen" && !S.geo) buildGen(true); } catch (e) { return err(e); }
@@ -268,7 +269,9 @@ var SU = (function () {
       S.res.ms = Date.now() - t0; f0();
       if (typeof PDB !== "undefined") PDB.setSummary(PIPE.summary(S));
       S.state = S.cb[0].name; S.disp = "def"; S.sel = null;
-      drawViewer(); renderResults(); status(); $("viewer").scrollIntoView({ behavior: "smooth" });
+      drawViewer(); renderResults(); status();
+      if (afterRun) { var a = afterRun; afterRun = null; location.hash = "#" + a; return; }
+      $("viewer").scrollIntoView({ behavior: "smooth" });
     }; })(steps[2][1]);
     (function next(i) {
       if (i >= steps.length) return;
@@ -604,7 +607,7 @@ var SU = (function () {
   }
   /* sticky chips that jump to the main parts of a long result */
   function jumpBar(box) {
-    var L = [["Analysis", /^(Linear static|P-Delta|Pushover)/], ["Seismic", /^Modal analysis/], ["Drift", /^Storey drift/], ["Design", /^(RCC beams|RCC columns|Steel members)/], ["Detailing", /^Reinforcement detailing/], ["Outputs", /^Professional outputs/], ["Estimate", /^Bill of quantities/], ["Assistant", /^Engineering assistant/], ["Calculations", /^Worked calculations/], ["Codes", /^Standards register/]], used = {}, chips = [];
+    var L = [["Analysis", /^(Linear static|P-Delta|Pushover)/], ["Seismic", /^Modal analysis/], ["Drift", /^Storey drift/], ["Design", /^(RCC beams|RCC columns|Steel members)/], ["Detailing", /^Reinforcement detailing/], ["Outputs", /^Professional outputs/], ["Estimate", /^(Bill of quantities|Estimate)/], ["Assistant", /^Engineering assistant/], ["Calculations", /^Worked calculations/], ["Codes", /^Standards register/]], used = {}, chips = [];
     box.querySelectorAll("h3, h4, summary").forEach(function (el, i) {
       var t = el.textContent.trim(); L.forEach(function (q) { if (!used[q[0]] && q[1].test(t)) { used[q[0]] = 1; el.id = el.id || "j" + i; chips.push([q[0], el.id]); } });
     });
@@ -823,5 +826,5 @@ var SU = (function () {
       if (!$("srcbox")) return; a.querySelector("[data-k=src]").value = "dxf"; $("srcbox").innerHTML = srcInner(); bindSrc(); $("p1").classList.add("open"); toast("DXF loaded: " + S.dx.ents.length + " entities"); } catch (e) { err(e); }
   }
   function ctx() { return { download: download, toast: toast, rerender: renderResults, S: function () { return S; }, params: function () { return params(); }, opened: function (p) { load(); } }; }
-  return { view: view, S: S, openText: openText, ctx: ctx, download: function (n, t) { download(n, t); }, toast: function (t) { toast(t); } };
+  return { state: function () { return S; }, analyseThen: function (t) { afterRun = t; runLinear(); }, bindBoq: function (rr) { if (typeof PRO !== "undefined") PRO.bindBoq({ S: function () { return S; }, rerender: rr, toast: toast, params: params }); }, view: view, S: S, openText: openText, ctx: ctx, download: function (n, t) { download(n, t); }, toast: function (t) { toast(t); } };
 })();
