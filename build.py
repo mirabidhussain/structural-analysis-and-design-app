@@ -2,10 +2,13 @@ import re, pathlib
 root = pathlib.Path(__file__).parent
 html = (root/'www/index.html').read_text()
 block = re.search(r'<!--SCRIPTS-->(.*?)<!--/SCRIPTS-->', html, re.S).group(1)
-js = ''
-for src in re.findall(r'src="([^"]+)"', block):
-    js += '\n/* ' + src + ' */\n' + (root/'www'/src).read_text()
-out = html.replace(block, '\n<script>\n' + js.replace('</script', '<\\/script') + '\n</script>\n')
+js, eng = '', ''
+for src, ed in re.findall(r'<script src="([^"]+)"( data-eng)?></script>', block):
+    t = '\n/* ' + src + ' */\n' + (root/'www'/src).read_text()
+    if ed: eng += t
+    else: js += t
+# engine in its own block: the background workers are started from this text (no extra files needed offline)
+out = html.replace(block, '\n<script id="isd-engine">\n' + eng.replace('</script', '<\\/script') + '\n</script>\n<script>\n' + js.replace('</script', '<\\/script') + '\n</script>\n')
 out = re.sub(r'<link rel="(manifest|icon)"[^>]*>\n?', '', out)
 import base64
 out = re.sub(r'url\((fonts/[\w.-]+\.woff)\)', lambda m: 'url(data:font/woff;base64,' + base64.b64encode((root/'www'/m.group(1)).read_bytes()).decode() + ')', out)

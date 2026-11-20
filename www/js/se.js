@@ -51,19 +51,23 @@ SE.floorDisp = function (m, f, U, d, W) {
 };
 /* centre of rigidity of every floor (floor-by-floor unit loads on the factored stiffness) */
 SE.centres = function (m, W, fl) {
-  FE.prepare(m); var asm = FE.assemble(m, null), A = asm.A;
-  if (FE.factor(A, m._maxa, m._neq) >= 0) throw new Error("Structure unstable — cannot compute centres of rigidity");
+  var A; try { A = FE.factored(m); } catch (e) { throw new Error("Structure unstable — cannot compute centres of rigidity"); }
   function solve(loads) {
     var F = new Float64Array(m._neq);
     loads.forEach(function (l) { for (var t = 0; t < 6; t++) { var e = m._eq[6 * l.n + t]; if (e >= 0) F[e] += l.f[t]; } });
     return FE.expand(m, FE.backsub(A, m._maxa, m._neq, F));
   }
+  function solve3(L3) {
+    var Fs = L3.map(function (loads) { var F = new Float64Array(m._neq); loads.forEach(function (l) { for (var t = 0; t < 6; t++) { var e = m._eq[6 * l.n + t]; if (e >= 0) F[e] += l.f[t]; } }); return F; });
+    return FE.backsubMany(A, m._maxa, m._neq, Fs).map(function (x) { return FE.expand(m, x); });
+  }
   fl.forEach(function (f) {
     var Wf = f.top.reduce(function (s, i) { return s + (W[i] > 0 ? W[i] : 0); }, 0) || f.top.length;
     var lx = f.top.map(function (i) { return { n: i, f: [(W[i] > 0 ? W[i] : Wf / f.top.length) / Wf, 0, 0, 0, 0, 0] }; });
     var ly = f.top.map(function (i) { return { n: i, f: [0, (W[i] > 0 ? W[i] : Wf / f.top.length) / Wf, 0, 0, 0, 0] }; });
-    var tT = SE.floorRot(m, f, solve(SE.torque(m, f, 1, W)), W);
-    var t1 = SE.floorRot(m, f, solve(lx), W), t2 = SE.floorRot(m, f, solve(ly), W);
+    var U3 = solve3([SE.torque(m, f, 1, W), lx, ly]);
+    var tT = SE.floorRot(m, f, U3[0], W);
+    var t1 = SE.floorRot(m, f, U3[1], W), t2 = SE.floorRot(m, f, U3[2], W);
     if (Math.abs(tT) < 1e-15) { f.cr = { x: f.cm.x, y: f.cm.y }; return; }
     f.cr = { x: f.cm.x - t2 / tT, y: f.cm.y + t1 / tT };
     f.esx = f.cm.x - f.cr.x; f.esy = f.cm.y - f.cr.y;   /* static eccentricities */
@@ -74,8 +78,8 @@ SE.centres = function (m, W, fl) {
 /* ---------- modal analysis (subspace iteration) ---------- */
 SE.modes = function (m, W, nModes, opt) {
   opt = opt || {};
-  FE.prepare(m); var asm = FE.assemble(m, null), A = asm.A, n = m._neq;
-  if (FE.factor(A, m._maxa, n) >= 0) throw new Error("Structure unstable — modal analysis not possible");
+  var A; try { A = FE.factored(m); } catch (e) { throw new Error("Structure unstable — modal analysis not possible"); }
+  var n = m._neq;
   var Md = new Float64Array(n), Mt = [0, 0], dirs = m.twoD ? [0] : [0, 1];
   m.nodes.forEach(function (nd, i) {
     var mi = (W[i] > 0 ? W[i] : 0) / SE.g; if (!mi) return;
@@ -95,7 +99,7 @@ SE.modes = function (m, W, nModes, opt) {
   var lam = null, it, conv = false, maxIt = opt.maxIt || 60, tol = opt.tol || 1e-8, Q, Xb, j;
   for (it = 0; it < maxIt; it++) {
     var MX = X.map(function (x) { var y = new Float64Array(n); for (var j = 0; j < n; j++) y[j] = Md[j] * x[j]; return y; });
-    Xb = MX.map(function (y) { return FE.backsub(A, m._maxa, n, Float64Array.from(y)); });
+    Xb = FE.backsubMany(A, m._maxa, n, MX.map(function (y) { return Float64Array.from(y); }));
     var Kr = [], Mr = [];
     for (var a = 0; a < q; a++) { Kr.push(new Float64Array(q)); Mr.push(new Float64Array(q)); }
     for (a = 0; a < q; a++) for (var b = a; b < q; b++) {
@@ -171,7 +175,9 @@ SE.rho = function (wi, wj, z) {   /* CQC correlation, equal damping z */
 SE.combine = function (vals, modes, method) {   /* vals[k] = modal response of one quantity */
   var s = 0, nM = vals.length, i, j;
   if (method === "srss") { for (i = 0; i < nM; i++) s += vals[i] * vals[i]; return Math.sqrt(s); }
-  for (i = 0; i < nM; i++) for (j = 0; j < nM; j++) s += vals[i] * vals[j] * (i === j ? 1 : SE.rho(modes[i].w, modes[j].w, 0.05));
+  var RH = modes._rho;
+  if (!RH || RH.length !== nM * nM) { RH = new Float64Array(nM * nM); for (i = 0; i < nM; i++) for (j = 0; j < nM; j++) RH[i * nM + j] = i === j ? 1 : SE.rho(modes[i].w, modes[j].w, 0.05); try { Object.defineProperty(modes, "_rho", { value: RH, writable: true, configurable: true, enumerable: false }); } catch (e) {} }
+  for (i = 0; i < nM; i++) { var vi = vals[i]; if (!vi) continue; var row = i * nM; for (j = 0; j < nM; j++) s += vi * vals[j] * RH[row + j]; }
   return Math.sqrt(Math.max(s, 0));
 };
 /* modal response quantities and combined envelopes for direction d. Returns {Vb, VbStatic, scale, U (envelope),
@@ -244,7 +250,7 @@ SE.reactions = function (m, U) {
   m.shells.forEach(function (e, k) {
     if (!e.n.some(function (v) { return isS[v]; })) return;
     var dd = m._shellCache[k], ug = []; e.n.forEach(function (v) { for (var t = 0; t < 6; t++) ug.push(U[6 * v + t]); });
-    var fg = FE.mv(FE.rotate(dd.R, 8, dd.K), ug); e.n.forEach(function (v, s) { if (isS[v]) for (var t = 0; t < 6; t++) R[v][t] += fg[6 * s + t]; });
+    var fg = FE.mv(FE.shellKg(dd), ug); e.n.forEach(function (v, s) { if (isS[v]) for (var t = 0; t < 6; t++) R[v][t] += fg[6 * s + t]; });
   });
   return R;
 };

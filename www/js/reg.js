@@ -2,7 +2,7 @@
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "3.9";
+REG.ENGINE = "3.10";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],
@@ -73,12 +73,13 @@ REG.CHECKS = [
   ["Quantities", "Project elements: take-off, bar bending schedule and JKSOR 2022 estimate of individually designed members (span + Ld/3 anchorage, 50φ column laps, 2(a + b) + 20φ links)", "Approximate", "Take-off rules recomputed by hand in acceptance.js O; excavation, backfill and finishes not included"],
   ["Slabs", "Slab design: one-way when ly/lx > 2 (IS 456 cl 24.4, spanning lx; continuous if both long edges are), otherwise two-way by Annex D Table 26/27; cantilever option", "Verified", "Decision rule and identical results to the one-way and two-way routines checked in acceptance.js Q"],
   ["DXF", "DXF import for the roof truss (elevation: lines split at joints, chords traced or from TOP/BOTTOM/WEB layers) and the pile / raft foundations (column plan: rectangles, circles or points on COLUMN layers, marks from text)", "Verified", "Imported Pratt truss identical to the generated one; plan reading and load checks in acceptance.js R; UI tests"],
+  ["Performance", "Solver and hardware: one factorisation of K shared by the analysis, rigidity centres and modal analysis; multi-vector back-substitution; cached CQC coefficients, shell stiffness and column capacities; background Web Workers sized to the CPU; WebGL viewer", "Verified", "Every engineering suite unchanged (acceptance, FE, pushover, verification); background results identical to the main thread in the UI test"],
   ["Design aids", "SP 16 style charts: rectangular and circular column P–M (Fe 415/500/550), slab coefficients (Tables 26, 27), flexure Mu/bd²–pt, τc, kt, kc, doubly reinforced sections, IS 800 fcd and LTB curves, IS 1893 spectrum, IS 875 k2; Ld tables", "Calculated", "Drawn from the engine's strain-compatibility routines; Pu = 0 point checked against a hand solution in acceptance.js O"]
 ];
 /* stable ids of REG.CHECKS rows, used by the verification mode */
 REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "mmc", "timehist",
   "rcbeam", "rccol", "rcslab", "rcwallel", "rcwall", "servic", "stfcd", "stltb", "stklen", "dtbeam", "dtcol", "scwb", "joint", "dtslab", "bbs",
-  "foot", "footpress", "mat", "matsoil", "pilecap", "pilelat", "pilegrp", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto", "inlim", "fixes", "units", "elements", "slabauto", "dxfmore", "aids"];
+  "foot", "footpress", "mat", "matsoil", "pilecap", "pilelat", "pilegrp", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto", "inlim", "fixes", "units", "elements", "slabauto", "dxfmore", "perf", "aids"];
 REG.byId = function (id) { var i = REG.IDS.indexOf(id); return i >= 0 ? { id: id, area: REG.CHECKS[i][0], t: REG.CHECKS[i][1], st: REG.CHECKS[i][2], ev: REG.CHECKS[i][3] } : null; };
 REG.RANK = { "Not implemented": 0, Simplified: 1, Calculated: 2, Verified: 3 };
 /* checks behind each kind of result; the weakest decides the result's verification state */

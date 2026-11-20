@@ -35,3 +35,15 @@ PIPE.summary = function (S) {
     concrete_m3: S.boq ? +S.boq.conc.toFixed(2) : null, cost: S.boq && S.boq.abs && S.boq.abs.total ? Math.round(S.boq.abs.total) : null, method: S.p ? S.p.method : null, zone: S.p ? S.p.zone : null };
 };
 if (typeof module !== "undefined") module.exports = PIPE;
+/* design function of every single-member module, by module id — used by the screens, the background workers and the fix search */
+var MODS = {
+  beam: function (p) { return p.method === "wsm" ? WS.beam(p) : RCC.beam(p); },
+  slab: function (p) { return RCC.slabAuto(p, p.method === "wsm" ? WS.slab1 : RCC.slab1, p.method === "wsm" ? WS.slab2 : RCC.slab2); },
+  slab1: function (p) { return p.method === "wsm" ? WS.slab1(p) : RCC.slab1(p); },
+  slab2: function (p) { return p.method === "wsm" ? WS.slab2(p) : RCC.slab2(p); },
+  column: function (p) { return p.method === "wsm" ? WS.column(p) : RCC.column(p); },
+  footing: function (p) { return RCC.footing(p); }, pile: function (p) { return FD.pile(p); }, raft: function (p) { return FD.raft(p); },
+  strip: function (p) { return RCC.strip(p); }, stair: function (p) { return RCC.stair(p); }, truss: function (p) { return TR.design(p); },
+  purlin: function (p) { return ST.purlin(p); }, tension: function (p) { return ST.tension(p); }, comp: function (p) { return ST.compression(p); },
+  sbeam: function (p) { return ST.beam(p); }, bolts: function (p) { return ST.bolts(p); }, roof: function (p) { return LD.roofReport(p); }, seismic: function (p) { return LD.seismic(p); }
+};

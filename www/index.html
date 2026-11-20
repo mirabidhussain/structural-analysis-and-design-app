@@ -244,45 +244,58 @@ button.pri .ico,a.btnl.pri .ico{color:#1d1505}
 .skv .tx,.skv .tl{fill:var(--ink);font-size:11px;font-weight:600}.skv .td{fill:var(--mut);font-size:10.5px;font-weight:600}.skv .ts{fill:var(--mut);font-size:10px}.skv .badge rect{fill:var(--nav)}.skv .tb{fill:var(--gold);font-size:11px;font-weight:700;letter-spacing:.04em}
 .gov{margin:10px 0;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:var(--card);box-shadow:var(--sh1);display:flex;flex-direction:column;gap:6px}.gov.fail{border-color:color-mix(in srgb,var(--no) 45%,transparent)}.gov .gh{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em}.gov .gh em{font-style:normal;text-transform:none;letter-spacing:0}.gov b{font-size:14px}.gov b i{font-style:normal;color:var(--mut);font-weight:400;font-size:12px}.ub.big i{height:9px}.ub.big em{font-size:13px;font-weight:700;color:var(--ink)}
 .dxfin{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.dxfbtn{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:12px;border:1.5px dashed color-mix(in srgb,var(--acc) 60%,var(--line));background:color-mix(in srgb,var(--gold) 8%,var(--card));color:var(--ink);font-weight:600;font-size:13px;cursor:pointer}.dxfbtn .ico{width:18px;height:18px;color:var(--acc)}.dxfbtn input{position:absolute;width:1px;height:1px;opacity:0}.dxfst{flex-basis:100%;color:var(--mut);font-size:12px}.dxfclr{min-height:32px;padding:0 12px;font-size:12.5px}
+/* ===== performance: GPU viewer layers, compositing, lighter effects on low-end devices ===== */
+.cvw{position:relative}.cvw #cvgl{position:absolute;left:0;top:0;width:100%;pointer-events:none;display:none}.cvw #cv{position:relative;display:block;width:100%;touch-action:none}
+.glb{position:absolute;right:8px;top:8px;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--mut);opacity:.7;pointer-events:none}
+.brand{will-change:transform;transform:translateZ(0)}.homebody{transform:translateZ(0)}
+#out .rep>.tw,#results .rep>.tw,.dwgs>.tw,.est.jk{content-visibility:auto;contain-intrinsic-size:auto 420px}
+.card,.qai,.ecard,.acard,.sheet{contain:layout paint}
+.busy.prog{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.busy.prog .bt{flex:1;min-width:150px}.busy.prog .bclock{font-style:normal;font-feature-settings:"tnum";color:var(--mut);font-size:12px}.busy.prog button{min-height:32px;padding:0 12px}.bhw{display:block;margin-top:6px;color:var(--mut);font-size:11px}
+:root[data-tier=low] header,:root[data-tier=low] .tabbar,:root[data-tier=low] .mhead{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+:root[data-tier=low] .card,:root[data-tier=low] .qai,:root[data-tier=low] .ecard,:root[data-tier=low] .acard{box-shadow:none!important}
+:root[data-rm="1"] *,:root[data-rm="1"] *:before,:root[data-rm="1"] *:after{transition:none!important;animation-duration:.01ms!important;scroll-behavior:auto!important}
+@media print{#cvgl{display:none!important}.rep>.tw,.dwgs>.tw,.est.jk{content-visibility:visible}}
 </style>
 </head>
 <body>
 <header><button id="back" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><span class="logo" id="logo"></span><h1 id="title">IS StructDesign</h1><button id="themeBtn" aria-label="Light / dark theme"></button></header>
 <main id="app"></main>
 <!--SCRIPTS-->
-<script src="js/data.js"></script>
+<script src="js/data.js" data-eng></script>
 <script src="js/icons.js"></script>
-<script src="js/core.js"></script>
-<script src="js/lim.js"></script>
-<script src="js/units.js"></script>
-<script src="js/rcc.js"></script>
-<script src="js/steel.js"></script>
-<script src="js/loads.js"></script>
-<script src="js/truss.js"></script>
-<script src="js/fem.js"></script>
-<script src="js/pushover.js"></script>
-<script src="js/dxf.js"></script>
-<script src="js/model.js"></script>
-<script src="js/se.js"></script>
-<script src="js/dt.js"></script>
-<script src="js/mat.js"></script>
-<script src="js/fdn.js"></script>
-<script src="js/reg.js"></script>
-<script src="js/pipe.js"></script>
-<script src="js/boq.js"></script>
-<script src="js/elem.js"></script>
-<script src="js/est.js"></script>
+<script src="js/core.js" data-eng></script>
+<script src="js/lim.js" data-eng></script>
+<script src="js/units.js" data-eng></script>
+<script src="js/rcc.js" data-eng></script>
+<script src="js/steel.js" data-eng></script>
+<script src="js/loads.js" data-eng></script>
+<script src="js/truss.js" data-eng></script>
+<script src="js/fem.js" data-eng></script>
+<script src="js/pushover.js" data-eng></script>
+<script src="js/dxf.js" data-eng></script>
+<script src="js/model.js" data-eng></script>
+<script src="js/se.js" data-eng></script>
+<script src="js/dt.js" data-eng></script>
+<script src="js/mat.js" data-eng></script>
+<script src="js/fdn.js" data-eng></script>
+<script src="js/reg.js" data-eng></script>
+<script src="js/pipe.js" data-eng></script>
+<script src="js/boq.js" data-eng></script>
+<script src="js/elem.js" data-eng></script>
+<script src="js/est.js" data-eng></script>
 <script src="js/sketch.js"></script>
 <script src="js/aids.js"></script>
-<script src="js/auto.js"></script>
+<script src="js/auto.js" data-eng></script>
 <script src="js/pdb.js"></script>
 <script src="js/cad.js"></script>
 <script src="js/rpt.js"></script>
 <script src="js/pro.js"></script>
-<script src="js/wsm.js"></script>
+<script src="js/wsm.js" data-eng></script>
 <script src="js/calc.js"></script>
 <script src="js/xlsx.js"></script>
 <script src="js/report.js"></script>
+<script src="js/par.js"></script>
+<script src="js/glv.js"></script>
 <script src="js/structui.js"></script>
 <script src="js/app.js"></script>
 <!--/SCRIPTS-->

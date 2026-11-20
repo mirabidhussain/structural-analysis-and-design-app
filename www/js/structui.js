@@ -248,7 +248,22 @@ var SU = (function () {
   }
 
   /* ---------- analysis ---------- */
-  function busy(t) { $("results").innerHTML = '<div class="rep"><div class="busy"><i></i>' + t + '</div></div>'; }
+  var busyT0 = 0, busyTimer = null;
+  function busy(t, cancel) {
+    if (!busyT0) busyT0 = Date.now();
+    $("results").innerHTML = '<div class="rep"><div class="busy prog"><i></i><span class="bt">' + t + '</span><em class="bclock">' + ((Date.now() - busyT0) / 1000).toFixed(1) + ' s</em>' + (cancel ? '<button type="button" id="bCancel">Cancel</button>' : '') + '</div>' + (cancel ? '<small class="bhw">' + esc(HW.summary()) + '</small>' : '') + '</div>';
+    if (cancel && $("bCancel")) $("bCancel").onclick = function () { cancel(); };
+    clearInterval(busyTimer); busyTimer = setInterval(function () { var c = document.querySelector(".bclock"); if (!c) { clearInterval(busyTimer); return; } c.textContent = ((Date.now() - busyT0) / 1000).toFixed(1) + " s"; }, 200);
+  }
+  function busyDone() { busyT0 = 0; clearInterval(busyTimer); }
+  /* results computed in a background worker → attach to the model on this thread */
+  function adopt(r, p) {
+    Object.keys(r).forEach(function (k) { S[k] = r[k]; });
+    S.m = MD.make(S.geo, p); FE.prepare(S.m);
+    if (S.det && !S.det.err) S.det.g = DT.grid(S.m);
+  }
+  var NW = { off: false };
+  function inWorker() { return typeof PAR !== "undefined" && !NW.off && (PAR.ok() || !PAR.tried); }
   function codeBlock(p) {
     var li = LIM.frame(p), hd = li.filter(function (x) { return x.hard; });
     S.limits = li;
@@ -261,38 +276,63 @@ var SU = (function () {
     try { if (P.src === "gen" && !S.geo) buildGen(true); } catch (e) { return err(e); }
     if (!S.m) return err("Build a model first");
     var p = params(); if (codeBlock(p)) return; S.p = p; MD._pm = {};
-    S.m = MD.make(S.geo, p);
-    busy("Assembling stiffness matrix and solving…");
-    var t0 = Date.now(), steps = PIPE.steps(S, p, pd);
+    S.m = MD.make(S.geo, p); busyT0 = 0;
     S.autoRes = null;
-    steps[2][1] = (function (f0) { return function () {
-      S.res.ms = Date.now() - t0; f0();
+    function finish() {
+      busyDone();
+      if (!$("results")) return;
       if (typeof PDB !== "undefined") PDB.setSummary(PIPE.summary(S));
       S.state = S.cb[0].name; S.disp = "def"; S.sel = null;
       drawViewer(); renderResults(); status();
       if (afterRun) { var a = afterRun; afterRun = null; location.hash = "#" + a; return; }
       $("viewer").scrollIntoView({ behavior: "smooth" });
-    }; })(steps[2][1]);
+    }
+    if (inWorker()) {
+      var job = PAR.job("pipe", { geo: S.geo, p: p, pd: pd, proj: typeof PDB !== "undefined" ? PDB.current() : null }, function (x) { busy(x.prog + " (" + (x.i + 1) + "/" + x.n + ", background)", function () { PAR.cancelAll(); }); });
+      busy("Starting the analysis in the background…", function () { PAR.cancelAll(); });
+      PAR.tried = true;
+      job.then(function (r) { adopt(r, p); finish(); }, function (e) {
+        if (/cancelled/.test(e.message)) { busyDone(); $("results").innerHTML = '<div class="note">Analysis cancelled.</div>'; return; }
+        if (!PAR.ok()) { runLinearSync(p, pd, finish); return; }
+        busyDone(); err(e); $("results").innerHTML = "";
+      });
+      return;
+    }
+    runLinearSync(p, pd, finish);
+  }
+  function runLinearSync(p, pd, finish) {
+    busy("Assembling stiffness matrix and solving…");
+    var t0 = Date.now(), steps = PIPE.steps(S, p, pd);
+    steps[2][1] = (function (f0) { return function () { S.res.ms = Date.now() - t0; f0(); finish(); }; })(steps[2][1]);
     (function next(i) {
       if (i >= steps.length) return;
       busy(steps[i][0]);
-      setTimeout(function () { try { steps[i][1](); next(i + 1); } catch (e) { err(e); $("results").innerHTML = ""; } }, 30);
+      setTimeout(function () { try { steps[i][1](); next(i + 1); } catch (e) { busyDone(); err(e); $("results").innerHTML = ""; } }, 30);
     })(0);
   }
   function runAuto() {
     grab(document.getElementById("app"));
     try { if (P.src === "gen" && !S.geo) buildGen(true); } catch (e) { return err(e); }
     if (!S.m) return err("Build a model first");
-    var p = params(); if (codeBlock(p)) return; MD._pm = {};
-    busy("Automatic design: iteration 1…");
-    AUTO.run(S.geo, p, { async: true, step: function (i, l) { busy("Automatic design: iteration " + (i + 2) + " — " + (Object.keys(l.fails.col).length + Object.keys(l.fails.beam).length) + " storey group(s) enlarged after iteration " + (i + 1) + "…"); } }).then(function (r) {
-      Object.keys(r.S).forEach(function (k) { if (k !== "geo") S[k] = r.S[k]; });
+    var p = params(); if (codeBlock(p)) return; MD._pm = {}; busyT0 = 0;
+    var bg = inWorker(), stop = bg ? function () { PAR.cancelAll(); } : null;
+    busy("Automatic design: iteration 1…", stop);
+    var prom = bg ? (PAR.tried = true, PAR.job("auto", { geo: S.geo, p: p, proj: typeof PDB !== "undefined" ? PDB.current() : null }, function (x) { busy("Automatic design: iteration " + (x.i + 2) + " — " + x.nf + " storey group(s) enlarged after iteration " + (x.i + 1) + "…", stop); })) :
+      AUTO.run(S.geo, p, { async: true, step: function (i, l) { busy("Automatic design: iteration " + (i + 2) + " — " + (Object.keys(l.fails.col).length + Object.keys(l.fails.beam).length) + " storey group(s) enlarged after iteration " + (i + 1) + "…"); } });
+    prom.then(function (r) {
+      busyDone();
+      if (bg) { adopt(r.S, r.p); } else Object.keys(r.S).forEach(function (k) { if (k !== "geo") S[k] = r.S[k]; });
       S.p = r.p; S.autoRes = r; set("secOver", r.rules);
       var box = document.querySelector("#p2 .pb"); if (box) box.innerHTML = propForm();
       if (typeof PDB !== "undefined") { PDB.setSummary(PIPE.summary(S)); PDB.update(PDB.current().id, {}, "Automatic design: " + r.log.length + " iterations, " + (r.ok ? "all checks pass" : "failures left")); }
       S.state = S.cb[0].name; S.disp = "def"; S.sel = null;
       drawViewer(); renderResults(); status(); toast(r.ok ? "Automatic design: all checks pass" : "Automatic design finished with failures left");
-    }, function (e) { err(e); $("results").innerHTML = ""; });
+    }, function (e) {
+      busyDone();
+      if (/cancelled/.test(e.message)) { $("results").innerHTML = '<div class="note">Automatic design cancelled.</div>'; return; }
+      if (bg && !PAR.ok()) { NW.off = true; return runAuto(); }
+      err(e); $("results").innerHTML = "";
+    });
   }
   function runPushover() {
     grab(document.getElementById("app"));
@@ -354,7 +394,7 @@ var SU = (function () {
     var h = '<div class="rep viewer"><div class="vbar"><select id="vDisp">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === S.disp ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>' +
       (states.length ? '<select id="vState">' + states.map(function (s) { return '<option' + (s === S.state ? " selected" : "") + '>' + esc(s) + '</option>'; }).join("") + '</select>' : '') +
       '<button type="button" id="vFit" title="Reset view">⟲</button><button type="button" id="vTop" title="Plan">Plan</button><button type="button" id="vFront" title="Elevation">Elev</button></div>' +
-      '<canvas id="cv"></canvas><div id="leg" class="leg"></div><div class="note">Drag to rotate · pinch / wheel to zoom · two-finger drag to pan · tap a member or element for details</div><div id="selinfo"></div></div>';
+      '<div class="cvw"><canvas id="cvgl" aria-hidden="true"></canvas><canvas id="cv"></canvas><span id="glbadge" class="glb"></span></div><div id="leg" class="leg"></div><div class="note">Drag to rotate · pinch / wheel to zoom · two-finger drag to pan · tap a member or element for details</div><div id="selinfo"></div></div>';
     v.innerHTML = h;
     $("vDisp").onchange = function () { S.disp = this.value; render(); };
     if ($("vState")) $("vState").onchange = function () { S.state = this.value; render(); if (S.sel) showSel(); };
@@ -381,74 +421,117 @@ var SU = (function () {
     cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", function (e) { delete pts[e.pointerId]; last = null; });
     cv.addEventListener("wheel", function (e) { e.preventDefault(); S.view.zoom *= e.deltaY < 0 ? 1.12 : 1 / 1.12; render(); }, { passive: false });
   }
-  var PRJ = null;
+  /* ---------- viewer: scene built once per result state, drawn by the GPU (WebGL) with a light 2D overlay; redraws limited to the screen refresh ---------- */
+  var PRJ = null, SCN = null, rafR = 0, GLC = null, VW = { noGL: false };
   function render() {
-    var cv = $("cv"); if (!cv) return;
-    var W = cv.clientWidth || 340, H = Math.round(Math.min(560, Math.max(300, W * 0.8))), dpr = window.devicePixelRatio || 1;
-    cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + "px";
-    var g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    var dark = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
-    g.fillStyle = dark ? "#0f1620" : "#fbfcfe"; g.fillRect(0, 0, W, H);
-    var m = S.m, v = S.view, cy = Math.cos(v.yaw), sy = Math.sin(v.yaw), cp = Math.cos(v.pitch), sp = Math.sin(v.pitch);
-    var st = S.res && S.state ? stateOf(S.state) : null, disp = S.disp, U = null, sc = 0;
+    if (rafR) return;
+    var f0 = function () { rafR = 0; paint(); };
+    rafR = window.requestAnimationFrame ? requestAnimationFrame(f0) : setTimeout(f0, 16);
+  }
+  function scene(key, dark) {
+    var m = S.m, st = S.res && S.state ? stateOf(S.state) : null, disp = S.disp, U = null, sc = 0, i;
     if (disp === "hinge" && S.po) U = S.po.U; else if (st && /def|mz|my|n|smx|smy|uz|util/.test(disp)) U = st.U;
     var bx = [Infinity, -Infinity, Infinity, -Infinity, Infinity, -Infinity];
     m.nodes.forEach(function (n) { bx[0] = Math.min(bx[0], n.x); bx[1] = Math.max(bx[1], n.x); bx[2] = Math.min(bx[2], n.y); bx[3] = Math.max(bx[3], n.y); bx[4] = Math.min(bx[4], n.z); bx[5] = Math.max(bx[5], n.z); });
     var span = Math.max(bx[1] - bx[0], bx[3] - bx[2], bx[5] - bx[4], 1), c0 = [(bx[0] + bx[1]) / 2, (bx[2] + bx[3]) / 2, (bx[4] + bx[5]) / 2];
-    if (U && (disp === "def" || disp === "hinge")) { var um = 0; for (var i = 0; i < m.nodes.length; i++) um = Math.max(um, Math.hypot(U[6 * i], U[6 * i + 1], U[6 * i + 2])); sc = um > 0 ? 0.08 * span / um : 0; }
-    var s = Math.min(W, H) * 0.8 / span * v.zoom;
-    function pr(x, y, z) {
-      var X = x - c0[0], Y = y - c0[1], Z = z - c0[2];
-      var a = X * cy + Y * sy, b = -X * sy + Y * cy;          /* rotate about Z */
-      var sx = a, syy = Z * cp - b * sp, dep = Z * sp + b * cp;
-      return [W / 2 + v.px + sx * s, H / 2 + v.py - syy * s, dep];
-    }
-    function P(i) { var n = m.nodes[i]; return sc ? pr(n.x + sc * U[6 * i], n.y + sc * U[6 * i + 1], n.z + sc * U[6 * i + 2]) : pr(n.x, n.y, n.z); }
-    PRJ = { pr: pr, P: P };
-    /* shells */
+    if (U && (disp === "def" || disp === "hinge")) { var um = 0; for (i = 0; i < m.nodes.length; i++) um = Math.max(um, Math.hypot(U[6 * i], U[6 * i + 1], U[6 * i + 2])); sc = um > 0 ? 0.08 * span / um : 0; }
+    var Pw = new Float64Array(3 * m.nodes.length);
+    m.nodes.forEach(function (n, k) { Pw[3 * k] = n.x + (sc ? sc * U[6 * k] : 0); Pw[3 * k + 1] = n.y + (sc ? sc * U[6 * k + 1] : 0); Pw[3 * k + 2] = n.z + (sc ? sc * U[6 * k + 2] : 0); });
     var cont = (disp === "smx" || disp === "smy" || disp === "uz") && st, vals = [], vmin = Infinity, vmax = -Infinity;
-    if (cont) {
-      m.shells.forEach(function (e, k) {
-        var val;
-        if (disp === "uz") val = e.n.reduce(function (a, i) { return a + st.U[6 * i + 2]; }, 0) / 4 * 1000;
-        else { var fs = st.sh(k); val = -(disp === "smx" ? fs.Mx : fs.My); }
-        vals[k] = val; vmin = Math.min(vmin, val); vmax = Math.max(vmax, val);
-      });
-      if (disp === "uz") m.frames.forEach(function () {});
-    }
-    var polys = m.shells.map(function (e, k) { var q = e.n.map(P); return { q: q, d: (q[0][2] + q[1][2] + q[2][2] + q[3][2]) / 4, k: k }; }).sort(function (a, b) { return a.d - b.d; });
-    var fail = {}; if (S.des && disp === "util") ["slabs", "walls"].forEach(function (gk) { S.des[gk].forEach(function (r) { if (!r.ok) fail["s" + r.k] = 1; }); });
-    polys.forEach(function (p) {
-      var e = m.shells[p.k];
-      g.beginPath(); p.q.forEach(function (q, i) { i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); }); g.closePath();
-      g.fillStyle = cont ? cmap(vals[p.k], vmin, vmax) : disp === "util" && S.des ? (fail["s" + p.k] ? "rgba(198,40,40,.55)" : "rgba(30,142,74,.35)") : e.kind === "wall" ? "rgba(224,122,31,.28)" : "rgba(80,140,220,.22)";
-      g.fill(); g.strokeStyle = dark ? "rgba(255,255,255,.12)" : "rgba(0,0,0,.12)"; g.lineWidth = 0.6; g.stroke();
+    if (cont) m.shells.forEach(function (e, k) {
+      var val;
+      if (disp === "uz") val = e.n.reduce(function (a, j) { return a + st.U[6 * j + 2]; }, 0) / 4 * 1000;
+      else { var fs = st.sh(k); val = -(disp === "smx" ? fs.Mx : fs.My); }
+      vals[k] = val; vmin = Math.min(vmin, val); vmax = Math.max(vmax, val);
     });
-    /* frames */
+    var fail = {}; if (S.des && disp === "util") ["slabs", "walls"].forEach(function (gk) { S.des[gk].forEach(function (r) { if (!r.ok) fail["s" + r.k] = 1; }); });
+    var stroke = dark ? "rgba(255,255,255,.12)" : "rgba(0,0,0,.12)";
+    var shFill = m.shells.map(function (e, k) { return cont ? cmap(vals[k], vmin, vmax) : disp === "util" && S.des ? (fail["s" + k] ? "rgba(198,40,40,.55)" : "rgba(30,142,74,.35)") : e.kind === "wall" ? "rgba(224,122,31,.28)" : "rgba(80,140,220,.22)"; });
     var util = {}; if (S.des) ["beams", "cols", "steel"].forEach(function (gk) { S.des[gk].forEach(function (r) { util[r.k] = r; }); });
-    var dg = (disp === "mz" || disp === "my" || disp === "n") && st, dmax = 0, dd = [];
-    if (dg) m.frames.forEach(function (e, k) { var d = FE.frameDiagram(st.fr(k), 8); dd[k] = d; d.forEach(function (q) { dmax = Math.max(dmax, Math.abs(disp === "mz" ? q.Mz : disp === "my" ? q.My : q.N)); }); });
-    var ds = dmax > 0 ? 0.06 * span / dmax : 0;
+    var frCol = [], frW = [];
     m.frames.forEach(function (e, k) {
-      var a = P(e.n1), b = P(e.n2);
       var col = e.type === "column" ? (dark ? "#9ab6d8" : "#1d3557") : e.type === "brace" ? "#7a5bbf" : (dark ? "#f0a050" : "#c4621a");
       if (disp === "util" && util[k]) col = util[k].ok ? (util[k].ratio > 0.85 ? "#e0a020" : "#1e8e4a") : "#c62828";
-      if (S.sel && S.sel.t === "f" && S.sel.k === k) col = "#00a3ff";
-      g.strokeStyle = col; g.lineWidth = S.sel && S.sel.t === "f" && S.sel.k === k ? 4 : e.type === "brace" ? 1.4 : 2.2;
-      g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
-      if (dg && ds) {
-        var ff = st.fr(k), R = ff.R, A = m.nodes[e.n1], dir = disp === "my" ? R[2] : R[1];
-        g.beginPath(); g.fillStyle = "rgba(29,53,87,.16)"; g.strokeStyle = dark ? "#7fb0e8" : "#1d3557"; g.lineWidth = 1;
-        var poly = dd[k].map(function (q) {
-          var val = disp === "mz" ? -q.Mz : disp === "my" ? q.My : q.N, t = q.x;
-          return pr(A.x + R[0][0] * t + dir[0] * val * ds, A.y + R[0][1] * t + dir[1] * val * ds, A.z + R[0][2] * t + dir[2] * val * ds);
-        });
-        var a0 = pr(A.x, A.y, A.z), b0 = pr(A.x + R[0][0] * ff.L, A.y + R[0][1] * ff.L, A.z + R[0][2] * ff.L);
-        g.moveTo(a0[0], a0[1]); poly.forEach(function (q) { g.lineTo(q[0], q[1]); }); g.lineTo(b0[0], b0[1]); g.closePath(); g.fill(); g.stroke();
-      }
+      var sel = S.sel && S.sel.t === "f" && S.sel.k === k; if (sel) col = "#00a3ff";
+      frCol[k] = col; frW[k] = sel ? 4 : e.type === "brace" ? 1.4 : 2.2;
     });
-    /* hinges */
-    if (disp === "hinge" && S.po) {
+    /* force diagrams in world coordinates */
+    var dg = (disp === "mz" || disp === "my" || disp === "n") && st, dmax = 0, dd = [], diag = [];
+    if (dg) m.frames.forEach(function (e, k) { var d = FE.frameDiagram(st.fr(k), 8); dd[k] = d; d.forEach(function (q) { dmax = Math.max(dmax, Math.abs(disp === "mz" ? q.Mz : disp === "my" ? q.My : q.N)); }); });
+    var ds = dmax > 0 ? 0.06 * span / dmax : 0;
+    if (dg && ds) m.frames.forEach(function (e, k) {
+      var ff = st.fr(k), R = ff.R, A = m.nodes[e.n1], dir = disp === "my" ? R[2] : R[1];
+      var pts = [[A.x, A.y, A.z]].concat(dd[k].map(function (q) { var val = disp === "mz" ? -q.Mz : disp === "my" ? q.My : q.N, t = q.x; return [A.x + R[0][0] * t + dir[0] * val * ds, A.y + R[0][1] * t + dir[1] * val * ds, A.z + R[0][2] * t + dir[2] * val * ds]; }), [[A.x + R[0][0] * ff.L, A.y + R[0][1] * ff.L, A.z + R[0][2] * ff.L]]);
+      diag.push(pts);
+    });
+    var lh = "";
+    if (cont) lh = '<span class="cbar"></span> ' + f(vmin, 2) + ' … ' + f(vmax, 2) + (disp === "uz" ? " mm (Z)" : " kNm/m (sagging +, local axes)");
+    else if (dg) lh = "Max |" + (disp === "n" ? "N" : disp === "mz" ? "Mz" : "My") + "| = " + f(dmax, 1) + (disp === "n" ? " kN" : " kNm") + (disp === "mz" ? " — drawn on tension side" : "");
+    else if ((disp === "def" || disp === "hinge") && sc) { var mxu = 0, mi = 0; for (i = 0; i < m.nodes.length; i++) { var uu = Math.hypot(U[6 * i], U[6 * i + 1], U[6 * i + 2]); if (uu > mxu) { mxu = uu; mi = i; } } lh = "Max displacement " + f(mxu * 1000, 2) + " mm at node " + (mi + 1) + " (scale ×" + f(sc, 0) + ")"; }
+    if (disp === "hinge") lh += '<br><b style="color:#1e8e4a">●</b> B–IO <b style="color:#2b7bd6">●</b> IO–LS <b style="color:#e0a020">●</b> LS–CP <b style="color:#c62828">●</b> &gt;CP <b style="color:#7a5bbf">●</b> brace';
+    if (disp === "util") lh = '<b style="color:#1e8e4a">■</b> OK <b style="color:#e0a020">■</b> ratio &gt; 0.85 <b style="color:#c62828">■</b> fails' + (S.des ? "" : " (run linear analysis first)");
+    var lg = $("leg"); if (lg) lg.innerHTML = lh;
+    return { key: key, m: m, span: span, c0: c0, Pw: Pw, shFill: shFill, stroke: stroke, frCol: frCol, frW: frW, diag: diag, dark: dark, gl: null };
+  }
+  function glScene(sc) {
+    if (sc.gl) return sc.gl;
+    var m = sc.m, Pw = sc.Pw, tri = [], lines = [], stc = GLV.rgba(sc.stroke);
+    function p(i) { return [Pw[3 * i], Pw[3 * i + 1], Pw[3 * i + 2]]; }
+    m.shells.forEach(function (e, k) {
+      var c = GLV.rgba(sc.shFill[k]), q = e.n.map(p);
+      tri.push({ p: [q[0], q[1], q[2]], c: c }, { p: [q[0], q[2], q[3]], c: c });
+      for (var j = 0; j < 4; j++) lines.push({ a: q[j], b: q[(j + 1) % 4], c: stc, w: 0.6 });
+    });
+    m.frames.forEach(function (e, k) { lines.push({ a: p(e.n1), b: p(e.n2), c: GLV.rgba(sc.frCol[k]), w: sc.frW[k] }); });
+    sc.gl = { tri: tri, lines: lines, c0: sc.c0 };
+    return sc.gl;
+  }
+  function paint() {
+    var cv = $("cv"); if (!cv || !S.m) return;
+    var W = cv.clientWidth || 340, H = Math.round(Math.min(560, Math.max(300, W * 0.8))), dpr = HW.dpr();
+    var dark = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
+    var m = S.m, v = S.view, cy = Math.cos(v.yaw), sy = Math.sin(v.yaw), cp = Math.cos(v.pitch), sp = Math.sin(v.pitch);
+    var key = [S.state, S.disp, S.sel ? S.sel.t + S.sel.k : "", dark ? 1 : 0, S.res ? S.res.ms : 0, S.po ? S.po.U.length + ":" + S.po.hinges.length : 0, S.des ? S.des.fails : -1, m.nodes.length, m.frames.length, m.shells.length].join("|");
+    if (!SCN || SCN.key !== key || SCN.m !== m) SCN = scene(key, dark);
+    var span = SCN.span, c0 = SCN.c0, s = Math.min(W, H) * 0.8 / span * v.zoom, Pw = SCN.Pw;
+    function pr(x, y, z) {
+      var X = x - c0[0], Y = y - c0[1], Z = z - c0[2];
+      var a = X * cy + Y * sy, b = -X * sy + Y * cy;
+      return [W / 2 + v.px + a * s, H / 2 + v.py - (Z * cp - b * sp) * s, Z * sp + b * cp];
+    }
+    function P(i) { return pr(Pw[3 * i], Pw[3 * i + 1], Pw[3 * i + 2]); }
+    PRJ = { pr: pr, P: P };
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.height = H + "px"; }
+    var g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var bgc = dark ? "#0f1620" : "#fbfcfe", gcv = $("cvgl"), usedGL = false;
+    if (gcv && HW.useGL && !VW.noGL) {
+      if (gcv.width !== Math.round(W * dpr) || gcv.height !== Math.round(H * dpr)) { gcv.width = Math.round(W * dpr); gcv.height = Math.round(H * dpr); gcv.style.height = H + "px"; }
+      if (!GLC || GLC.canvas !== gcv) { GLC = GLV.init(gcv); if (GLC) GLC.canvas = gcv; else VW.noGL = true; }
+      if (GLC) {
+        try {
+          if (GLC.scn !== SCN) { GLV.upload(GLC, glScene(SCN)); GLC.scn = SCN; }
+          var bg = GLV.rgba(bgc);
+          usedGL = GLV.draw(GLC, { cy: cy, sy: sy, cp: cp, sp: sp, s: s, px: v.px, py: v.py, W: W, H: H, span: span, dpr: dpr, bg: [bg[0] / 255, bg[1] / 255, bg[2] / 255] });
+        } catch (e) { VW.noGL = true; usedGL = false; }
+      }
+    }
+    if (gcv) gcv.style.display = usedGL ? "block" : "none";
+    if (usedGL) g.clearRect(0, 0, W, H);
+    else {
+      g.fillStyle = bgc; g.fillRect(0, 0, W, H);
+      var polys = m.shells.map(function (e, k) { var q = e.n.map(P); return { q: q, d: (q[0][2] + q[1][2] + q[2][2] + q[3][2]) / 4, k: k }; }).sort(function (a, b) { return a.d - b.d; });
+      polys.forEach(function (p) {
+        g.beginPath(); p.q.forEach(function (q, i) { i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); }); g.closePath();
+        g.fillStyle = SCN.shFill[p.k]; g.fill(); g.strokeStyle = SCN.stroke; g.lineWidth = 0.6; g.stroke();
+      });
+      m.frames.forEach(function (e, k) { var a = P(e.n1), b = P(e.n2); g.strokeStyle = SCN.frCol[k]; g.lineWidth = SCN.frW[k]; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); });
+    }
+    /* overlay: force diagrams, hinges, supports, selection, axes */
+    if (SCN.diag.length) {
+      g.fillStyle = "rgba(29,53,87,.16)"; g.strokeStyle = dark ? "#7fb0e8" : "#1d3557"; g.lineWidth = 1;
+      SCN.diag.forEach(function (pts) { g.beginPath(); pts.forEach(function (w, i) { var q = pr(w[0], w[1], w[2]); i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); }); g.closePath(); g.fill(); g.stroke(); });
+    }
+    if (S.disp === "hinge" && S.po) {
       var colr = { "Elastic": "#9e9e9e", "B-IO": "#1e8e4a", "IO-LS": "#2b7bd6", "LS-CP": "#e0a020", "> CP": "#c62828", "Axial yield/buckle": "#7a5bbf" };
       S.po.hinges.forEach(function (h) {
         var e = m.frames[h.k], a = P(e.n1), b = P(e.n2), t = h.end === "i" ? 0.12 : 0.88, x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t;
@@ -456,20 +539,11 @@ var SU = (function () {
         g.beginPath(); g.arc(x, y, 4.5, 0, 6.3); g.fillStyle = colr[h.state] || "#c62828"; g.fill(); g.strokeStyle = "#fff"; g.lineWidth = 1; g.stroke();
       });
     }
-    /* supports */
     Object.keys(m.sup).forEach(function (i) { var q = P(+i), fx = m.sup[i][3]; g.fillStyle = fx ? "#2e7d32" : "#8d6e63"; g.beginPath(); g.moveTo(q[0], q[1]); g.lineTo(q[0] - 6, q[1] + 9); g.lineTo(q[0] + 6, q[1] + 9); g.closePath(); g.fill(); });
     if (S.sel && S.sel.t === "s") { var e2 = m.shells[S.sel.k]; g.beginPath(); e2.n.map(P).forEach(function (q, i) { i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); }); g.closePath(); g.strokeStyle = "#00a3ff"; g.lineWidth = 3; g.stroke(); }
-    /* axes */
     var o = [34, H - 30], ax = [[1, 0, 0, "X", "#c62828"], [0, 1, 0, "Y", "#2e7d32"], [0, 0, 1, "Z", "#1565c0"]];
-    ax.forEach(function (a) { var p0 = pr(c0[0], c0[1], c0[2]), p1 = pr(c0[0] + a[0] * span / s * 22, c0[1] + a[1] * span / s * 22, c0[2] + a[2] * span / s * 22); var dx = (p1[0] - p0[0]) / span * s / 1, dy = (p1[1] - p0[1]) / span * s; dx = (p1[0] - p0[0]); dy = (p1[1] - p0[1]); var l = Math.hypot(dx, dy) || 1; if (m.twoD && a[3] === "Y") return; g.strokeStyle = a[4]; g.lineWidth = 2; g.beginPath(); g.moveTo(o[0], o[1]); g.lineTo(o[0] + dx / l * 22 * Math.min(1, l / 22), o[1] + dy / l * 22 * Math.min(1, l / 22)); g.stroke(); g.fillStyle = a[4]; g.font = "11px sans-serif"; g.fillText(a[3], o[0] + dx / l * 27, o[1] + dy / l * 27 + 4); });
-    /* legend */
-    var lg = $("leg"), lh = "";
-    if (cont) lh = '<span class="cbar"></span> ' + f(vmin, 2) + ' … ' + f(vmax, 2) + (disp === "uz" ? " mm (Z)" : " kNm/m (sagging +, local axes)");
-    else if (dg) lh = "Max |" + (disp === "n" ? "N" : disp === "mz" ? "Mz" : "My") + "| = " + f(dmax, 1) + (disp === "n" ? " kN" : " kNm") + (disp === "mz" ? " — drawn on tension side" : "");
-    else if ((disp === "def" || disp === "hinge") && sc) { var mxu = 0, mi = 0; for (i = 0; i < m.nodes.length; i++) { var uu = Math.hypot(U[6 * i], U[6 * i + 1], U[6 * i + 2]); if (uu > mxu) { mxu = uu; mi = i; } } lh = "Max displacement " + f(mxu * 1000, 2) + " mm at node " + (mi + 1) + " (scale ×" + f(sc, 0) + ")"; }
-    if (disp === "hinge") lh += '<br><b style="color:#1e8e4a">●</b> B–IO <b style="color:#2b7bd6">●</b> IO–LS <b style="color:#e0a020">●</b> LS–CP <b style="color:#c62828">●</b> &gt;CP <b style="color:#7a5bbf">●</b> brace';
-    if (disp === "util") lh = '<b style="color:#1e8e4a">■</b> OK <b style="color:#e0a020">■</b> ratio &gt; 0.85 <b style="color:#c62828">■</b> fails' + (S.des ? "" : " (run linear analysis first)");
-    lg.innerHTML = lh;
+    ax.forEach(function (a) { var p0 = pr(c0[0], c0[1], c0[2]), p1 = pr(c0[0] + a[0] * span / s * 22, c0[1] + a[1] * span / s * 22, c0[2] + a[2] * span / s * 22); var dx = p1[0] - p0[0], dy = p1[1] - p0[1], l = Math.hypot(dx, dy) || 1; if (m.twoD && a[3] === "Y") return; g.strokeStyle = a[4]; g.lineWidth = 2; g.beginPath(); g.moveTo(o[0], o[1]); g.lineTo(o[0] + dx / l * 22 * Math.min(1, l / 22), o[1] + dy / l * 22 * Math.min(1, l / 22)); g.stroke(); g.fillStyle = a[4]; g.font = "11px sans-serif"; g.fillText(a[3], o[0] + dx / l * 27, o[1] + dy / l * 27 + 4); });
+    var gb = $("glbadge"); if (gb) gb.textContent = usedGL ? "GPU" : "";
   }
   function cmap(v, a, b) {
     var t = b > a ? (v - a) / (b - a) : 0.5, st = [[0, [33, 102, 172]], [0.25, [103, 169, 207]], [0.5, [209, 229, 240]], [0.75, [244, 165, 130]], [1, [178, 24, 43]]];

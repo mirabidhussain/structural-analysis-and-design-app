@@ -211,7 +211,31 @@ FE.shellElem = function (m, e) {
 };
 
 /* ================= MODEL / ASSEMBLY ================= */
+/* stiffness signature: geometry, supports, sections, releases, shells — reuse numbering and the factorised K while it is unchanged */
+FE.sig = function (m) {
+  var h1 = 2166136261, h2 = 5381, cnt = 0;
+  function add(x) { var v = typeof x === "number" ? (x * 1e6) | 0 : String(x).length * 7919 + (String(x).charCodeAt(0) || 0); h1 = Math.imul(h1 ^ v, 16777619); h2 = (Math.imul(h2, 33) + v) | 0; cnt++; }
+  function addS(o) { if (!o) return add(0); for (var k in o) { var v = o[k]; if (typeof v === "number") add(v); else if (typeof v === "boolean") add(v ? 1 : 0); else if (typeof v === "string") { add(v.length); for (var i = 0; i < v.length; i++) add(v.charCodeAt(i)); } } }
+  add(m.nodes.length); add(m.frames.length); add(m.shells.length); add(m.twoD ? 1 : 0);
+  m.nodes.forEach(function (n) { add(n.x); add(n.y); add(n.z); });
+  Object.keys(m.sup || {}).forEach(function (k) { add(+k); (m.sup[k] || []).forEach(function (x) { add(x ? 1 : 0); }); });
+  m.frames.forEach(function (e) { add(e.n1); add(e.n2); add(e.pinned ? 1 : 0); add(e.type || ""); addS(e.sec); if (e.rel) e.rel.forEach(function (x) { add(x ? 1 : 0); }); });
+  m.shells.forEach(function (e) { e.n.forEach(add); add(e.t); addS(e.mat); });
+  return (h1 >>> 0).toString(36) + "." + (h2 >>> 0).toString(36) + "." + cnt;
+};
+/* factorised elastic stiffness (no geometric stiffness), shared by the linear analysis, rigidity centres and modal analysis */
+FE.factored = function (m) {
+  FE.prepare(m);
+  if (m._LDL && m._LDL.sig === m._kSig && m._LDL.A.length === m._maxa[m._neq]) return m._LDL.A;
+  var A = FE.assemble(m, null).A, bad = FE.factor(A, m._maxa, m._neq);
+  if (bad >= 0) { var er = new Error("Structure is unstable (mechanism or missing support) at " + FE.dofName(m, bad) + ". Check supports, member releases and that every part of the model is connected."); er.dof = bad; throw er; }
+  m._LDL = { sig: m._kSig, A: A };
+  return A;
+};
 FE.prepare = function (m) {
+  var sg = FE.sig(m);
+  if (m._kSig === sg && m._eq && m._prepInfo) return m._prepInfo;
+  m._LDL = null;
   var n = m.nodes.length, adj = []; for (var i = 0; i < n; i++) adj.push([]);
   function link(list) { for (var a = 0; a < list.length; a++) for (var b = 0; b < list.length; b++) if (a !== b) adj[list[a]].push(list[b]); }
   m.frames.forEach(function (e) { link([e.n1, e.n2]); }); m.shells.forEach(function (e, k) { e.id = k; link(e.n); });
@@ -254,7 +278,8 @@ FE.prepare = function (m) {
   var maxa = new Int32Array(neq + 1); maxa[0] = 0;
   for (i = 0; i < neq; i++) maxa[i + 1] = maxa[i] + (i - minRow[i]) + 1;
   m._eq = eq2; m._neq = neq; m._maxa = maxa; m._elDofs = elDofs; m._skyShell = null; m._shellCache = [];
-  return { neq: neq, size: maxa[neq] };
+  m._kSig = sg; m._prepInfo = { neq: neq, size: maxa[neq] };
+  return m._prepInfo;
 };
 FE.newSky = function (m) { return new Float64Array(m._maxa[m._neq]); };
 FE.addSky = function (m, A, dofs, K) {
@@ -294,6 +319,31 @@ FE.backsub = function (A, maxa, nn, V) {
   return V;
 };
 
+/* back-substitution for many right-hand sides at once: each row of the factor is read once for all vectors
+   (memory bound on phones — several times faster than one vector at a time). Vs: array of Float64Array, solved in place */
+FE.backsubMany = function (A, maxa, nn, Vs) {
+  var nv = Vs.length; if (!nv) return Vs;
+  if (nv === 1) { FE.backsub(A, maxa, nn, Vs[0]); return Vs; }
+  var B = new Float64Array(nn * nv), n, r, kl, ku, k, kk, a, o, o2, acc = new Float64Array(nv);
+  for (r = 0; r < nv; r++) { var v = Vs[r]; for (n = 0; n < nn; n++) B[n * nv + r] = v[n]; }
+  for (n = 0; n < nn; n++) {
+    kl = maxa[n] + 1; ku = maxa[n + 1] - 1; if (ku < kl) continue;
+    acc.fill(0); k = n;
+    for (kk = kl; kk <= ku; kk++) { k--; a = A[kk]; if (a === 0) continue; o = k * nv; for (r = 0; r < nv; r++) acc[r] += a * B[o + r]; }
+    o = n * nv; for (r = 0; r < nv; r++) B[o + r] -= acc[r];
+  }
+  for (n = 0; n < nn; n++) { a = 1 / A[maxa[n]]; o = n * nv; for (r = 0; r < nv; r++) B[o + r] *= a; }
+  for (n = nn - 1; n > 0; n--) {
+    kl = maxa[n] + 1; ku = maxa[n + 1] - 1; if (ku < kl) continue;
+    k = n; o2 = n * nv;
+    for (kk = kl; kk <= ku; kk++) { k--; a = A[kk]; if (a === 0) continue; o = k * nv; for (r = 0; r < nv; r++) B[o + r] -= a * B[o2 + r]; }
+  }
+  for (r = 0; r < nv; r++) { var w = Vs[r]; for (n = 0; n < nn; n++) w[n] = B[n * nv + r]; }
+  return Vs;
+};
+/* global stiffness of a shell (cached with the element) */
+FE.shellKg = function (d) { return d.Kg || (d.Kg = FE.rotate(d.R, 8, d.K)); };
+
 /* assemble global K (+ geometric stiffness from axial forces Nfr[], optional) */
 FE.assemble = function (m, Nfr) {
   var A, cache = { fr: [], sh: [] };
@@ -303,7 +353,7 @@ FE.assemble = function (m, Nfr) {
     m.shells.forEach(function (e, k) {
       var d = FE.shellElem(m, e);
       cache.sh[k] = d;
-      FE.addSky(m, A, m._elDofs(e.n), FE.rotate(d.R, 8, d.K));
+      FE.addSky(m, A, m._elDofs(e.n), FE.shellKg(d));
     });
     m._shellCache = cache.sh; m._skyShell = Float64Array.from(A);
   }
@@ -472,9 +522,7 @@ FE.linear = function (m, cases, combos, opt) {
   if (qc.errors.length) throw new Error("Model check failed:\n• " + qc.errors.slice(0, 8).join("\n• ") + (qc.errors.length > 8 ? "\n… " + (qc.errors.length - 8) + " more" : ""));
   var info = FE.prepare(m);
   var res = { info: info, cases: {}, combos: [], quality: qc, warn: qc.warnings.slice() };
-  var asm = FE.assemble(m, null), A = asm.A;
-  var bad = FE.factor(A, m._maxa, m._neq);
-  if (bad >= 0) throw new Error("Structure is unstable (mechanism or missing support) at " + FE.dofName(m, bad) + ". Check supports, member releases and that every part of the model is connected.");
+  var A = FE.factored(m);
   Object.keys(cases).forEach(function (cn) {
     var lv = FE.loadVector(m, cases[cn], null), x = FE.backsub(A, m._maxa, m._neq, Float64Array.from(lv.F));
     res.cases[cn] = { U: FE.expand(m, x), lv: lv };
@@ -522,7 +570,7 @@ FE.linear = function (m, cases, combos, opt) {
     fr.forEach(function (ff, k) { var e = m.frames[k], ku = ff.f.map(function (v, i) { return v + (ff.d.rel.indexOf(i) >= 0 ? 0 : ff.d.q[i]); }), g = FE.toGlobal(ff.R, 4, ku); [e.n1, e.n2].forEach(function (v, s) { for (var t = 0; t < 6; t++) Rr[6 * v + t] += g[6 * s + t]; }); });   /* element K u */
     m.shells.forEach(function (e, k) {
       var d = m._shellCache[k], ug = []; e.n.forEach(function (v) { for (var t = 0; t < 6; t++) ug.push(U[6 * v + t]); });
-      var fg = FE.mv(FE.rotate(d.R, 8, d.K), ug); e.n.forEach(function (v, s) { for (var t = 0; t < 6; t++) Rr[6 * v + t] += fg[6 * s + t]; });
+      var fg = FE.mv(FE.shellKg(d), ug); e.n.forEach(function (v, s) { for (var t = 0; t < 6; t++) Rr[6 * v + t] += fg[6 * s + t]; });
     });
     var Fn = new Float64Array(6 * m.nodes.length);
     lcs.forEach(function (p) { var c = res.cases[p[0]].lv.Ffull; for (var i = 0; i < Fn.length; i++) Fn[i] += p[1] * c[i]; });

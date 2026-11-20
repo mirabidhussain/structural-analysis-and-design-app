@@ -4,7 +4,9 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.widget.Toast;
@@ -38,6 +40,13 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);          // saved inputs (localStorage)
         s.setAllowFileAccess(true);
         s.setTextZoom(100);
+        // background analysis workers read the engine scripts from the app's own assets
+        s.setAllowFileAccessFromFileURLs(true);
+        // smooth scrolling and GPU drawing: hardware layer, pre-rasterise off-screen content, keep the renderer at high priority
+        web.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        if (Build.VERSION.SDK_INT >= 23) s.setOffscreenPreRaster(true);
+        if (Build.VERSION.SDK_INT >= 26) web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
+        s.setCacheMode(WebSettings.LOAD_DEFAULT);
         web.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView v, String url) { deliverOpen(); }
         });

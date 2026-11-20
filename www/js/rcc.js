@@ -261,19 +261,19 @@ RCC.slab2 = function (p) {
 /* ------------------------------------------------------------ COLUMN (strain compatibility) */
 /* section capacity: bars as layers [{y (from top), As}], returns {P (kN), M (kNm)} for neutral axis xu (mm) */
 RCC.colPM = function (b, Dd, layers, xu, fck, fy) {
-  var n = 60, h = Dd / n, P = 0, M = 0, yc = Dd / 2;
-  var epsAt;
-  if (xu <= Dd) epsAt = function (y) { return 0.0035 * (xu - y) / xu; };
-  else epsAt = function (y) { return 0.002 * (xu - y) / (xu - 3 * Dd / 7); };
-  for (var i = 0; i < n; i++) {
-    var y = (i + 0.5) * h, s = RCC.fc(epsAt(y), fck), F = s * b * h;
-    P += F; M += F * (yc - y);
+  /* same arithmetic as the stress-block integration of IS 456 cl 38.1 / 39.1, written without per-call closures (hot loop) */
+  var n = 60, h = Dd / n, P = 0, M = 0, yc = Dd / 2, deep = xu > Dd, k0 = deep ? 0.002 : 0.0035, den = deep ? xu - 3 * Dd / 7 : xu, fmax = 0.446 * fck, i, y, e, s, r, F;
+  for (i = 0; i < n; i++) {
+    y = (i + 0.5) * h; e = k0 * (xu - y) / den;
+    if (e <= 0) s = 0; else if (e >= 0.002) s = fmax; else { r = e / 0.002; s = fmax * (2 * r - r * r); }
+    F = s * b * h; P += F; M += F * (yc - y);
   }
-  layers.forEach(function (L) {
-    var e = epsAt(L.y), fs = RCC.fs(e, fy), fcon = RCC.fc(e, fck);
-    var F = (fs - (e > 0 ? fcon : 0)) * L.As;
-    P += F; M += F * (yc - L.y);
-  });
+  for (i = 0; i < layers.length; i++) {
+    var L = layers[i]; e = k0 * (xu - L.y) / den;
+    var fsv = RCC.fs(e, fy), fcon;
+    if (e <= 0) fcon = 0; else if (e >= 0.002) fcon = fmax; else { r = e / 0.002; fcon = fmax * (2 * r - r * r); }
+    F = (fsv - (e > 0 ? fcon : 0)) * L.As; P += F; M += F * (yc - L.y);
+  }
   return { P: P / 1e3, M: M / 1e6 };
 };
 RCC.colLayers = function (Dd, dc, As, arr) {
@@ -284,7 +284,14 @@ RCC.colLayers = function (Dd, dc, As, arr) {
   return L;
 };
 /* moment capacity at axial load Pu (kN) */
+RCC._mcap = new Map();
 RCC.colMcap = function (b, Dd, As, Pu, fck, fy, dc, arr) {
+  var key = b + "|" + Dd + "|" + As + "|" + Pu + "|" + fck + "|" + fy + "|" + dc + "|" + arr, hit = RCC._mcap.get(key);
+  if (hit !== undefined) return hit;
+  if (RCC._mcap.size > 50000) RCC._mcap.clear();
+  var v = RCC._colMcap(b, Dd, As, Pu, fck, fy, dc, arr); RCC._mcap.set(key, v); return v;
+};
+RCC._colMcap = function (b, Dd, As, Pu, fck, fy, dc, arr) {
   var lay = RCC.colLayers(Dd, dc, As, arr);
   var lo = 0.01 * Dd, hi = 50 * Dd;
   var Pmax = RCC.colPM(b, Dd, lay, hi, fck, fy).P;

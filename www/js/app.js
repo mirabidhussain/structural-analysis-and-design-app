@@ -314,7 +314,20 @@
       var fe = form.querySelector('.fld[data-fk="' + hardI[0].k + '"]'); if (fe && !quiet) fe.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    try { r = m.fn(read(m, form)); } catch (err) { out.innerHTML = '<div class="err">Could not calculate: ' + esc(err.message) + '</div>'; return; }
+    var pIn = read(m, form), heavy = /^(pile|raft)$/.test(m.id) || (m.id === "truss" && pIn.src === "dxf");
+    if (heavy && bgOn()) {
+      out.innerHTML = '<section class="repbusy"><div class="busy"><i></i>Calculating on a background core…</div></section>';
+      PAR.tried = true;
+      PAR.job("call", { fn: "MODS." + m.id, args: [pIn] }).then(function (rr) { Object.setPrototypeOf(rr, Rep.prototype); show(rr); }, function (e) {
+        if (!PAR.ok()) { BG.off = true; return run(m, form, quiet); }
+        out.innerHTML = '<div class="err">Could not calculate: ' + esc(e.message) + '</div>';
+      });
+      return;
+    }
+    try { r = m.fn(pIn); } catch (err) { out.innerHTML = '<div class="err">Could not calculate: ' + esc(err.message) + '</div>'; return; }
+    show(r);
+    function show(r) {
+    if (!out.isConnected || !form.isConnected) return;   /* the user moved on while a background calculation was running */
     var pp = read(m, form);
     out.innerHTML = render(r); out.__rep = r;
     if (pp.__defaults.length) out.querySelector(".rh").insertAdjacentHTML("afterend", '<div class="note">Blank inputs taken at default: ' + esc(pp.__defaults.join(" · ")) + '</div>');
@@ -340,7 +353,10 @@
     } catch (e) {}
     document.getElementById("xls").onclick = function () { toast("Preparing Excel…"); RX.save(RX.fromRep(r, m, read(m, form)), m.id + "-design.xlsx", function (ok) { if (!ok) toast("Excel export not available here"); }); };
     if (!quiet) out.scrollIntoView({ behavior: "smooth" });
+    }
   }
+  var BG = { off: false };
+  function bgOn() { return typeof PAR !== "undefined" && !BG.off && (PAR.ok() || !PAR.tried); }
 
   function unitSeg() { var c = UN.sys(); return '<span class="seg useg" role="group" aria-label="Units">' + ["si", "mks", "fps"].map(function (s) { return '<button type="button" data-u="' + s + '"' + (s === c ? ' class="on"' : '') + '>' + UN.SYS[s].short + '</button>'; }).join("") + '</span>'; }
   function bindUnitSeg(root, after) { root.querySelectorAll(".useg button").forEach(function (b) { b.onclick = function () { var s = b.getAttribute("data-u"); if (s === UN.sys()) return; if (after) after(s, true); UN.set(s); if (after) after(s); toast("Input units: " + UN.SYS[s].name); }; }); }
@@ -463,7 +479,22 @@
     setTimeout(function () {
       var box = document.getElementById("fixbox"); if (!box) return;
       var q = Object.assign({}, p); delete q.__defaults;
-      var fx = LIM.fixes(m.id, q, function (z) { return m.fn(Object.assign({ __defaults: [] }, z)); }, { budget: /pile|raft/.test(m.id) ? 30 : 140 });
+      var bud = /pile|raft/.test(m.id) ? 30 : 140, nl = LIM.nLevers(m.id, q);
+      if (bgOn() && MODS[m.id] && nl > 1) {
+        PAR.tried = true;
+        var k = Math.min(HW.workers, nl), shards = []; for (var si = 0; si < k; si++) shards.push([]);
+        for (var li = 0; li < nl; li++) shards[li % k].push(li);
+        Promise.all(shards.map(function (sh) { return PAR.job("fixes", { id: m.id, p: q, fn: "MODS." + m.id, opt: { budget: bud, only: sh, noPairs: true, max: 8 } }); })).then(function (parts) {
+          var list = [].concat.apply([], parts.map(function (x) { return x.list; })).sort(function (a, b) { return a.rank - b.rank; });
+          if (list.length) return { list: list.slice(0, 4) };
+          return PAR.job("fixes", { id: m.id, p: q, fn: "MODS." + m.id, opt: { budget: bud } });
+        }).then(function (fx) { showFixes(fx); }, function () { showFixes(LIM.fixes(m.id, q, function (z) { return m.fn(Object.assign({ __defaults: [] }, z)); }, { budget: bud })); });
+        return;
+      }
+      showFixes(LIM.fixes(m.id, q, function (z) { return m.fn(Object.assign({ __defaults: [] }, z)); }, { budget: bud }));
+    }, 30);
+    function showFixes(fx) {
+      var box = document.getElementById("fixbox"); if (!box) return;
       var fails = (out.__rep && out.__rep.checks || []).filter(function (c) { return !c.ok; }).map(function (c) { return c.l; });
       var h = '<b>' + IC.svg("bulb") + ' How to make it pass</b>' + (fails.length ? '<small>Failing: ' + esc(fails.join(" · ")) + '</small>' : '');
       if (fx.list.length) h += fx.list.map(function (s, i) { return '<div class="fx"><span>' + esc(s.text) + '</span><button type="button" data-i="' + i + '">Apply</button></div>'; }).join("") + '<small>Each option makes every check pass on its own; the first is the smallest change. Apply fills the input and recalculates.</small>';
@@ -474,7 +505,7 @@
         Object.keys(set).forEach(function (k) { var el = form.elements[k], v = set[k], f = m.f[k]; if (!el) return; if (f && f.type === "number") { var sh = UN.show(v, f.unit); el.value = sh; el.setAttribute("data-si", v); el.setAttribute("data-shown", sh); } else el.value = v === true ? "1" : v === false ? "" : String(v); });
         run(m, form); toast("Applied: " + fx.list[+b.getAttribute("data-i")].text);
       }; });
-    }, 30);
+    }
   }
   /* utilisation from a check's text "a ≤ b …" or "a ≥ b" (the limit is the value after "=" if present) */
   function util(d) {
@@ -565,6 +596,7 @@
   function about() {
     title.textContent = "About & scope"; back.hidden = false;
     app.innerHTML = '<div class="rep"><h4>IS StructDesign — engine ' + (window.REG ? REG.ENGINE : "") + '</h4><p>Analysis, design, detailing and documentation of buildings to Indian Standards. Works offline; projects are stored on this device.</p>' +
+      '<h4>This device</h4><p id="hwinfo">' + esc(typeof HW !== "undefined" ? HW.summary() : "") + '</p><p class="note">Long analyses run on background CPU cores (the screen stays responsive and can cancel), independent jobs such as fix searches and pile / raft designs run on several cores at once, and the 3D viewer draws with the GPU. Results are identical on every device.</p>' +
       '<h4>What it does</h4><ul><li>Frame & shell FE analysis: linear static, P-Delta, modal and response spectrum (IS 1893:2016), accidental torsion, pushover</li>' +
       '<li>Design: IS 456 (limit state or working stress), IS 800, with worked calculations</li><li>Loads & durability: snow (IS 875 Pt 4), pattern imposed load, imposed-load reduction, covers for exposure and fire (IS 456 Table 16/16A)</li><li>Automatic design & detailing: storey-wise enlargement until every check passes</li>' +
       '<li>Detailing: IS 13920 beams, columns, joints, strong column–weak beam, shear walls, slabs, isolated footings; bar bending schedule (IS 2502)</li><li>Mat (raft) foundations: plate on compression-only soil springs, punching, one-way shear, flexure, settlement (IS 2950, IS 456, IS 1904)</li>' +
@@ -598,4 +630,9 @@
   window.addEventListener("hashchange", route);
   window.ISD = { modules: M, route: route, store: store };
   if (window.PDB) PDB.init().then(route, route); else route();
+  if (typeof HW !== "undefined") {
+    HW.apply();
+    var warm = function () { try { PAR.warm(); } catch (e) {} };
+    if (window.requestIdleCallback) requestIdleCallback(warm, { timeout: 4000 }); else setTimeout(warm, 1500);
+  }
 })();

@@ -219,7 +219,7 @@ MD.cases = function (m, p) {
     cases.LP1 = LP1; cases.LP2 = LP2;
   }
   /* seismic weights (IS 1893 cl 7.3): DL + 25%/50% of imposed, roof imposed excluded */
-  var info = FE.prepare(m); m._shellCache = [];
+  var info = FE.prepare(m);
   var fd = FE.loadVector(m, DL, null).Ffull, fl = FE.loadVector(m, LL, null).Ffull, W = [], Wt = 0;
   var llf = p.ll > 3 ? 0.5 : 0.25;
   var sw = snow && p.snowW > 0 ? p.snowW / 100 * snow / Math.max(llR, 1e-9) : 0;   /* share of snow in the seismic weight (roof imposed otherwise excluded, IS 1893 cl 7.3) */

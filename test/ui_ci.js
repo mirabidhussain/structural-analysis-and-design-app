@@ -7,7 +7,7 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   const b = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ['--no-sandbox'] });
   const ctx = await b.newContext({ acceptDownloads: true, viewport: { width: 390, height: 844 } });
   const pg = await ctx.newPage();
-  const errs = []; pg.on('pageerror', e => errs.push(e.message)); pg.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
+  const errs = []; pg.on('pageerror', e => errs.push(e.message + ' @ ' + String(e.stack || '').split('\n').slice(1, 3).join(' '))); pg.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
   await pg.goto('file://' + __dirname + '/../dist/index.html');
   await pg.evaluate(() => localStorage.clear());
   const ids = await pg.evaluate(() => ISD.modules.map(m => m.id));
@@ -201,6 +201,16 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   await pg.click('#bAuto'); await pg.waitForSelector('#results .rep.pro', { timeout: 240000 });
   const au = await pg.evaluate(() => ({ t: document.querySelector('.rep.pro .vbox b').textContent, rules: document.querySelector('[data-k=secOver]') ? document.querySelector('[data-k=secOver]').value : '' }));
   ok('Automatic design converges in the browser and writes section rules', /converged/.test(au.t) && /columns storey 1 = 500x500/.test(au.rules), au.t);
+  /* performance: background workers, cancel, GPU viewer, device info */
+  await pg.waitForFunction(() => window.PAR && PAR.ok(), null, { timeout: 20000 }).catch(() => {});
+  await pg.evaluate(() => { HW.useGL = true; location.hash = '#model'; }); await pg.waitForSelector('#bAna');
+  await pg.click('#bAna'); await pg.waitForSelector('#bCancel', { timeout: 10000 }); await pg.click('#bCancel'); await pg.waitForTimeout(300);
+  const canc = await pg.evaluate(() => /cancelled/.test(document.getElementById('results').textContent));
+  await pg.click('#bAna'); await pg.waitForSelector('#results .rh', { timeout: 120000 }); await pg.waitForTimeout(400);
+  const wk = await pg.evaluate(() => { const S = SU.state(), T = PIPE.run(S.geo, S.p), f = X => JSON.stringify([X.des.fails, Math.round(X.boq.abs.total), X.res.combos.length, X.res.combos.map(c => Array.from(c.U).reduce((a, v) => Math.max(a, Math.abs(v)), 0).toPrecision(12)).join()]); return { ok: PAR.ok(), same: f(S) === f(T), gpu: document.getElementById('glbadge').textContent, gl: getComputedStyle(document.getElementById('cvgl')).display }; });
+  ok('Analysis runs on a background core (cancel works) and gives results identical to the main thread; GPU draws the model', canc && wk.ok && wk.same && wk.gpu === 'GPU' && wk.gl === 'block', JSON.stringify(wk));
+  await pg.evaluate(() => { location.hash = '#about'; }); await pg.waitForSelector('#hwinfo');
+  ok('About shows the device: CPU cores, memory, GPU, tier and background workers', await pg.evaluate(() => /CPU cores/.test(document.getElementById('hwinfo').textContent) && /background worker/.test(document.getElementById('hwinfo').textContent)));
   ok('No JavaScript errors', errs.length === 0, errs.slice(0, 3).join(' | '));
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);

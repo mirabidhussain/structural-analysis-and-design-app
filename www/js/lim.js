@@ -189,6 +189,7 @@ var LIM = (function () {
     return "Increase " + l.label.charAt(0).toLowerCase() + l.label.slice(1) + " to " + v + (l.unit ? " " + l.unit : "");
   }
   /* run(p) → report; returns [{text, set: {k: v}, fails}] ranked by size of change */
+  L.nLevers = function (id, p) { return levers(id, p).length; };
   L.fixes = function (id, p, run, opt) {
     opt = opt || {};
     var budget = opt.budget || 120, n = 0, res = [];
@@ -197,14 +198,15 @@ var LIM = (function () {
       if (L.check(id, q).some(function (x) { return x.hard; })) return null;
       try { var r = run(q); return r && r.ok() ? r : null; } catch (e) { return null; }
     }
-    var Lv = levers(id, p);
-    Lv.forEach(function (l) {
+    var Lv = levers(id, p), only = opt.only;
+    Lv.forEach(function (l, li) {
+      if (only && only.indexOf(li) < 0) return;
       for (var i = 0; i < l.vals.length; i++) {
         var q = Object.assign({}, p); q[l.k] = l.vals[i];
         if (test(q)) { var s = {}; s[l.k] = l.vals[i]; res.push({ text: label(l, l.vals[i]), set: s, rank: i / l.vals.length }); break; }
       }
     });
-    if (!res.length && Lv.length > 1) {      /* pairs of the first two levers, stepping both */
+    if (!res.length && Lv.length > 1 && !opt.noPairs) {      /* pairs of the first two levers, stepping both */
       var a = Lv[0], b = Lv[1];
       for (var i = 0; i < a.vals.length && !res.length; i++) for (var j = 0; j < b.vals.length; j++) {
         var q = Object.assign({}, p); q[a.k] = a.vals[i]; q[b.k] = b.vals[j];
