@@ -323,14 +323,14 @@
     if (heavy && bgOn()) {
       out.innerHTML = '<section class="repbusy"><div class="busy"><i></i>Calculating on a background core…</div></section>';
       PAR.tried = true;
-      PAR.job("call", { fn: "MODS." + m.id, args: [pIn] }).then(function (rr) { Object.setPrototypeOf(rr, Rep.prototype); show(rr); }, function (e) {
+      PAR.job("call", { fn: "MODS." + m.id, args: [pIn] }).then(function (rr) { Object.setPrototypeOf(rr, Rep.prototype); rr.mid = m.id; show(rr); }, function (e) {
         if (!PAR.ok()) { BG.off = true; return run(m, form, quiet); }
         out.innerHTML = '<div class="err">Could not calculate: ' + esc(e.message) + '</div>';
       });
       return;
     }
     try { r = m.fn(pIn); } catch (err) { out.innerHTML = '<div class="err">Could not calculate: ' + esc(err.message) + '</div>'; return; }
-    show(r);
+    r.mid = m.id; show(r);
     function show(r) {
     if (!out.isConnected || !form.isConnected) return;   /* the user moved on while a background calculation was running */
     var pp = read(m, form);
@@ -397,7 +397,7 @@
     box.scrollIntoView({ behavior: "smooth", block: "center" });
   }
   function modById(id) { return M.filter(function (x) { return x.id === id; })[0]; }
-  function runEl(e) { var m = modById(e.mod); if (!m) return null; try { var p = parse(m, e.inputs || {}), r = m.fn(p); return { m: m, p: p, r: r, t: EL.take(m.id, p, r, e.x) }; } catch (er) { return null; } }
+  function runEl(e) { var m = modById(e.mod); if (!m) return null; try { var p = parse(m, e.inputs || {}), r = m.fn(p); r.mid = m.id; return { m: m, p: p, r: r, t: EL.take(m.id, p, r, e.x) }; } catch (er) { return null; } }
   function inr(v) { return "₹ " + Math.round(v).toLocaleString("en-IN"); }
   function etb(head, rows, cls) { return '<div class="tw"><table class="etb ' + (cls || "") + '"><tr>' + head.map(function (x) { return '<th>' + x + '</th>'; }).join("") + '</tr>' + rows.map(function (r) { return '<tr>' + r.map(function (x) { return '<td>' + x + '</td>'; }).join("") + '</tr>'; }).join("") + '</table></div>'; }
   function elemData(list, title) { var runs = list.map(function (e) { return { e: e, x: runEl(e) }; }), okRuns = runs.filter(function (q) { return q.x; }); return mkData(runs, okRuns.map(function (q) { return { mark: q.e.mark, nos: q.e.nos, title: q.e.title, take: q.x.t }; }), title); }
@@ -527,6 +527,7 @@
     if (r.checks.length) { var gv = null, gu = -1, np = r.checks.filter(function (c) { return c.ok; }).length;
       r.checks.forEach(function (c) { var u = util(c.d); if (!c.ok && (u === null || u <= 1)) u = 1.0001; if (u !== null && u > gu) { gu = u; gv = c; } });
       h += '<div class="gov ' + (ok ? "pass" : "fail") + '"><div class="gh"><span>' + (gv ? 'Governing check' : 'Checks') + '</span><em>' + np + ' / ' + r.checks.length + ' pass</em></div>' + (gv ? '<b>' + esc(gv.l) + (gv.ref ? ' <i>' + esc(gv.ref) + '</i>' : '') + '</b><div class="ub big"><i style="width:' + Math.min(100, gu * 100).toFixed(1) + '%" class="' + (gu > 1 ? "x" : gu > 0.9 ? "w" : "g") + '"></i><em>' + Math.round(gu * 100) + ' %</em></div>' : '') + '</div>'; }
+    if (r.mid && window.REG && REG.auditHtml) h += REG.auditHtml(r.mid, esc);
     if (r.svg) h += '<div class="svg">' + r.svg + '</div>';
     r.items.forEach(function (it) {
       if (it.k === "h") h += '<h4>' + esc(it.t) + '</h4>';

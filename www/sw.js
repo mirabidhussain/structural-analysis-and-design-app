@@ -1,5 +1,5 @@
 /* offline cache for the installable web version */
-var C = "isd-v20", FILES = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png",
+var C = "isd-v21", FILES = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png",
   "logo-mark-128.png", "logo-mark.png", "brand-banner.jpg", "js/data.js", "js/icons.js", "fonts/inter-regular.woff", "fonts/inter-medium.woff", "fonts/inter-semibold.woff", "fonts/inter-bold.woff", "fonts/dejavu-mono.woff", "fonts/dejavu-mono-bold.woff", "js/core.js", "js/lim.js", "js/units.js", "js/rcc.js", "js/steel.js", "js/loads.js", "js/truss.js", "js/fem.js", "js/pushover.js", "js/dxf.js", "js/model.js", "js/se.js", "js/dt.js", "js/mat.js", "js/fdn.js", "js/reg.js", "js/beam1d.js", "js/beamx.js", "js/pipe.js", "js/boq.js", "js/elem.js", "js/est.js", "js/sketch.js", "js/par.js", "js/glv.js", "js/aids.js", "js/auto.js", "js/pdb.js", "js/cad.js", "js/rpt.js", "js/pro.js", "js/wsm.js", "js/calc.js", "js/xlsx.js", "js/report.js", "js/structui.js", "js/app.js"];
 self.addEventListener("install", function (e) { e.waitUntil(caches.open(C).then(function (c) { return c.addAll(FILES); })); });
 self.addEventListener("activate", function (e) { e.waitUntil(caches.keys().then(function (k) { return Promise.all(k.filter(function (x) { return x !== C; }).map(function (x) { return caches.delete(x); })); })); });

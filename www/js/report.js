@@ -77,7 +77,7 @@ var RX = (function () {
     intro(ip, "Inputs — design parameters", "Every design parameter used by the formulas in this workbook. The blue values on a yellow background are inputs: change one and every dependent formula (base shear, design steel, checks) recalculates. Each value is a named cell, e.g. p_fck, so formulas read like =0.36*p_fck*b*… . 'Source' tells you whether you entered the value in the app or the default was used.\nNote: changing an input here does NOT re-run the structural analysis — forces and displacements stay as computed in the app.", 6);
     ip.row(["Name", "Description", "Value", "Unit", "Reference / note", "Source"], "h", 22);
     ip.opt.freeze = "A" + ip.next();
-    var UIK = { fck: "fck", fy: "fy", fys: "fys", crackB: "crack", crackC: "crack", Zz: "zone", Imp: "I", Rr: "R", soil: "soil", sys: "sys", ff: "ff", ll: "ll", ffr: "ffRoof", llr: "llRoof", wall: "wall", parapet: "parapet", vb: "vbp", cf: "cf", kcol: "kcol" };
+    var UIK = { fck: "fck", fy: "fy", fys: "fys", crackB: "crack", crackC: "crack", Zz: "zone", Imp: "I", Rr: "R", soil: "soil", sys: "sys", ff: "ff", ll: "ll", ffr: "ffRoof", llr: "llRoof", wall: "wall", parapet: "parapet", vb: "vbp", cf: "cf", k1: "k1", kcol: "kcol" };
     var ent = p.entered || [];
     function inp(k, label, v, u, note) { var rn = ip.next(), src = UIK[k] ? (ent.indexOf(UIK[k]) >= 0 ? "entered" : "default") : "code value"; ip.row([{ v: "p_" + k, s: "b" }, label, { v: v, s: typeof v === "number" ? "in2" : "in" }, u || "", { v: note || "", s: "note" }, { v: src, s: src === "entered" ? "ok" : "" }]); wb.define("p_" + k, "Inputs!$C$" + rn); G[k] = v; }
     inp("fck", "Concrete grade fck", +p.fck, "N/mm²", "IS 456 cl 6.1");
@@ -97,7 +97,7 @@ var RX = (function () {
     inp("ff", "Floor finish + partitions", +p.ff, "kN/m²", "IS 875 Pt 1"); inp("ll", "Imposed load, floors", +p.ll, "kN/m²", "IS 875 Pt 2");
     inp("ffr", "Roof finish", +p.ffRoof, "kN/m²", ""); inp("llr", "Roof imposed load", +p.llRoof, "kN/m²", "");
     inp("wall", "Wall load on floor beams", +p.wall, "kN/m", ""); inp("parapet", "Parapet load on roof beams", +p.parapet, "kN/m", "");
-    inp("vb", "Basic wind speed Vb", p.vb, "m/s", "IS 875 Pt 3 Annex A (" + p.vbp + ")"); inp("cf", "Net force coefficient Cf", +p.cf, "", "IS 875 Pt 3 cl 7.4");
+    inp("vb", "Basic wind speed Vb", p.vb, "m/s", "IS 875 Pt 3 Annex A (" + p.vbp + ")"); inp("cf", "Net force coefficient Cf", +p.cf, "", "IS 875 Pt 3 cl 7.4"); inp("k1", "Risk coefficient k1", +p.k1 > 0 ? +p.k1 : 1, "", "IS 875 Pt 3 Table 1");
     inp("kcol", "Column effective length factor", +p.kcol, "", "IS 456 Annex E / Table 28");
     inp("dlim", "Storey drift limit (× h)", 0.004, "", "IS 1893 cl 7.11.1");
     var W = p.method === "wsm";
@@ -191,11 +191,11 @@ var RX = (function () {
         var w = S.L.wind[k];
         ld.row([]); ld.row(["Wind " + k + " — IS 875 (Part 3):2015"], "tb");
         var lv = MD.floorLevels(m), zmin = lv[0], rows = [];
-        lv.forEach(function (z, i) { if (i === 0) return; var hz = z - zmin, k2 = U.interp(D.k2h, D.k2[p.terrain], Math.max(10, Math.min(hz, 100))); rows.push({ z: z, hz: hz, k2: k2, hb: (z - lv[i - 1]) / 2 + (i + 1 < lv.length ? (lv[i + 1] - z) / 2 : 0), B: w.B }); });
+        lv.forEach(function (z, i) { if (i === 0) return; var hz = z - zmin, k2 = U.interp(D.k2h, D.k2[p.terrain], Math.max(10, Math.min(hz, 100))); rows.push({ z: z, hz: hz, k2: k2, hb: (z - lv[i - 1]) / 2 + (i + 1 < lv.length ? (lv[i + 1] - z) / 2 : 0), B: w.B, C: w.C }); });
         table(ld, [{ k: "z", h: "Level z (m)", s: "n3" }, { k: "hz", h: "Height (m)", s: "n3" }, { k: "k2", h: "k2 (Table 2, TC " + p.terrain + ")", s: "n3" },
-          { k: "Vz", h: "Vz = Vb·k1·k2·k3·k4 (m/s)", f: "[vb]*{k2}", s: "f2" }, { k: "pz", h: "pz = 0.6Vz² (kN/m²)", f: "0.6*{Vz}^2/1000", s: "f4" },
-          { k: "pd", h: "pd = max(Kd·Ka·Kc, 0.7)·pz", f: "MAX(0.9*0.8*0.9,0.7)*{pz}", s: "f4" }, { k: "hb", h: "Tributary height (m)", s: "n3" }, { k: "B", h: "Exposed width (m)", s: "n3" },
-          { k: "F", h: "F = Cf·pd·B·h (kN)", f: "[cf]*{pd}*{B}*{hb}", s: "f2" }], rows, G, { freeze: false });
+          { k: "Vz", h: "Vz = Vb·k1·k2·k3·k4 (m/s)", f: "[vb]*[k1]*{k2}", s: "f2" }, { k: "pz", h: "pz = 0.6Vz² (kN/m²)", f: "0.6*{Vz}^2/1000", s: "f4" },
+          { k: "pd", h: "pd = max(Kd·Ka·Kc, 0.7)·pz", f: "MAX(0.9*0.8*0.9,0.7)*{pz}", s: "f4" }, { k: "hb", h: "Tributary height (m)", s: "n3" }, { k: "B", h: "Exposed width (m)", s: "n3" }, { k: "C", h: w.cpe ? "Cpe,windward − Cpe,leeward (Table 5)" : "Cf", s: "n3" },
+          { k: "F", h: "F = C·pd·B·h (kN)", f: "{C}*{pd}*{B}*{hb}", s: "f2" }], rows, G, { freeze: false });
       });
       ld.row([]); ld.row([{ v: "Reactions sheet checks Σ reactions against the total applied loads above for every combination.", s: "note" }]);
     }
@@ -907,7 +907,7 @@ var RX = (function () {
     ["5 · Loads"],
     ["Dead / imposed", "IS 875 Parts 1 & 2. Slab area loads → consistent nodal loads of the shell elements."],
     ["Seismic", "IS 1893 (Part 1):2016: Ta (cl 7.6.2), Sa/g (cl 6.4.2), Ah = (Z/2)(Sa/g)/(R/I) ≥ Table 7, Vb = Ah·W, Qi = Vb·Wi·hi²/ΣWj·hj² (cl 7.6.3). Seismic weight per cl 7.3."],
-    ["Wind", "IS 875 (Part 3):2015: Vz = Vb·k1·k2·k3·k4, pz = 0.6Vz², pd = Kd·Ka·Kc·pz ≥ 0.7pz, F = Cf·pd·Ae."],
+    ["Wind", "IS 875 (Part 3):2015: Vz = Vb·k1·k2·k3·k4, pz = 0.6Vz², pd = Kd·Ka·Kc·pz ≥ 0.7pz, F = C·pd·Ae with C = Cpe,windward − Cpe,leeward from Table 5 for 3D clad buildings (internal pressure cancels on the whole frame) or the entered Cf; optional torsion sets 0.75·WL ± 0.75·Fi·0.15B (ASCE 7 Case 2, IS 875-3 has no torsion clause)."],
     ["Combinations", "IS 456 Table 18: 1.5(DL+LL), 1.2(DL+LL±EL), 1.5(DL±EL), 0.9DL±1.5EL."],
     ["6 · Design"],
     ["RCC beams", "IS 456 Annex G: Mu,lim = 0.36fck·b·xu,max(d − 0.42xu,max); Ast = 0.5fck/fy[1 − √(1 − 4.6Mu/fck·b·d²)]bd; doubly reinforced Asc = (Mu − Mu,lim)/((fsc − 0.446fck)(d − d')). Torsion cl 41.4.2: Me1 = Mu + Tu(1 + D/b)/1.7, Ve = Vu + 1.6Tu/b. Shear cl 40: τc from Table 19, τc,max Table 20, sv = 0.87fy·Asv·d/Vus; minimum cl 26.5.1.6."],

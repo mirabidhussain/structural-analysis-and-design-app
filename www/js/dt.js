@@ -49,6 +49,20 @@ DT.Mcap = function (As, b, d, fck, fy) {
   if (xu >= xm) return RCC.mulim(b, d, fck, fy);
   return 0.87 * fy * As * (d - 0.42 * xu) / 1e6;
 };
+/* crack-width limit (IS 456 cl 35.3.2): 0.3 mm in general; 0.2 mm where moisture makes cracking harmful (severe);
+   0.004 × nominal cover, not more than 0.2 mm, in very severe and extreme exposure */
+DT.wlim = function (cf) { var e = cf.cv.expo; return e === "severe" ? 0.2 : e === "very severe" || e === "extreme" ? Math.min(0.2, 0.004 * cf.cv.nom) : 0.3; };
+/* surface crack width, IS 456 Annex F: cracked section with long-term modular ratio Es / (Ec / (1 + θ)), θ = 1.6 (cl 6.2.5.1, 28 days);
+   εm = ε1 − b(h − x)(a' − x) / (3 Es As (d − x)) at the tension face; wcr = 3 acr εm / (1 + 2 (acr − cmin)/(h − x)); acr the larger of
+   the point midway between bars and the corner */
+DT.crack = function (M, b, h, d, n, dia, cmin, fck) {
+  n = Math.max(2, n); var As = n * D.barArea(dia), Es = 2e5, Ec = 5000 * Math.sqrt(fck) / (1 + 1.6), mr = Es / Ec;
+  var x = (-mr * As + Math.sqrt(Math.pow(mr * As, 2) + 2 * b * mr * As * d)) / b, z = d - x / 3, fs = Math.max(0, M) * 1e6 / (As * z);
+  var e1 = fs / Es * (h - x) / (d - x), em = e1 - b * (h - x) * (h - x) / (3 * Es * As * (d - x)), c0 = cmin + dia / 2;
+  var s = (b - 2 * c0) / (n - 1), acr = Math.max(Math.sqrt(Math.pow(s / 2, 2) + c0 * c0) - dia / 2, Math.SQRT2 * c0 - dia / 2);
+  var w = em > 0 ? 3 * acr * em / (1 + 2 * (acr - cmin) / (h - x)) : 0;
+  return { w: w, fs: fs, x: x, acr: acr, em: em, e1: e1, mr: mr };
+};
 DT.parseBars = function (t) { var m = /(\d+)\s*nos\s*(\d+)/.exec(t || ""); return m ? { n: +m[1], dia: +m[2] } : null; };
 
 /* ------------------------------------------------------------------ BEAM LINES */
@@ -111,9 +125,9 @@ DT.beams = function (m, S, p, cf, g) {
         var ic = inc[cb.name] || 1;
         FE.frameDiagram(cb.fr[it.k], 8).forEach(function (pt, q) { var o = loc[q]; o.Mp = Math.max(o.Mp, pt.Mz / ic); o.Mn = Math.max(o.Mn, -pt.Mz / ic); o.V = Math.max(o.V, Math.abs(pt.Vy) / ic); o.T = Math.max(o.T, Math.abs(pt.T) / ic); });
       });
-      var vg = loc.map(function () { return 0; });
-      gcases.forEach(function (c) { var C = res.cases[c]; FE.frameDiagram(FE.frameForces(m, it.k, C.U, C.lv.qeq[it.k], 0), 8).forEach(function (pt, q) { vg[q] += pt.Vy; }); });
-      loc.forEach(function (o, q) { o.Vg = Math.abs(vg[q]) * (cf.wsm ? 1 : 1.2); st.push(o); });
+      var vg = loc.map(function () { return 0; }), mg = loc.map(function () { return 0; });
+      gcases.forEach(function (c) { var C = res.cases[c]; FE.frameDiagram(FE.frameForces(m, it.k, C.U, C.lv.qeq[it.k], 0), 8).forEach(function (pt, q) { vg[q] += pt.Vy; mg[q] += pt.Mz; }); });
+      loc.forEach(function (o, q) { o.Vg = Math.abs(vg[q]) * (cf.wsm ? 1 : 1.2); o.Msv = mg[q]; st.push(o); });
     });
     st.sort(function (a, c) { return a.s - c.s; });
     function req(o) {
@@ -174,8 +188,33 @@ DT.beams = function (m, S, p, cf, g) {
         if (sp.cL - sp.fL < 100) sp.cL = sp.fL - sp.L.hc / 2; if (sp.fR - sp.cR < 100) sp.cR = sp.fR + sp.R.hc / 2;   /* run into the support to its centre line */
       }
     });
-    /* stirrups: 2-legged hoops, 135° hooks; spacing from design (IS 456 cl 40.4/41.4.3), capacity shear and ductile limits */
     var checks = [];
+    /* serviceability: span / effective depth (IS 456 cl 23.2.1) and crack width under service DL + LL (cl 35.3.2, Annex F) */
+    var wlim = DT.wlim(cf), cmin = cf.cb + phs, nsp = spans.length;
+    function sv(sp, si, cant) {
+      var o = { cant: !!cant };
+      if (cant) { var Lc = cant.fR - cant.fL, sup0 = si === 0 ? sup[0] : sup[sup.length - 1]; o.Leff = Lc + d / 2; o.basic = 7; o.Aprov = sup0.nt * a; o.Areq = Math.max(sup0.At, amin); o.Ac = ncb * a; }
+      else {
+        var c2c = sp.R.s - sp.L.s, Ar = amin; sp.st.forEach(function (q) { if (q.s > sp.fL && q.s < sp.fR) Ar = Math.max(Ar, q.Ab); });
+        o.Leff = Math.min(c2c, sp.Lc + d); o.basic = nsp > 1 ? 26 : 20; o.Aprov = sp.nb * a; o.Areq = Ar; o.Ac = nct * a;
+      }
+      o.basic0 = o.basic; if (!cant && o.Leff > 10000) o.basic = o.basic * 10000 / o.Leff;
+      o.kt = RCC.kt(100 * o.Aprov / (b * d), 0.58 * fy * Math.min(o.Areq, o.Aprov) / o.Aprov); o.kc = RCC.kc(100 * o.Ac / (b * d));
+      o.allow = o.basic * o.kt * o.kc; o.ratio = o.Leff / d; o.okD = o.ratio <= o.allow + 1e-9;
+      /* crack widths: mid-span soffit (sagging) and support top (hogging), largest service moment */
+      var Mm = 0, Mt = 0, list = cant ? st.filter(function (q) { return q.s >= cant.fL - 1 && q.s <= cant.fR + 1; }) : sp.st;
+      list.forEach(function (q) { if (!cant && q.s > sp.fL && q.s < sp.fR) Mm = Math.max(Mm, q.Msv); if (cant || q.s <= sp.fL + 1 || q.s >= sp.fR - 1) Mt = Math.max(Mt, -q.Msv); });
+      if (!cant) { [sp.L, sp.R].forEach(function (S0) { st.forEach(function (q) { if (Math.abs(q.s - S0.s) <= S0.hc / 2 + 1) Mt = Math.max(Mt, -q.Msv); }); }); }
+      var nTop = cant ? (si === 0 ? sup[0] : sup[sup.length - 1]).nt : Math.max(sp.L.nt, sp.R.nt);
+      o.wMid = cant ? null : DT.crack(Mm, b, Dd, d, nb(o.Aprov) || 2, dia, cmin, fck); o.wSup = DT.crack(Mt, b, Dd, d, nTop, dia, cmin, fck); o.Mm = Mm; o.Mt = Mt;
+      o.wlim = wlim; o.okW = (o.wMid ? o.wMid.w : 0) <= wlim + 1e-9 && o.wSup.w <= wlim + 1e-9;
+      checks.push({ t: "Span / effective depth ≤ basic × kt × kc" + (cant ? " (cantilever)" : ""), ok: o.okD, v: o.ratio.toFixed(1) + " ≤ " + o.basic0 + (o.basic !== o.basic0 ? "×10/L" : "") + " × " + o.kt.toFixed(2) + " × " + o.kc.toFixed(2) + " = " + o.allow.toFixed(1), cl: "IS 456 cl 23.2.1", sp: si, serv: true });
+      checks.push({ t: "Crack width, service DL + LL" + (cant ? " (cantilever top)" : " (mid-span / support)"), ok: o.okW, v: (o.wMid ? o.wMid.w.toFixed(2) + " / " : "") + o.wSup.w.toFixed(2) + " ≤ " + wlim.toFixed(2) + " mm", cl: "IS 456 cl 35.3.2, Annex F", sp: si, serv: true });
+      return o;
+    }
+    spans.forEach(function (sp, si) { sp.serv = sv(sp, si); });
+    if (cantL) cantL.serv = sv(null, 0, cantL); if (cantR) cantR.serv = sv(null, sup.length - 1, cantR);
+    /* stirrups: 2-legged hoops, 135° hooks; spacing from design (IS 456 cl 40.4/41.4.3), capacity shear and ductile limits */
     spans.forEach(function (sp, si) {
       var lh = 2 * d, Asv = 2 * D.barArea(phs);
       function dsv(x0, x1) { var s = Infinity; sp.st.forEach(function (o) { if (o.s >= x0 - 1 && o.s <= x1 + 1) { var r = desB[o.k]; if (r) s = Math.min(s, r.sv === null || r.sv === undefined ? 50 : r.sv); } }); return s; }
@@ -682,6 +721,12 @@ DT.slabs = function (m, S, p, cf, g) {
       var A = (dc === 2 ? 0.75 : 0.375) * Ash, sp = spc(A, P.d, smax), len = DT.r(Lsh / 5 + bw / 2, 25);
       P.corner.push({ c: cc[0] + cc[1], sp: sp, len: len, n: Math.floor((Lsh / 5) / sp.s) + 1, full: dc === 2 });
     });
+    /* deflection: short span / effective depth (IS 456 cl 23.2.1, cl 24.1), continuous when a panel adjoins along the short span */
+    var shortX = P.Lx <= P.Ly, Ls = shortX ? P.Lx : P.Ly, cont = shortX ? (P.nb.W || P.nb.E) : (P.nb.S || P.nb.N), Ab = shortX ? P.bot.X.As : P.bot.Y.As, Ar = Math.max(shortX ? P.req.bX : P.req.bY, P.amin);
+    var basic = cont ? 26 : 20; if (Ls > 10000) basic *= 10000 / Ls;
+    var kt = RCC.kt(100 * Ab / (1000 * P.d), 0.58 * cf.fy * Math.min(Ar, Ab) / Ab);
+    P.serv = { Ls: Ls, basic: basic, cont: !!cont, kt: kt, allow: basic * kt, ratio: Ls / P.d }; P.serv.ok = P.serv.ratio <= P.serv.allow + 1e-9;
+    if (!P.serv.ok) P.msg.push("Deflection: short span / d = " + P.serv.ratio.toFixed(1) + " > " + P.serv.allow.toFixed(1) + " (IS 456 cl 23.2.1) — increase the thickness");
     (floors[P.z] = floors[P.z] || []).push(P);
   });
   /* bars per floor (top bars over a shared edge counted once) */
@@ -945,6 +990,10 @@ DT.run = function (m, S, p) {
   out.cols.forEach(function (c) { c.checks.forEach(function (q) { if (!q.ok) out.fails++; }); });
   out.foot.forEach(function (f) { f.checks.forEach(function (q) { if (!q.ok) out.fails++; }); });
   out.walls.forEach(function (w) { w.checks.forEach(function (q) { if (!q.ok) out.fails++; }); });
+  out.slabs.forEach(function (fl) { fl.panels.forEach(function (P) { if (P.serv && !P.serv.ok) out.fails++; }); });
+  out.serv = { beams: 0, beamFail: 0, slabs: 0, slabFail: 0 };
+  out.beams.forEach(function (bl) { bl.checks.forEach(function (q) { if (q.serv) { out.serv.beams++; if (!q.ok) out.serv.beamFail++; } }); });
+  out.slabs.forEach(function (fl) { fl.panels.forEach(function (P) { if (P.serv) { out.serv.slabs++; if (!P.serv.ok) out.serv.slabFail++; } }); });
   if (out.mat) out.mat.checks.forEach(function (q) { if (!q.ok) out.fails++; });
   out.scwb.forEach(function (q) { if (!q.ok) out.fails++; });
   out.fails += (out.dur || []).length;

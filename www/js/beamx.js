@@ -74,7 +74,15 @@ RCC.beamEnds = function (p) {
   r.check("L/d ≤ basic × kt × kc", act <= allow, U.f(act, 1) + " ≤ " + U.f(allow, 1), "cl 23.2.1");
   if (cs.id === "cant" && L > 10) r.note("Cantilever longer than 10 m: IS 456 cl 23.2.1(b) requires the deflection to be calculated.");
 
-  r.h("6. Curtailment and anchorage");
+  r.h("6. Crack width (IS 456 cl 35.3.2, Annex F)");
+  var wlim = DT.wlim({ cv: { expo: p.exp || "moderate", nom: p.cover } }), cmin = p.cover + p.stir, wsv = [];
+  [["Mid-span soffit", ex.Msag, bot], ["Left support, top", ML, topL], ["Right support, top", MR, topR]].forEach(function (q) {
+    if (!q[2] || q[1] < 0.5 || q[2].nominal) return;
+    var cw = DT.crack(q[1] / 1.5, b, Dd, d, q[2].bars.n, q[2].bars.dia, cmin, fck); wsv.push(cw.w);
+    r.check(q[0] + ": wcr ≤ " + wlim.toFixed(2) + " mm", cw.w <= wlim + 1e-9, U.f(cw.w, 3) + " mm (Ms = Mu/1.5 = " + U.f(q[1] / 1.5) + " kNm, fs = " + U.f(cw.fs, 0) + " N/mm², acr = " + U.f(cw.acr, 0) + " mm)", "Annex F");
+  });
+  r.note("Cracked section with the long-term modular ratio Es/(Ec/(1+θ)), θ = 1.6; limit 0.3 mm in general, 0.2 mm for severe exposure, 0.004 × cover (≤ 0.2 mm) for very severe and extreme (cl 35.3.2).");
+  r.h("7. Curtailment and anchorage");
   var lead = function (dia) { return Math.max(d, 12 * dia); }, Ld = function (dia) { return RCC.Ld(dia, fy, fck); };
   var fixedL = eL === "fixed", fixedR = eR === "fixed", cut = {}, cantRight = cs.id === "cant" && eR === "fixed";
   function Mcap(nb, dia) { var As = nb * D.barArea(dia); return 0.87 * fy * As * d * (1 - As * fy / (b * d * fck)) / 1e6; }

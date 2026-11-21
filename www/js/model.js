@@ -258,23 +258,43 @@ MD.cases = function (m, p) {
       });
     } catch (e) { notes.push("Accidental torsion not applied: " + e.message); tor = null; }
   }
-  var wind = {};
+  var wind = {}, wtor = {};
   if (p.wind) dirs.forEach(function (d) {
     var lv = MD.floorLevels(m), nm = "WL" + (d ? "Y" : "X"), nod = [], B = m.twoD ? p.trib : (function () { var a = Infinity, b = -Infinity; m.nodes.forEach(function (n) { var v = d ? n.x : n.y; a = Math.min(a, v); b = Math.max(b, v); }); return Math.max(b - a, 1); })();
-    var Ftot = 0;
+    var Ftot = 0, k1 = +p.k1 > 0 ? +p.k1 : 1, k3 = +p.k3 > 0 ? +p.k3 : 1, k4 = +p.k4 > 0 ? +p.k4 : 1, depth = 0, rowsW = [];
+    if (!m.twoD) { var a2 = Infinity, b2 = -Infinity; m.nodes.forEach(function (n) { var v = d ? n.y : n.x; a2 = Math.min(a2, v); b2 = Math.max(b2, v); }); depth = Math.max(b2 - a2, 1); }
+    var useCpe = !m.twoD && p.wmeth !== "cf", cp = useCpe ? LD.cpeWall(H, B, depth) : null, C = useCpe ? cp.net : +p.cf;
     lv.forEach(function (z, i) {
       if (i === 0) return;
       var hz = z - zmin, k2 = U.interp(D.k2h, D.k2[p.terrain], Math.max(10, Math.min(hz, 100)));
-      var Vz = p.vb * k2, pz = 0.6 * Vz * Vz / 1000, pd = Math.max(0.9 * 0.8 * 0.9, 0.7) * pz;
+      var Vz = p.vb * k1 * k2 * k3 * k4, pz = 0.6 * Vz * Vz / 1000, pd = Math.max(0.9 * 0.8 * 0.9, 0.7) * pz;
       var hb = (z - lv[i - 1]) / 2 + (i + 1 < lv.length ? (lv[i + 1] - z) / 2 : 0);
-      var F = p.cf * pd * B * hb, at = [];
+      var F = C * pd * B * hb, at = [];
       m.nodes.forEach(function (n, j) { if (Math.abs(n.z - z) < 0.01) at.push(j); });
       at.forEach(function (j) { var f = [0, 0, 0, 0, 0, 0]; f[d] = F / at.length; nod.push({ n: j, f: f }); });
-      Ftot += F;
+      Ftot += F; rowsW.push({ z: z, hz: hz, k2: k2, Vz: Vz, pz: pz, pd: pd, hb: hb, F: F });
     });
-    cases[nm] = { nodal: nod }; wind[nm] = { B: B, F: Ftot };
+    var cpi = LD.CPI[p.wperm] || 0.2;
+    cases[nm] = { nodal: nod }; wind[nm] = { B: B, F: Ftot, C: C, cpe: cp, cpi: cpi, k1: k1, k3: k3, k4: k4, rows: rowsW, depth: depth,
+      clad: cp ? { pos: (cp.ww + cpi), neg: (Math.min(cp.lw, cp.side) - cpi) } : null };
   });
-  return { cases: cases, eq: eq, wind: wind, W: W, Wt: Wt, notes: notes, tor: tor, snow: snow, pattern: pat };
+  /* wind torsion: IS 875 (Part 3) has no torsion clause — the case of ASCE 7-22 Fig. 27.3-8 (Case 2: 75 % of the wind forces at an
+     eccentricity of ±15 % of the face width) is applied to 3D models as a check, giving the sets 0.75·WL ± torque */
+  if (p.wind && !m.twoD && p.wtor !== false && typeof SE !== "undefined") {
+    try {
+      var flw = SE.floors(m, W);
+      dirs.forEach(function (d) {
+        var nm = "WL" + (d ? "Y" : "X"), ld = cases[nm]; if (!ld) return;
+        var ta = [], tb = [], Bw = wind[nm].B;
+        flw.forEach(function (f) {
+          var Q = 0; ld.nodal.forEach(function (l) { if (f.nodes.indexOf(l.n) >= 0) Q += l.f[d]; });
+          var Mt = 0.75 * Q * 0.15 * Bw; ta = ta.concat(SE.torque(m, f, Mt, W)); tb = tb.concat(SE.torque(m, f, -Mt, W));
+        });
+        cases["TW" + (d ? "Y" : "X") + "a"] = { nodal: ta }; cases["TW" + (d ? "Y" : "X") + "b"] = { nodal: tb }; wtor[nm] = true;
+      });
+    } catch (e) { notes.push("Wind torsion not applied: " + e.message); }
+  }
+  return { cases: cases, eq: eq, wind: wind, wtor: wtor, W: W, Wt: Wt, notes: notes, tor: tor, snow: snow, pattern: pat };
 };
 /* IS 456 Table 18 / IS 875 Part 5 combinations */
 MD.combos = function (cases, method) {
@@ -301,6 +321,11 @@ MD.lateralSets = function (cases) {
       var a = {}; a[L] = 1; a[ta] = 1; var b = {}; b[L] = 1; b[tb] = 1;
       out.push({ name: L + "+" + ta, f: a, dir: d, base: L }, { name: L + "+" + tb, f: b, dir: d, base: L });
     } else { var o = {}; o[L] = 1; out.push({ name: L, f: o, dir: d, base: L }); }
+    var wa = "TW" + d + "a", wb = "TW" + d + "b";
+    if (/^WL/.test(L) && cases[wa] && cases[wb]) {
+      var ra = {}; ra[L] = 0.75; ra[wa] = 1; var rb = {}; rb[L] = 0.75; rb[wb] = 1;
+      out.push({ name: "0.75" + L + "+" + wa, f: ra, dir: d, base: L, wtor: true }, { name: "0.75" + L + "+" + wb, f: rb, dir: d, base: L, wtor: true });
+    }
   });
   return out;
 };

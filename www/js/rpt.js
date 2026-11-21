@@ -11,12 +11,16 @@ var RPT = (function () {
     "#rpt .vb{border-left:5px solid #b26a00;background:#fff7e8;padding:8px 10px;margin:8px 0}#rpt .vb.vok{border-color:#1e8e4a;background:#e8f6ee}#rpt .vb.vno{border-color:#c62828;background:#fdecec}" +
     "#rpt .eq{font-family:Consolas,Menlo,monospace;background:#f3f5f8;border-left:3px solid #1d3557;padding:4px 7px;margin:3px 0;font-size:11.5px}#rpt .sig td{height:46px}#rpt .note{color:#5d6b7b;font-size:11.5px}" +
     "#rpt .toc li{margin:1px 0}#rpt details{margin:4px 0}#rpt .calc{border:1px solid #dfe4ea;border-radius:6px;padding:6px 8px;margin:6px 0}" +
-    "@media print{#rpt{padding:0;max-width:none}.noprint{display:none!important}#rpt h2{page-break-before:always}#rpt tr{page-break-inside:avoid}}";
+    "#rpt .stamp{border:2px dashed #b0001e;color:#b0001e;font-weight:700;text-align:center;padding:8px;margin:10px 0;letter-spacing:.02em}#rpt .wm{display:none}" +
+    "@media print{#rpt .wm{display:block;position:fixed;top:0;right:0;font-size:9.5px;font-weight:700;color:#b0001e;border:1px solid #b0001e;padding:1px 6px}#rpt{padding:0;max-width:none}.noprint{display:none!important}#rpt h2{page-break-before:always}#rpt tr{page-break-inside:avoid}}";
   function html(S, p, opt) {
     opt = opt || {};
     var P = S.p || {}, m = S.m, dt = S.det && !S.det.err && S.det.gB ? S.det : null, sm = PRO.summary(S), v = PRO.verifyState(p, S), vc = PRO.vClass(v), sec = 0, toc = [], body = "";
     function H(t, nb) { sec++; toc.push(sec + ". " + t); return '<h2 id="s' + sec + '"' + (nb ? ' class="nb"' : '') + '>' + sec + '. ' + esc(t) + '</h2>'; }
     var rev = p && p.revs && p.revs.length ? p.revs[p.revs.length - 1] : null;
+    /* design audit: the report is marked not for construction until every check passes, every open verification item has been
+       reviewed and the project status is Checked or Issued */
+    var forC = vc[0] === "vok" && !!p && /^(Checked|Issued)$/.test(p.status || ""), stamp = forC ? "" : '<div class="stamp">NOT FOR CONSTRUCTION — ' + esc(vc[0] === "vno" ? "failing results are not resolved" : vc[0] === "vmid" ? (v.open + v.query) + " verification item(s) are open (simplified, calculated-only or missing checks)" : "project status is " + (p ? p.status : "not set") + " — set it to Checked after review") + '</div>';
     /* cover */
     var cover = '<div class="cover"><h1>Structural design calculations</h1><div style="font-size:16px;font-weight:600">' + esc(p ? p.name : "Project") + '</div><table class="meta">' +
       [["Job / file no.", p && p.jobNo], ["Client", p && p.client], ["Site", p && p.site], ["Design engineer", p && p.engineer], ["Checking engineer", p && p.checker], ["Status", p && p.status], ["Revision", rev ? rev.rev + " — " + day(rev.date) + (rev.note ? " — " + rev.note : "") : "not issued"], ["Date of this report", day()], ["Design method", P.method === "wsm" ? "Working stress (IS 456 Annex B, IS 800 cl 11)" : "Limit state (IS 456, IS 800)"], ["Software", "IS StructDesign, calculation engine " + REG.ENGINE]].map(function (r) { return "<tr><td>" + r[0] + "</td><td>" + esc(r[1] || "—") + "</td></tr>"; }).join("") + '</table>' +
@@ -104,7 +108,7 @@ var RPT = (function () {
     if (p && p.revs && p.revs.length) body += '<h3>Revision history</h3>' + tbl(["Rev", "Date", "By", "Note", "Engine"], p.revs.map(function (r) { return [esc(r.rev), day(r.date), esc(r.by), esc(r.note), esc(r.engine)]; }));
     /* 12 limits */
     body += H("Limitations") + '<ul>' + REG.CHECKS.filter(function (r) { return r[2] === "Not implemented"; }).map(function (r) { return '<li>' + esc(r[1]) + (r[3] ? ' — ' + esc(r[3]) : '') + '</li>'; }).join("") + '<li>The results depend on the inputs listed in the design basis; defaults marked "confirm" must be checked against site data.</li></ul>';
-    return '<div id="rpt">' + cover + '<h2 class="nb">Contents</h2><ol class="toc">' + toc.map(function (t) { return '<li>' + esc(t.replace(/^\d+\.\s*/, "")) + '</li>'; }).join("") + '</ol>' + body + '</div>';
+    return '<div id="rpt">' + (forC ? "" : '<div class="wm">NOT FOR CONSTRUCTION</div>') + cover.replace('<div class="vb ', stamp + '<div class="vb ') + '<h2 class="nb">Contents</h2><ol class="toc">' + toc.map(function (t) { return '<li>' + esc(t.replace(/^\d+\.\s*/, "")) + '</li>'; }).join("") + '</ol>' + body + '</div>';
   }
   function doc(S, p, opt) { return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc((p ? p.name : "Project") + " — calculations") + '</title><style>body{margin:0;background:#fff}' + CSS + ' table.est td:nth-child(n+3){text-align:right} tr.ih td{background:#eef2f7} tr.ded td{color:#a33} tr.it td{border-top:1.5px solid #333} .sorc{font-size:.85em;color:#666}</style></head><body>' + html(S, p, opt) + '</body></html>'; }
   function view(app, title, back, ctx) {

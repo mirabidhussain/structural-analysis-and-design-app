@@ -231,6 +231,8 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   await pg.evaluate(() => { location.hash = '#model'; }); await pg.waitForSelector('#bAna');
   await pg.evaluate(() => { const e = document.querySelector('[data-k=base]'); e.value = 'spring'; e.dispatchEvent(new Event('change', { bubbles: true })); }); await pg.click('#bAna'); await pg.waitForSelector('#results .rh', { timeout: 120000 }); await pg.waitForTimeout(500);
   const sp = await pg.evaluate(() => { const m = SU.state().m; return { spr: !!m.spr, n: Object.keys(m.spr || {}).length, t: Object.values(m.supType).join() }; });
+  const svr = await pg.evaluate(() => { const d = SU.state().det; return { serv: d && d.serv, txt: /Serviceability/.test(document.getElementById('results').textContent) && /Annex F/.test(document.getElementById('results').textContent) }; });
+  ok('Frame detailing reports serviceability (span / depth and crack width, IS 456 cl 23.2.1, Annex F)', svr.serv && svr.serv.beams > 0 && svr.txt, JSON.stringify(svr));
   const xy = await pg.evaluate(() => { const m = SU.state().m, k = Object.keys(m.sup)[0]; return { k: +k, p: SU.nodeXY(+k) }; });
   await pg.mouse.click(xy.p[0], xy.p[1]); await pg.waitForSelector('#supSel', { timeout: 5000 }).catch(() => {});
   const sel = await pg.evaluate(() => ({ box: !!document.getElementById('supSel'), h: document.querySelector('#selinfo h4') ? document.querySelector('#selinfo h4').textContent : '' }));
@@ -239,6 +241,10 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   ok('Frame base condition "spring" gives soil springs at every base; tapping a node lets its support be changed (rule written)', sp.spr && sp.n >= 4 && /spring/.test(sp.t) && sel.box && /^Node N/.test(sel.h) && after.t === 'pinned' && new RegExp('N' + (xy.k + 1) + ' = pinned').test(after.rule), JSON.stringify([sp, sel, after]));
   await pg.evaluate(() => { const t = document.querySelector('[data-k=supOver]'); t.value = ''; t.dispatchEvent(new Event('input', { bubbles: true })); t.dispatchEvent(new Event('change', { bubbles: true })); });
   await pg.evaluate(() => { const e = document.querySelector('[data-k=base]'); e.value = 'fixed'; e.dispatchEvent(new Event('change', { bubbles: true })); });
+  /* v3.12: serviceability in the frame detailing, design audit on member reports */
+  await pg.evaluate(() => { location.hash = '#beam'; }); await pg.waitForSelector('#f'); await pg.click('button.pri'); await pg.waitForSelector('#out .rep', { timeout: 30000 }); await pg.waitForTimeout(300);
+  const aud = await pg.evaluate(() => { const a = document.querySelector('#out .audit'); return a ? { chip: a.querySelector('.vchip').textContent, stamp: !!a.querySelector('.stamp'), gaps: a.querySelectorAll('.ag li').length, crack: /wcr/.test(document.querySelector('#out').textContent) } : null; });
+  ok('Member report carries the design audit: verification state, items not covered and the not-for-construction stamp; beam crack widths reported', aud && aud.chip === 'Calculated' && aud.stamp && aud.gaps >= 3 && aud.crack, JSON.stringify(aud));
   ok('No JavaScript errors', errs.length === 0, errs.slice(0, 3).join(' | '));
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);

@@ -130,6 +130,15 @@ ST.compression = function (p) {
 };
 
 /* ------------------------------------------------------------ BEAM (ISMB) */
+/* lateral-torsional buckling, IS 800 cl 8.2.2 and Annex E (E-1.1, exact Mcr for a doubly symmetric section with LLT):
+   q = { Iy mm⁴, It mm⁴, Iw mm⁶, Zp mm³, bb, fy, LLT mm, E, G (default IS 800 values), alpha (0.21 rolled) } → Mcr, λLT, φLT, χLT, fbd (N/mm²), Md (kNm) */
+ST.ltb = function (q) {
+  var E = q.E || D.E, G = q.G || D.G, L = q.LLT, aL = q.alpha || 0.21;
+  var Mcr = Math.sqrt((Math.PI * Math.PI * E * q.Iy / (L * L)) * (G * q.It + Math.PI * Math.PI * E * q.Iw / (L * L)));
+  var lLT = Math.sqrt(q.bb * q.Zp * q.fy / Mcr), phi = 0.5 * (1 + aL * (lLT - 0.2) + lLT * lLT);
+  var chi = Math.min(1, 1 / (phi + Math.sqrt(phi * phi - lLT * lLT))), fbd = chi * q.fy / D.gm0;
+  return { Mcr: Mcr / 1e6, lLT: lLT, phi: phi, chi: chi, fbd: fbd, Md: q.bb * q.Zp * fbd / 1e6 };
+};
 ST.beamCheck = function (s, p) {
   var fy = p.fy, eps = ST.eps(fy), L = p.L * 1000, o = {};
   var bt = (s.bf / 2) / s.tf, dt = (s.D - 2 * s.tf) / s.tw;
@@ -143,12 +152,9 @@ ST.beamCheck = function (s, p) {
     var Iy = s.Iy * 1e4, hf = s.D - s.tf;
     var It = (2 * s.bf * Math.pow(s.tf, 3) + (s.D - 2 * s.tf) * Math.pow(s.tw, 3)) / 3;
     var Iw = Iy * hf * hf / 4;
-    var Mcr = Math.sqrt((Math.PI * Math.PI * D.E * Iy / (LLT * LLT)) * (D.G * It + Math.PI * Math.PI * D.E * Iw / (LLT * LLT)));
-    var lLT = Math.sqrt(bb * Zp * fy / Mcr);
-    var phi = 0.5 * (1 + 0.21 * (lLT - 0.2) + lLT * lLT);
-    var chi = Math.min(1, 1 / (phi + Math.sqrt(phi * phi - lLT * lLT)));
-    o.Mcr = Mcr / 1e6; o.lLT = lLT; o.chi = chi;
-    o.Md = Math.min(bb * Zp * chi * fy / D.gm0 / 1e6, Mds);
+    var lt = ST.ltb({ Iy: Iy, It: It, Iw: Iw, Zp: Zp, bb: bb, fy: fy, LLT: LLT });
+    o.Mcr = lt.Mcr; o.lLT = lt.lLT; o.chi = lt.chi; o.LLT = LLT;
+    o.Md = Math.min(lt.Md, Mds);
   }
   var w = p.wu, P = p.Pu || 0;
   if (p.support === "cant") { o.Mu = w * p.L * p.L / 2 + P * p.L; o.Vu = w * p.L + P; }

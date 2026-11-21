@@ -89,3 +89,22 @@ LD.seismic = function (p) {
 };
 
 if (typeof module !== "undefined") module.exports = LD;
+
+/* IS 875 (Part 3):2015 Table 5 — external pressure coefficients on the walls of rectangular clad buildings
+   (A, B the long faces of length l, C, D the short faces of width w; θ = 0° wind normal to a long face).
+   Rows: h/w ≤ ½, ½ < h/w ≤ 3/2, 3/2 < h/w < 6; each with 1 ≤ l/w ≤ 3/2 and 3/2 < l/w < 4.
+   [windward, leeward, side] for θ = 0° (wind on a long face) and θ = 90° (wind on a short face). */
+LD.CPE_WALL = [
+  [[0.7, -0.2, -0.5], [0.7, -0.2, -0.5]], [[0.7, -0.25, -0.6], [0.7, -0.1, -0.5]],
+  [[0.7, -0.25, -0.6], [0.7, -0.25, -0.6]], [[0.7, -0.3, -0.7], [0.7, -0.1, -0.5]],
+  [[0.8, -0.25, -0.8], [0.8, -0.25, -0.8]], [[0.7, -0.4, -0.7], [0.8, -0.1, -0.5]]
+];
+LD.cpeWall = function (h, Bface, Dalong) {   /* Bface: width of the windward face, Dalong: depth in the wind direction */
+  var l = Math.max(Bface, Dalong), w = Math.max(Math.min(Bface, Dalong), 1e-6), hw = h / w, lw = l / w, note = [];
+  var hr = hw <= 0.5 ? 0 : hw <= 1.5 ? 1 : 2, lr = lw <= 1.5 ? 0 : 1;
+  if (hw >= 6) note.push("h/w = " + hw.toFixed(2) + " ≥ 6: beyond Table 5 — the 3/2 < h/w < 6 values are used; a wind-tunnel or dynamic study may be needed");
+  if (lw >= 4) note.push("l/w = " + lw.toFixed(2) + " ≥ 4: beyond Table 5 — the 3/2 < l/w < 4 values are used");
+  var onLong = Bface >= Dalong - 1e-9, row = LD.CPE_WALL[2 * hr + lr][onLong ? 0 : 1];
+  return { ww: row[0], lw: row[1], side: row[2], net: row[0] - row[1], hw: hw, lwr: lw, onLong: onLong, note: note };
+};
+LD.CPI = { normal: 0.2, medium: 0.5, large: 0.7 };

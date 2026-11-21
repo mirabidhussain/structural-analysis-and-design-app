@@ -1,6 +1,6 @@
 {
   "name": "is-structdesign",
-  "version": "2.6.0",
+  "version": "3.12.0",
   "private": true,
   "description": "IS-code structural analysis & design app (offline web app + Android WebView)",
   "scripts": {

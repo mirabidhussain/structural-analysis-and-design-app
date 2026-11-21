@@ -367,7 +367,7 @@ console.log('\n== H. Professional platform: BOQ, automatic design, projects, ver
   /* verification mode on the converged design */
   PDB.open(PDB.list().find(x => x.name === 'SKIMS block').id);
   const vi = PRO.vItems(r.S);
-  ok('Verification: deflection/crack width (not implemented) and Calculated checks are listed for review; no failures', vi.some(i => i.key === 'chk:servic' && i.st === 'Not implemented') && vi.some(i => i.key === 'chk:rccol') && !vi.some(i => i.st === 'FAIL'), vi.length + ' items');
+  ok('Verification: serviceability (calculated, no published benchmark) is listed for review; benchmarked column design is not; no failures', vi.some(i => i.key === 'chk:servic' && i.st === 'Calculated') && !vi.some(i => i.key === 'chk:rccol') && !vi.some(i => i.st === 'FAIL'), vi.length + ' items');
   ok('Verification: unreviewed → "Calculated result"', PRO.vClass(PRO.verifyState(PDB.current(), r.S))[1] === 'Calculated result');
   vi.forEach(i => PDB.setReview(i.key, { state: 'ok', by: 'Checker', date: new Date().toISOString(), note: '' }));
   ok('Verification: every item accepted → "Verified engineering result"', PRO.vClass(PRO.verifyState(PDB.current(), r.S))[1] === 'Verified engineering result');
@@ -375,7 +375,7 @@ console.log('\n== H. Professional platform: BOQ, automatic design, projects, ver
   ok('Verification: the original design with failures stays "Not acceptable"', PRO.vClass(vFail)[1] === 'Not acceptable' && vFail.fails > 0, vFail.fails + ' failures');
   const sm = PRO.summary(r.S);
   ok('Design summary: every group has utilisation ≤ 1 and a verification state', sm.length > 10 && sm.every(x => x.ok && x.u <= 1 + 1e-9 && x.v), sm.length + ' groups, max ' + Math.max(...sm.map(x => x.u)).toFixed(2));
-  ok('Verification state is the weakest check (beams: serviceability not implemented)', sm.find(x => x.kind === 'beam').v.st === 'Not implemented' && sm.find(x => x.kind === 'column').v.st === 'Calculated');
+  ok('Verification state is the weakest check (beams: serviceability calculated; columns: all benchmarked)', sm.find(x => x.kind === 'beam').v.st === 'Calculated' && sm.find(x => x.kind === 'column').v.st === 'Verified');
 
   /* report */
   const html = RPT.html(r.S, PDB.current(), {});
@@ -473,7 +473,7 @@ console.log('\n== J. Mat (raft) foundation');
   ok('Mat J5b: … and keeps isolated footings at SBC 300', !Si.det.mat && Si.det.foot.length === 12);
   ok('Mat J6: plan = column extents + 0.5 m projection beyond the outer faces (13.4 × 11.4 m); all checks pass', Math.abs(mt.L - 13.4) < 1e-9 && Math.abs(mt.B - 11.4) < 1e-9 && mt.checks.every(q => q.ok), mt.T + ' mm, ' + mt.checks.filter(q => !q.ok).map(q => q.t).join('; '));
   const pw = mt.pun.find(q => q.type === 'interior'), d = mt.T - Sa.det.cf.cf - 16;
-  ok('Mat J7: punching recomputed — b0 = 2(a + b + 2d), τv = Vu/(b0·d), ks·0.25√fck', Math.abs(pw.d - d) < 1e-9 && Math.abs(pw.b0 - 2 * (400 + 400 + 2 * d)) < 1e-6 && Math.abs(pw.tv - pw.Vu * 1000 / (pw.b0 * d)) < 1e-12 && Math.abs(pw.kc - 1.25) < 1e-12 && mt.pun.every(q => q.Vu < q.Pu));
+  ok('Mat J7: punching recomputed — b0 = 2(a + b + 2d), τv = Vu/(b0·d) + moment-transfer part, ks·0.25√fck', Math.abs(pw.d - d) < 1e-9 && Math.abs(pw.b0 - 2 * (400 + 400 + 2 * d)) < 1e-6 && Math.abs(pw.tvV - pw.Vu * 1000 / (pw.b0 * d)) < 1e-12 && Math.abs(pw.tv - pw.tvV - pw.tvM) < 1e-12 && pw.tvM >= 0 && Math.abs(pw.kc - 1.25) < 1e-12 && mt.pun.every(q => q.Vu < q.Pu));
   const fx = mt.flex.bx;
   ok('Mat J8: flexure — Ast from IS 456 Annex G at the most stressed element, provided ≥ required everywhere', Math.abs(fx.req - RCC.astFlex(fx.M, 1000, fx.d, 25, 500)) < 1e-9 && ['bx', 'by', 'tx', 'ty'].every(k => mt.flex[k].prov >= mt.flex[k].req - 1e-6) && mt.el.every(q => ['bx', 'by', 'tx', 'ty'].every(k => { let A0 = mt.mesh[k].As; mt.zones.forEach(z => { if (z.key === k && q.x0 >= z.x0 - 1e-6 && q.x1 <= z.x1 + 1e-6 && q.y0 >= z.y0 - 1e-6 && q.y1 <= z.y1 + 1e-6) A0 = Math.max(A0, z.As); }); return A0 >= q.req[k] - 1e-6; })), fx.M.toFixed(1) + ' kNm/m → ' + fx.req.toFixed(0) + ' mm²/m');
   ok('Mat J9: base mesh ≥ 0.12 %/2 per face and spacing ≤ min(3d, 300); sagging under the columns needs bottom bars', ['bx', 'by', 'tx', 'ty'].every(k => mt.mesh[k].As >= mt.Amin - 1e-9 && mt.mesh[k].s <= Math.min(300, 3 * mt.d.by)) && mt.zones.some(z => z.face === 'bottom' && mt.sups.some(s => s.col && s.x >= z.x0 && s.x <= z.x1 && s.y >= z.y0 && s.y <= z.y1)));
@@ -713,6 +713,68 @@ console.log('\n== S. v3.11 supports, cantilever and propped cantilever, effectiv
   ok('S19: vertical reactions balance the same loads for every base condition (spring reaction = k·settlement)', near1(sumV(pn), sumV(fx), 1e-6) && near1(sumV(sw), sumV(fx), 1e-6));
   const ov = MD.make(g, Object.assign({}, p0, { supOver: 'N1 = roller\nN99 = fixed\nnonsense' }));
   ok('S20: support rules per node — roller set, bad rules reported', ov.supType[0] === 'roller' && ov.sup[0].join() === '0,0,1,0,0,0' && ov.warn.some(w => /node 99/.test(w)) && ov.warn.some(w => /ignored/.test(w)));
+})();
+
+console.log('\n== T. v3.12 independent benchmarks and serviceability');
+(function () {
+  const { RCC, ST, LD, DT, MD, FE, PO } = c, rel = (a, b) => Math.abs(a - b) / Math.abs(b);
+  /* SP 16:1980 worked examples (design aids to IS 456), chart readings ±3 % */
+  const ex6two = RCC.colMcap(450, 450, 0.0225 * 450 * 450, 2500, 25, 415, 0.15 * 450, 'two'), ex6four = RCC.colMcap(450, 450, 0.025 * 450 * 450, 2500, 25, 415, 0.15 * 450, 'four');
+  ok('T1: SP 16 Example 6 — 450×450 M25 Fe415, Pu 2500 kN: p = 2.25 % (two faces, Chart 33) and 2.5 % (four faces, Chart 45) carry Mu = 200 kNm', rel(ex6two, 200) < 0.03 && rel(ex6four, 200) < 0.03, ex6two.toFixed(1) + ' / ' + ex6four.toFixed(1) + ' kNm');
+  const As8 = 0.012 * 400 * 600, mx8 = RCC.colMcap(400, 600, As8, 1600, 15, 415, 0.10 * 600, 'four'), my8 = RCC.colMcap(600, 400, As8, 1600, 15, 415, 0.15 * 400, 'four'), puz8 = (0.45 * 15 * (240000 - As8) + 0.75 * 415 * As8) / 1000;
+  ok('T2: SP 16 Example 8 — 400×600 M15 Fe415, p 1.2 % four faces, Pu 1600 kN: Mux1 = 194.4, Muy1 = 119.5 kNm (Charts 44, 45), Puz = 2496 kN (Chart 63)', rel(mx8, 194.4) < 0.03 && rel(my8, 119.52) < 0.03 && Math.abs(puz8 - 2496) < 1.5, mx8.toFixed(1) + ' / ' + my8.toFixed(1) + ' kNm, Puz ' + puz8.toFixed(0));
+  const As9 = 0.03 * 300 * 400, mx9 = RCC.colMcap(300, 400, As9, 1500, 30, 415, 0.15 * 400, 'four'), my9 = RCC.colMcap(400, 300, As9, 1500, 30, 415, 0.20 * 300, 'four');
+  ok('T3: SP 16 Example 9 — 300×400 M30 Fe415, p 3 % four faces, Pu 1500 kN: Mux1 = 149.8, Muy1 = 103.7 kNm', rel(mx9, 149.8) < 0.03 && rel(my9, 103.7) < 0.035, mx9.toFixed(1) + ' / ' + my9.toFixed(1) + ' kNm');
+  /* STAAD.Pro verification problem "IS 800 2007 LSD – I section with LTB": ISMB 200, LLT 3 m, E 205 GPa, G 78.85 GPa */
+  const lt = ST.ltb({ Iy: 137e4, It: 10.6e4, Iw: 15042e6, Zp: 240e3, bb: 1, fy: 250, LLT: 3000, E: 205000, G: 78850 });
+  ok('T4: steel LTB vs the published STAAD.Pro IS 800 verification — Mcr 60.13 kNm, λLT 0.999, χLT 0.666, fbd 151.4 N/mm², Md 36.35 kNm', rel(lt.Mcr, 60.13) < 0.002 && Math.abs(lt.lLT - 0.999) < 0.001 && Math.abs(lt.chi - 0.666) < 0.001 && rel(lt.fbd, 151.4) < 0.002 && rel(lt.Md, 36.35) < 0.002, JSON.stringify(lt));
+  /* IITK-GSDMA EQ21 / EQ03 Example 1 (IS 1893): 4 storeys 4.2 + 3 × 3.2 m, W = 4200, 4200, 4200, 3000 kN, zone V, I 1, R 5, soil II, 0.09h/√d, d = 20 m */
+  const floors = [{ name: '1', w: 4200, h: 4.2 }, { name: '2', w: 4200, h: 7.4 }, { name: '3', w: 4200, h: 10.6 }, { name: 'Roof', w: 3000, h: 13.8 }];
+  const sq = LD.seismic({ zone: 'V', I: 1, R: 5, soil: 'II', btype: 'infill', h: 13.8, d: 20, floors, __defaults: [] }), vb = parseFloat(sq.summary.find(x => /Base shear/.test(x[0]))[1].replace(/,/g, ''));
+  const rows = sq.items.find(i => i.head && i.head[0] === 'Floor').rows, q = rows.map(r => parseFloat(r[3].replace(/,/g, '')));
+  ok('T5: IITK-GSDMA Example 1 — Ta = 0.28 s, Sa/g = 2.5, Ah = 0.09, VB = 1404 kN', Math.abs(vb - 1404) < 0.5 && /0\.090/.test(sq.summary[0][1] + ''), vb + ' kN, Ah ' + sq.summary[0][1]);
+  ok('T6: storey forces Qi = VB Wi hi² / Σ Wj hj² — same distribution as the published INSDAG example (426 / 352 / 172 / 55 of 1005 kN)', [55, 172, 352, 426].every((v, i) => Math.abs(q[i] / vb - v / 1005) < 0.0007), q.map(x => x.toFixed(1)).join(', '));
+  /* frame engine: the same weights through the frame model's load pattern */
+  const g = MD.generate({ bx: '5,5,5,5', by: '5,5,5', hs: '4.2, 3.2, 3.2, 3.2', slabs: false, mesh: 1 }), mm = MD.make(g, { fck: 25, fy: 500, fys: 250, colSec: '400x400', beamSec: '300x450', braceSec: 'ISA 75x75x6', tSlab: 150, tWall: 200 });
+  const lv = [4.2, 7.4, 10.6, 13.8], W = mm.nodes.map(n => { const i = lv.findIndex(z => Math.abs(z - n.z) < 1e-6); if (i < 0) return 0; const k = mm.nodes.filter(m2 => Math.abs(m2.z - n.z) < 1e-6).length; return floors[i].w / k; });
+  const pat = PO.pattern(mm, W, 0, 'parabolic'), byLv = lv.map(z => pat.filter(o => Math.abs(mm.nodes[o.n].z - z) < 1e-6).reduce((a, o) => a + o.f[0], 0) * 1404);
+  ok('T7: frame model lateral pattern reproduces the IITK-GSDMA storey forces for the same weights (595.4 / 491.8 / 239.7 / 77.2 kN)', [77.2, 239.7, 491.8, 595.4].every((v, i) => Math.abs(byLv[i] - v) < 0.1), byLv.map(x => x.toFixed(1)).join(', '));
+  /* crack width, IS 456 Annex F — hand calculation: b 300, h 600, d 550, 4-20, cmin 40, M 150 kNm, M25 (θ = 1.6) */
+  const cw = DT.crack(150, 300, 600, 550, 4, 20, 40, 25), Ec = 5000 * 5 / 2.6, m = 2e5 / Ec, As = 4 * Math.PI * 100;
+  const x = (-m * As + Math.sqrt((m * As) ** 2 + 2 * 300 * m * As * 550)) / 300, fs = 150e6 / (As * (550 - x / 3)), e1 = fs / 2e5 * (600 - x) / (550 - x), em = e1 - 300 * (600 - x) ** 2 / (3 * 2e5 * As * (550 - x));
+  const s4 = (300 - 2 * 50) / 3, acr = Math.max(Math.hypot(s4 / 2, 50) - 10, Math.SQRT2 * 50 - 10), w = 3 * acr * em / (1 + 2 * (acr - 40) / (600 - x));
+  ok('T8: crack width (IS 456 Annex F) agrees with a step-by-step hand calculation', Math.abs(cw.w - w) < 1e-9 && Math.abs(cw.x - x) < 1e-9 && cw.w > 0.1 && cw.w < 0.3, 'x ' + x.toFixed(1) + ' mm, fs ' + fs.toFixed(0) + ' N/mm², acr ' + acr.toFixed(1) + ' mm, w ' + w.toFixed(3) + ' mm');
+  /* punching with moment transfer (IS 456 cl 31.6.2.2): closed forms for interior and edge columns (as tabulated in ACI 318 / textbooks) */
+  const pi = RCC.punchMT({ box: [-300, 300, -300, 300], open: [], cx: 0, cy: 0, d: 200, Vu: 500, Mx: 0, My: 100 }), Ji = 200 * 600 ** 3 / 6 + 600 * 200 ** 3 / 6 + 200 * 600 * 600 ** 2 / 2;
+  ok('T13: punching with moment transfer, interior column — J = d a³/6 + a d³/6 + d b a²/2, γv = 1 − 1/(1 + ⅔√(a1/b1)) = 0.4, τ = V/(b0 d) + γv M c / J', Math.abs(pi.Jy / Ji - 1) < 1e-12 && Math.abs(pi.gy - 0.4) < 1e-12 && Math.abs(pi.tv - (500e3 / (2400 * 200) + 0.4 * 100e6 * 300 / Ji)) < 1e-9, pi.tv.toFixed(3) + ' N/mm²');
+  const pe = RCC.punchMT({ box: [0, 500, -300, 300], open: ['W'], cx: 0, cy: 0, d: 200, Vu: 300, Mx: 0, My: 0 }), b1 = 500, b2 = 600, cAB = b1 * b1 / (2 * b1 + b2), Je = 2 * (b1 * 200 ** 3 / 12 + 200 * b1 ** 3 / 12 + b1 * 200 * (b1 / 2 - cAB) ** 2) + b2 * 200 * cAB ** 2;
+  ok('T14: edge column — three-sided perimeter, centroid at b1²/(2b1 + b2) from the inner face, J by the closed form; the eccentricity of the shear adds stress', pe.b0 === 1600 && Math.abs(500 - pe.xc - cAB) < 1e-9 && Math.abs(pe.Jy / Je - 1) < 1e-12 && pe.tvM > 0, 'J ' + pe.Jy.toExponential(4));
+  /* design audit */
+  const REGx = require('vm').runInContext('REG', c), au = REGx.audit('beam'), af = REGx.audit('footing'), ht = REGx.auditHtml('pile', x => String(x));
+  ok('T19: design audit — each module lists the engine checks behind it; the weakest decides the state; gaps include simplified register items', au.rows.length === 4 && au.st === 'Calculated' && au.gaps.some(g => /Annex C/.test(g)) && af.st === 'Simplified' && af.gaps.some(g => /rigid footing/i.test(g)) && /not for construction/i.test(ht) && /Nq read approximately/.test(ht));
+  ok('T20: every module has an audit entry and every listed check id exists in the register', Object.keys(REGx.MOD).every(k => REGx.MOD[k].every(id => REGx.byId(id))) && Object.keys(c.MODS).every(k => REGx.MOD[k] && REGx.GAPS[k]));
+  ok('T9: no crack width when the steel strain is outweighed by tension stiffening (εm ≤ 0)', DT.crack(5, 300, 600, 550, 4, 20, 40, 25).w === 0);
+  ok('T10: crack-width limits of IS 456 cl 35.3.2 — 0.3 mm general, 0.2 mm severe, 0.004 × cover (≤ 0.2) very severe', DT.wlim({ cv: { expo: 'moderate', nom: 30 } }) === 0.3 && DT.wlim({ cv: { expo: 'severe', nom: 45 } }) === 0.2 && Math.abs(DT.wlim({ cv: { expo: 'very severe', nom: 50 } }) - 0.2) < 1e-12);
+  /* frame serviceability: thin long slab fails span/depth, the default building passes */
+  const p = { fck: 25, fy: 500, fys: 250, crack: true, pcCol: 2, pcBeam: 1, colSec: '450x450', beamSec: '300x500', braceSec: 'ISA 75x75x6', tSlab: 150, tWall: 200, ff: 1.5, ffRoof: 2.5, ll: 3, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0, eq: true, zone: 'IV', I: 1, R: 5, soil: 'II', sys: 'rc', wind: false, vb: 39, terrain: 2, cf: 1.3, trib: 4, kcol: 1.2, method: 'lsm' };
+  /* wind on buildings, IS 875 (Part 3):2015 */
+  const cpA = LD.cpeWall(9.9, 20, 15), cpB = LD.cpeWall(9.9, 15, 20), cpC = LD.cpeWall(30, 12, 11.5);
+  ok('T15: Table 5 wall pressure coefficients — wind on the long face of a low building +0.7 / −0.25 (net 0.95), on the short face +0.7 / −0.25; tall building (h/w > 3/2) +0.8 / −0.25', cpA.onLong && cpA.ww === 0.7 && cpA.lw === -0.25 && Math.abs(cpA.net - 0.95) < 1e-12 && !cpB.onLong && cpB.lw === -0.25 && cpC.ww === 0.8 && cpC.lw === -0.25, JSON.stringify([cpA.net, cpB.net, cpC.net]));
+  ok('T16: Table 5 rows for long buildings (3/2 < l/w < 4): wind on the long face −0.3 leeward, on the short face −0.1', LD.cpeWall(10, 40, 15).lw === -0.3 && LD.cpeWall(10, 15, 40).lw === -0.1 && LD.cpeWall(10, 80, 15).note.length === 1);
+  {
+    const pw = Object.assign({}, p, { eq: false, wind: true, vb: 39, terrain: 2, k1: 1, wmeth: 'cpe', wperm: 'normal' }), gw = MD.generate({ bx: '5,5,5,5', by: '5,5,5', hs: '3.3, 3.3, 3.3', slabs: false, mesh: 1 }), mw = MD.make(gw, pw), Lw = MD.cases(mw, pw), wx = Lw.wind.WLX;
+    /* hand calculation: B = 15 m (face normal to X), depth 20 m, h = 9.9 m → h/w = 0.66, l/w = 1.33, wind on the short face: +0.7 / −0.25 */
+    const k2 = 1.0, pd = 0.7 * 0.6 * Math.pow(39 * k2, 2) / 1000, F = 0.95 * pd * 15 * (3.3 + 3.3 + 3.3 / 2);   /* tributary heights of the three floor levels; the lower half of the ground storey goes to the base */
+    ok('T17: frame wind force by Cpe — F = (Cpe,w − Cpe,l)·pd·B·h with pd = 0.7·0.6·Vz² (k2 = 1.0 up to 10 m, terrain 2)', Math.abs(wx.C - 0.95) < 1e-12 && Math.abs(wx.F - F) < 1e-6 && Math.abs(wx.B - 15) < 1e-9, wx.F.toFixed(2) + ' kN vs ' + F.toFixed(2));
+    const cbw = MD.combos(Lw.cases, 'lsm'), nT = cbw.filter(c => /TWXa|TWXb/.test(c.name)).length;
+    const torq = Lw.cases.TWXa.nodal.reduce((a, l) => { const n = mw.nodes[l.n]; return a + (n.x - 10) * l.f[1] - (n.y - 7.5) * l.f[0] + l.f[5]; }, 0);
+    ok('T18: wind torsion sets 0.75·WL ± 0.75·Fi·0.15B (ASCE 7 Case 2) added to the combinations; torque matches', nT === 12 && Math.abs(Math.abs(torq) - 0.75 * wx.F * 0.15 * 15) < 1e-6 * wx.F, nT + ' combos, ΣT ' + torq.toFixed(2) + ' vs ' + (0.75 * wx.F * 0.15 * 15).toFixed(2));
+  }
+  function det(bx, by, extra) { const P = Object.assign({}, p, extra || {}), m2 = MD.make(MD.generate({ bx, by, hs: '3.5,3.2', slabs: true, mesh: 1 }), P), S = { m: m2, p: P }; S.L = MD.cases(m2, P); S.cb = MD.combos(S.L.cases, P.method); S.res = FE.linear(m2, S.L.cases, S.cb, { caseReac: true }); S.res.incMap = {}; S.des = MD.design(m2, S.res, P); return DT.run(m2, S, P); }
+  const d1 = det('5,5', '4,4'), d2 = det('7,7', '6', { beamSec: '230x450' });
+  const sp = d1.beams[0].spans[0].serv, kt = RCC.kt(100 * sp.Aprov / (300 * d1.beams[0].d), 0.58 * 500 * Math.min(sp.Areq, sp.Aprov) / sp.Aprov);
+  ok('T11: frame beams — span / effective depth check with basic 26 (continuous), kt from the steel provided; crack widths under service DL + LL', d1.serv.beams > 0 && d1.serv.beamFail === 0 && sp.basic === 26 && Math.abs(sp.kt - kt) < 1e-12 && sp.wMid.w > 0 && sp.wSup.w > 0, JSON.stringify(d1.serv));
+  ok('T12: frame slabs — a 150 mm slab over a 6 m short span fails span / depth and is counted as a failure; 4 m spans pass', d2.serv.slabFail === d2.serv.slabs && d2.serv.slabs > 0 && d1.serv.slabFail === 0 && d2.fails >= d2.serv.slabFail, JSON.stringify(d2.serv));
 })();
 
 console.log(`\n${pass} passed, ${fail} failed`);

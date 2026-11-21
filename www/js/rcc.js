@@ -532,3 +532,28 @@ RCC.stair = function (p) {
 };
 
 if (typeof module !== "undefined") module.exports = RCC;
+
+/* punching shear with unbalanced moment transfer, IS 456 cl 31.6.2.2 with cl 31.3.3: a fraction (1 − α) of the moment,
+   α = 1 / (1 + (2/3)√(a1/b1)), is carried by eccentric shear varying linearly about the centroid of the critical section.
+   q: box [xa, xb, ya, yb] of the critical perimeter at d/2 (mm), open sides ("W", "E", "S", "N") at free edges, cx, cy column centre (mm),
+   d (mm), Vu (kN), Mx (kNm, about the x axis → stress varies with y), My (kNm, about y → varies with x).
+   Polar moments J of the perimeter (thickness d): sides normal to the bending axis d·l³/12 + l·d³/12 + l·d·r², parallel sides l·d·r².
+   The moment is taken about the critical-section centroid: |M| + Vu·|e| (e the centroid offset from the column centre) — conservative. */
+RCC.punchMT = function (q) {
+  var xa = q.box[0], xb = q.box[1], ya = q.box[2], yb = q.box[3], d = q.d, op = q.open || [], segs = [];
+  if (op.indexOf("W") < 0) segs.push({ x1: xa, y1: ya, x2: xa, y2: yb }); if (op.indexOf("E") < 0) segs.push({ x1: xb, y1: ya, x2: xb, y2: yb });
+  if (op.indexOf("S") < 0) segs.push({ x1: xa, y1: ya, x2: xb, y2: ya }); if (op.indexOf("N") < 0) segs.push({ x1: xa, y1: yb, x2: xb, y2: yb });
+  var b0 = 0, sx = 0, sy = 0; segs.forEach(function (g) { g.l = Math.hypot(g.x2 - g.x1, g.y2 - g.y1); g.xm = (g.x1 + g.x2) / 2; g.ym = (g.y1 + g.y2) / 2; b0 += g.l; sx += g.l * g.xm; sy += g.l * g.ym; });
+  var xc = sx / b0, yc = sy / b0, Jy = 0, Jx = 0, cxm = 0, cym = 0;
+  segs.forEach(function (g) {
+    var horiz = Math.abs(g.y2 - g.y1) < 1e-9;
+    Jy += horiz ? d * Math.pow(g.l, 3) / 12 + g.l * Math.pow(d, 3) / 12 + g.l * d * Math.pow(g.xm - xc, 2) : g.l * d * Math.pow(g.xm - xc, 2);
+    Jx += horiz ? g.l * d * Math.pow(g.ym - yc, 2) : d * Math.pow(g.l, 3) / 12 + g.l * Math.pow(d, 3) / 12 + g.l * d * Math.pow(g.ym - yc, 2);
+    cxm = Math.max(cxm, Math.abs(g.x1 - xc), Math.abs(g.x2 - xc)); cym = Math.max(cym, Math.abs(g.y1 - yc), Math.abs(g.y2 - yc));
+  });
+  var a1x = xb - xa, b1x = yb - ya;   /* bending about y: span direction x */
+  var alY = 1 / (1 + (2 / 3) * Math.sqrt(a1x / b1x)), alX = 1 / (1 + (2 / 3) * Math.sqrt(b1x / a1x));
+  var My = Math.abs(q.My || 0) + Math.abs(q.Vu) * Math.abs(xc - q.cx) / 1000, Mx = Math.abs(q.Mx || 0) + Math.abs(q.Vu) * Math.abs(yc - q.cy) / 1000;
+  var tvV = q.Vu * 1000 / (b0 * d), tmy = Jy > 0 ? (1 - alY) * My * 1e6 * cxm / Jy : 0, tmx = Jx > 0 ? (1 - alX) * Mx * 1e6 * cym / Jx : 0;
+  return { tv: tvV + tmx + tmy, tvV: tvV, tvM: tmx + tmy, b0: b0, xc: xc, yc: yc, Jx: Jx, Jy: Jy, gx: 1 - alX, gy: 1 - alY, Mx: Mx, My: My };
+};

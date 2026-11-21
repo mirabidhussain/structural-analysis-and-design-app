@@ -154,7 +154,7 @@ MAT.run = function (m, S, p, cf, g, iso) {
     out.ang = ang || { r: 0, dw: 0, L: 0, a: "", b: "" };
     /* factored: element moments and shears, punching */
     var ne = mm.shells.length, env = []; for (var k = 0; k < ne; k++) env.push({ bx: 0, by: 0, tx: 0, ty: 0, Q: 0, Mx: [0, 0], My: [0, 0], cb: ["", "", "", ""] });
-    var pun = {}; cols.forEach(function (s) { pun[s.n] = { Vu: 0, cb: "" }; });
+    var pun = {}; cols.forEach(function (s) { pun[s.n] = { Vu: 0, cb: "", list: [] }; });
     /* one-way shear (IS 456 cl 31.6.1 / 40.2): section at d from each column face, shear averaged over the column strip
        (0.25 of the transverse spans each side of the column line, or to the mat edge) */
     var strips = [], d1 = ((T * 1000 - cov - dia0 / 2) + (T * 1000 - cov - 1.5 * dia0)) / 2000;
@@ -182,7 +182,8 @@ MAT.run = function (m, S, p, cf, g, iso) {
       cols.forEach(function (s) {
         var pr = perim(s, dd0), sup = 0;
         for (var v2 = 0; v2 < n; v2++) { var nd = mm.nodes[v2]; if (nd.x > pr.box[0] + 1e-6 && nd.x < pr.box[1] - 1e-6 && nd.y > pr.box[2] + 1e-6 && nd.y < pr.box[3] - 1e-6) sup += rf.R[v2] - sf.sw * 25 * T * pm.tr[v2]; }
-        var Vu = sf.r[s.n][2] - Math.max(sup, 0); if (Vu > pun[s.n].Vu) pun[s.n] = { Vu: Vu, cb: sf.name };
+        var Vu = sf.r[s.n][2] - Math.max(sup, 0); if (Vu > pun[s.n].Vu) { pun[s.n].Vu = Vu; pun[s.n].cb = sf.name; }
+        pun[s.n].list.push({ Vu: Vu, Mx: sf.r[s.n][3], My: sf.r[s.n][4], cb: sf.name });
       });
     }
     /* flexure: required steel per element, base mesh (≥ 0.12 % split between faces, covering 75 % of the area), extra bars */
@@ -276,8 +277,11 @@ MAT.run = function (m, S, p, cf, g, iso) {
 
     /* punching */
     out.pun = cols.map(function (s) {
-      var dd = (dxB + dyB) / 2, pr = perim(s, dd / 1000), Vu = pun[s.n].Vu, tv = Vu * 1000 / (pr.b0 * 1000 * dd), kc = kpun(s);
-      return { name: s.name, n: s.n, a: s.a * 1000, b: s.b * 1000, d: dd, b0: pr.b0 * 1000, type: pr.type, Vu: Vu, Pu: Pu[s.n], cb: pun[s.n].cb, tv: tv, kc: kc, u: tv / kc, ok: tv <= kc + 1e-9 };
+      var dd = (dxB + dyB) / 2, pr = perim(s, dd / 1000), kc = kpun(s), best = null;
+      pun[s.n].list.forEach(function (c0) { if (c0.Vu <= 0) return; var mt = RCC.punchMT({ box: pr.box.map(function (v) { return v * 1000; }), open: pr.open, cx: s.x * 1000, cy: s.y * 1000, d: dd, Vu: c0.Vu, Mx: c0.Mx, My: c0.My }); if (!best || mt.tv > best.mt.tv) best = { c: c0, mt: mt }; });
+      if (!best) best = { c: { Vu: 0, cb: "" }, mt: { tv: 0, tvV: 0, tvM: 0 } };
+      var tv = best.mt.tv;
+      return { name: s.name, n: s.n, a: s.a * 1000, b: s.b * 1000, d: dd, b0: pr.b0 * 1000, type: pr.type, Vu: best.c.Vu, Pu: Pu[s.n], cb: best.c.cb, tv: tv, tvV: best.mt.tvV, tvM: best.mt.tvM, Mx: best.mt.Mx, My: best.mt.My, kc: kc, u: tv / kc, ok: tv <= kc + 1e-9 };
     });
     /* sliding and overturning (IS 456 cl 20): 0.9 × dead load, μ = 0.5 */
     var DLt = tot({ r: comb({ DL: 1 }) }), Wd = 0.9 * (DLt.N + 25 * T * Am), sl = null, ot = null;
@@ -303,7 +307,7 @@ MAT.run = function (m, S, p, cf, g, iso) {
     C.push({ t: "Settlement under DL+LL (Winkler, indicative)", ok: out.wmax <= setLim + 1e-9, v: out.wmax.toFixed(1) + " ≤ " + setLim + " mm", cl: "IS 1904 (raft) — confirm with a settlement analysis", u: out.wmax / setLim });
     C.push({ t: "Angular distortion between columns", ok: out.ang.r <= 1 / angLim + 1e-12, v: "1/" + (out.ang.r > 0 ? Math.round(1 / out.ang.r) : "∞") + (out.ang.a ? " (" + out.ang.a + "–" + out.ang.b + ", Δ " + out.ang.dw.toFixed(1) + " mm)" : "") + " ≤ 1/" + angLim, cl: "IS 1904", u: out.ang.r * angLim });
     var pw = out.pun.reduce(function (a, q) { return !a || q.u > a.u ? q : a; }, null);
-    if (pw) C.push({ t: "Punching shear at d/2 — worst " + pw.name + " (" + pw.type + ")", ok: out.pun.every(function (q) { return q.ok; }), v: pw.tv.toFixed(3) + " ≤ ks·0.25√fck " + pw.kc.toFixed(3) + " N/mm²" + (out.pun.filter(function (q) { return !q.ok; }).length ? " — fails at " + out.pun.filter(function (q) { return !q.ok; }).length + " columns" : ""), cl: "IS 456 cl 31.6", u: pw.u });
+    if (pw) C.push({ t: "Punching shear at d/2 — worst " + pw.name + " (" + pw.type + ")", ok: out.pun.every(function (q) { return q.ok; }), v: pw.tvV.toFixed(3) + " + " + pw.tvM.toFixed(3) + " (moment transfer) = " + pw.tv.toFixed(3) + " ≤ ks·0.25√fck " + pw.kc.toFixed(3) + " N/mm²" + (out.pun.filter(function (q) { return !q.ok; }).length ? " — fails at " + out.pun.filter(function (q) { return !q.ok; }).length + " columns" : ""), cl: "IS 456 cl 31.6.2.2, 31.6.3", u: pw.u });
     C.push({ t: "One-way shear at d from the column faces (column-strip average)" + (out.shear.col ? " — worst " + out.shear.col + " " + out.shear.dir : ""), ok: out.shear.u <= 1 + 1e-9, v: out.shear.tv.toFixed(3) + " ≤ τc " + out.shear.tc.toFixed(3) + " N/mm² (pt " + out.shear.pt.toFixed(2) + " %)", cl: "IS 456 cl 31.6.1, 40.2", u: out.shear.u });
     C.push({ t: "Flexure (Wood–Armer) within the section capacity", ok: feasible, v: feasible ? "all elements designed" : "Mu > Mu,lim or more than 32φ extra bars needed — thicken the mat", cl: "IS 456 Annex G / cl 24" });
     if (sl) C.push({ t: "Sliding (μ = 0.5, 0.9 DL)", ok: sl.fs >= 1.4 - 1e-9, v: "FS " + sl.fs.toFixed(2) + " ≥ 1.4", cl: "IS 456 cl 20.2" });
