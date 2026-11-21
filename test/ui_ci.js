@@ -237,8 +237,9 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   await pg.mouse.click(xy.p[0], xy.p[1]); await pg.waitForSelector('#supSel', { timeout: 5000 }).catch(() => {});
   const sel = await pg.evaluate(() => ({ box: !!document.getElementById('supSel'), h: document.querySelector('#selinfo h4') ? document.querySelector('#selinfo h4').textContent : '' }));
   if (sel.box) { await pg.selectOption('#supSel', 'pinned'); await pg.click('#supBtn'); await pg.waitForTimeout(300); }
-  const after = await pg.evaluate(k => ({ rule: document.querySelector('[data-k=supOver]').value, t: SU.state().m.supType[k] }), xy.k);
-  ok('Frame base condition "spring" gives soil springs at every base; tapping a node lets its support be changed (rule written)', sp.spr && sp.n >= 4 && /spring/.test(sp.t) && sel.box && /^Node N/.test(sel.h) && after.t === 'pinned' && new RegExp('N' + (xy.k + 1) + ' = pinned').test(after.rule), JSON.stringify([sp, sel, after]));
+  const tapped = /Node N(\d+)/.exec(sel.h), kk = tapped ? +tapped[1] - 1 : xy.k;   /* the node the tap actually selected (a node above may be drawn at the same spot) */
+  const after = await pg.evaluate(k => ({ rule: document.querySelector('[data-k=supOver]').value, t: SU.state().m.supType[k] }), kk);
+  ok('Frame base condition "spring" gives soil springs at every base; tapping a node lets its support be changed (rule written)', sp.spr && sp.n >= 4 && /spring/.test(sp.t) && sel.box && /^Node N/.test(sel.h) && after.t === 'pinned' && new RegExp('N' + (kk + 1) + ' = pinned').test(after.rule), JSON.stringify([sp, sel, after]));
   await pg.evaluate(() => { const t = document.querySelector('[data-k=supOver]'); t.value = ''; t.dispatchEvent(new Event('input', { bubbles: true })); t.dispatchEvent(new Event('change', { bubbles: true })); });
   await pg.evaluate(() => { const e = document.querySelector('[data-k=base]'); e.value = 'fixed'; e.dispatchEvent(new Event('change', { bubbles: true })); });
   /* v3.12: serviceability in the frame detailing, design audit on member reports */
