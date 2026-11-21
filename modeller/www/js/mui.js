@@ -47,8 +47,34 @@
   $("bUndo").onclick = undo; $("bRedo").onclick = redo;
 
   /* ---------------- files ---------------- */
+  /* in a Claude artifact, files go through the viewer's "downloads" capability; types it does not allow (.dxf) travel inside a .zip */
+  var DL = null;
+  try { if (window.claude && window.claude.use) window.claude.use("downloads").then(function (d) { DL = d; }, function () {}); } catch (e) {}
+  function zipOne(name, text) {
+    var data = new TextEncoder().encode(text), nm = new TextEncoder().encode(name), T = zipOne.T;
+    if (!T) { T = zipOne.T = []; for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; T[n] = c >>> 0; } }
+    var crc = 0xFFFFFFFF; for (var i = 0; i < data.length; i++) crc = T[(crc ^ data[i]) & 255] ^ (crc >>> 8); crc = (crc ^ 0xFFFFFFFF) >>> 0;
+    var d = new Date(), dt = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), dd = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    var L = 30 + nm.length, C = 46 + nm.length, out = new Uint8Array(L + data.length + C + 22), v = new DataView(out.buffer);
+    function hdr(o, central) {
+      var p = o; v.setUint32(p, central ? 0x02014b50 : 0x04034b50, true); p += 4; if (central) { v.setUint16(p, 20, true); p += 2; }
+      v.setUint16(p, 20, true); v.setUint16(p + 2, 0x0800, true); v.setUint16(p + 4, 0, true); v.setUint16(p + 6, dt, true); v.setUint16(p + 8, dd, true);
+      v.setUint32(p + 10, crc, true); v.setUint32(p + 14, data.length, true); v.setUint32(p + 18, data.length, true); v.setUint16(p + 22, nm.length, true); v.setUint16(p + 24, 0, true); p += 26;
+      if (central) p += 14; /* comment length, disk, attributes, local header offset: all 0 */
+      out.set(nm, p); return p + nm.length;
+    }
+    var p = hdr(0, false); out.set(data, p); p += data.length; var cd = p; p = hdr(p, true);
+    v.setUint32(p, 0x06054b50, true); v.setUint16(p + 8, 1, true); v.setUint16(p + 10, 1, true); v.setUint32(p + 12, C, true); v.setUint32(p + 16, cd, true);
+    return out;
+  }
   function download(name, text, mime) {
     if (window.AndroidBridge && AndroidBridge.saveFile) { AndroidBridge.saveFile(name, text); return; }
+    if (DL) {
+      var fn = name, data = text;
+      if (!/\.(json|txt|csv|md)$/i.test(name)) { data = zipOne(name, text); fn = name.replace(/\.[^.]+$/, "") + ".zip"; }
+      DL.save({ filename: fn, data: data }).then(function () { toast("Saved " + fn + (fn !== name ? " — unzip it for " + name : "")); }, function (e) { if (!e || e.code !== "declined") toast("Could not save: " + (e && (e.message || e.code))); });
+      return;
+    }
     var url = URL.createObjectURL(new Blob([text], { type: mime || "application/octet-stream" })), a = document.createElement("a");
     a.href = url; a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1500);
   }
