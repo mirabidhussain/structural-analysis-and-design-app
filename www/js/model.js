@@ -123,6 +123,7 @@ MD.make = function (geo, p) {
     return (cache[k] = s);
   }
   var m = { nodes: geo.nodes, sup: geo.sup, twoD: geo.twoD, frames: [], shells: [] };
+  MD.supports(m, geo, p, warn);
   geo.frames.forEach(function (f) {
     var role = f.role === "brace" ? "brace" : f.role === "column" ? "column" : "beam";
     var s = sec(defs[role], role, f.layer || ""), src = MD.parseSec(f.layer || "", p, role) ? "DXF layer" : "default";
@@ -534,3 +535,45 @@ MD.drift = function (m, res) {
 };
 
 if (typeof module !== "undefined") module.exports = MD;
+
+/* support conditions: base condition for the generated / default-fixed bases, then per-node rules ("N12 = pinned", "3-5 = roller").
+   Restraint vector [ux, uy, uz, rx, ry, rz], z vertical. Spring base: vertical and rocking springs of a footing on soil,
+   Kv = ks·B·L, Kθ = ks·I (IS 2950 Pt 1 modulus of subgrade reaction), horizontal and torsion held. */
+MD.SUPS = { fixed: [1, 1, 1, 1, 1, 1], pinned: [1, 1, 1, 0, 0, 0], roller: [0, 0, 1, 0, 0, 0], spring: [1, 1, 0, 0, 0, 1], guided: [1, 1, 0, 1, 1, 1] };
+MD.SUP_OPTS = [["fixed", "Fixed"], ["pinned", "Pinned (hinged)"], ["roller", "Roller (vertical only)"], ["spring", "Spring (footing on soil)"], ["guided", "Guided (slides vertically)"], ["free", "Free (no support)"]];
+MD.springOf = function (p) {
+  var ks = +p.ksoil > 0 ? +p.ksoil : 40000, B = +p.fB > 0 ? +p.fB : 2, L = +p.fL > 0 ? +p.fL : 2;
+  return [0, 0, ks * B * L, ks * L * Math.pow(B, 3) / 12, ks * B * Math.pow(L, 3) / 12, 0];   /* L along X, B along Y: rocking about X uses B³, about Y uses L³ */
+};
+MD.supRules = function (txt) {
+  var out = [];
+  String(txt || "").split(/\n/).forEach(function (ln, i) {
+    var t = ln.replace(/#.*/, "").trim(); if (!t) return;
+    var mm = t.match(/^(.+?)=\s*([a-z]+)\s*$/i), nodes = [];
+    if (!mm) { out.push({ err: true, line: i + 1, txt: t }); return; }
+    mm[1].split(/[,\s]+/).forEach(function (q) { q = q.replace(/^n/i, ""); var r = q.match(/^(\d+)(?:-(\d+))?$/); if (r) for (var k = +r[1]; k <= +(r[2] || r[1]); k++) nodes.push(k - 1); });
+    var ty = mm[2].toLowerCase().replace(/^hinged?$/, "pinned").replace(/^pin$/, "pinned");
+    if (!nodes.length || !(MD.SUPS[ty] || ty === "free")) { out.push({ err: true, line: i + 1, txt: t }); return; }
+    out.push({ nodes: nodes, type: ty, line: i + 1 });
+  });
+  return out;
+};
+MD.supports = function (m, geo, p, warn) {
+  var sup = {}, spr = {}, base = p.base || "fixed", K = MD.springOf(p), types = {};
+  Object.keys(geo.sup || {}).forEach(function (k) {
+    var r = geo.sup[k], allFix = r.every(function (x) { return !!x; });
+    if (allFix && base !== "fixed" && MD.SUPS[base]) { sup[k] = MD.SUPS[base].slice(); types[k] = base; if (base === "spring") spr[k] = K.slice(); }
+    else { sup[k] = r.slice(); types[k] = allFix ? "fixed" : r[3] || r[4] ? "partial" : r[0] ? "pinned" : "roller"; }
+  });
+  MD.supRules(p.supOver).forEach(function (r) {
+    if (r.err) { warn.push("Support rule line " + r.line + " ignored (use e.g. 'N12 = pinned', '3-5 = roller', 'N7 = spring' or 'N9 = free'): " + r.txt); return; }
+    r.nodes.forEach(function (v) {
+      if (v < 0 || v >= m.nodes.length) { warn.push("Support rule line " + r.line + ": node " + (v + 1) + " does not exist"); return; }
+      delete spr[v]; delete types[v];
+      if (r.type === "free") { delete sup[v]; return; }
+      sup[v] = MD.SUPS[r.type].slice(); types[v] = r.type; if (r.type === "spring") spr[v] = K.slice();
+    });
+  });
+  m.sup = sup; m.supType = types; if (Object.keys(spr).length) m.spr = spr;
+  if (!Object.keys(sup).length) warn.push("No supports left — the model is a mechanism; restore a support (Support rules).");
+};

@@ -22,11 +22,23 @@ var SK = (function () {
     else { [0, 0.5, 1].forEach(function (t) { o += circ(x + c + r + t * (w - 2 * c - 2 * r), y + h - c - r, r); }); [0, 1].forEach(function (t) { o += circ(x + c + 2.2 + t * (w - 2 * c - 4.4), y + c + 2.2, 2.2); }); }
     return { s: o, x: x, y: y, w: w, h: h };
   }
+  /* support symbol at (x, y) on a member of depth h; side −1 = left end, +1 = right end (fixed walls sit outside the member) */
+  S.support = function (x, y, h, t, side) {
+    side = side || -1;
+    if (t === "fixed") return rect(side < 0 ? x - 12 : x, y - 26, 12, h + 52, "wall") + hatch(side < 0 ? x - 12 : x, y - 26, 12, h + 52, "v");
+    if (t === "pinned") return pin(x, y + h) + line(x - 10, y + h + 11, x + 10, y + h + 11, "sup");
+    if (t === "roller") return roller(x, y + h) + line(x - 10, y + h + 19, x + 10, y + h + 19, "sup");
+    if (t === "spring") { var d = "M" + x + " " + (y + h); for (var i = 1; i <= 6; i++) d += " L" + (x + (i % 2 ? 5 : -5)) + " " + (y + h + i * 3.5); return '<path class="sup" d="' + d + " L" + x + " " + (y + h + 26) + '"/>' + line(x - 9, y + h + 26, x + 9, y + h + 26, "sup"); }
+    if (t === "guided") return rect(side < 0 ? x - 6 : x + 2, y - 10, 4, h + 20, "sup") + line(side < 0 ? x - 10 : x + 10, y - 14, side < 0 ? x - 10 : x + 10, y + h + 14, "sup");
+    return text(x + side * 4, y - 4, "free", "ts", side < 0 ? "end" : "start");
+  };
   var D_ = {};
   D_.beam = function (p) {
     var o = "", x0 = 22, x1 = 222, y = 78, sup = p.support || "ss";
     o += rect(x0, y, x1 - x0, 14, "con");
-    if (sup === "cant") { o += rect(x0 - 12, y - 26, 12, 66, "wall") + hatch(x0 - 12, y - 26, 12, 66, "v"); }
+    if (p.endL) { o += S.support(x0, y, 14, p.endL, -1) + S.support(x1, y, 14, p.endR, 1); var cs = RCC.beamCase(p.endL, p.endR); o += text((x0 + x1) / 2, y + 30, cs.name, "td", "middle");
+      if (p.mode !== "direct") [[p.P1, p.a1], [p.P2, p.a2]].forEach(function (q) { if (+q[0] > 0) { var xx = x0 + (x1 - x0) * Math.min(Math.max(+q[1] || 0, 0), p.L) / p.L; o += arrow(xx, y - 44, xx, y - 2, "ld") + text(xx, y - 47, f(q[0], 1) + " kN", "td", "middle"); } }); }
+    else if (sup === "cant") { o += rect(x0 - 12, y - 26, 12, 66, "wall") + hatch(x0 - 12, y - 26, 12, 66, "v"); }
     else if (sup === "cont") { o += line(x0 - 16, y + 7, x0, y + 7, "cnt") + line(x1, y + 7, x1 + 16, y + 7, "cnt") + pin(x0, y + 14) + pin(x1, y + 14) + text(x0 - 14, y - 4, "cont.", "ts") + text(x1 + 2, y - 4, "cont.", "ts"); }
     else o += pin(x0, y + 14) + roller(x1, y + 14);
     if (p.mode === "direct") o += text((x0 + x1) / 2, y - 26, "Mu = " + f(p.Mu, 1) + " kNm · Vu = " + f(p.Vu, 1) + " kN", "tl", "middle");

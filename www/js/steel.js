@@ -139,7 +139,7 @@ ST.beamCheck = function (s, p) {
   var Mds = Math.min(bb * Zp * fy / D.gm0, (p.support === "cant" ? 1.5 : 1.2) * Ze * fy / D.gm0) / 1e6;
   o.Md = Mds; o.chi = 1;
   if (!p.lat) {
-    var LLT = p.Lun * 1000 * (p.destab ? 1.2 : 1.0);
+    var t15 = p.ltb && p.ltb !== "manual" && p.support !== "cant" && B1.T15[p.ltb], LLT = t15 ? t15[p.destab ? 1 : 0] * p.L * 1000 + (t15[2] ? 2 * s.D : 0) : p.Lun * 1000 * (p.destab ? 1.2 : 1.0);
     var Iy = s.Iy * 1e4, hf = s.D - s.tf;
     var It = (2 * s.bf * Math.pow(s.tf, 3) + (s.D - 2 * s.tf) * Math.pow(s.tw, 3)) / 3;
     var Iw = Iy * hf * hf / 4;

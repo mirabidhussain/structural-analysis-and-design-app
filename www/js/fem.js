@@ -219,6 +219,7 @@ FE.sig = function (m) {
   add(m.nodes.length); add(m.frames.length); add(m.shells.length); add(m.twoD ? 1 : 0);
   m.nodes.forEach(function (n) { add(n.x); add(n.y); add(n.z); });
   Object.keys(m.sup || {}).forEach(function (k) { add(+k); (m.sup[k] || []).forEach(function (x) { add(x ? 1 : 0); }); });
+  Object.keys(m.spr || {}).forEach(function (k) { add(-1 - k); m.spr[k].forEach(function (x) { add(x / 1e3); }); });
   m.frames.forEach(function (e) { add(e.n1); add(e.n2); add(e.pinned ? 1 : 0); add(e.type || ""); addS(e.sec); if (e.rel) e.rel.forEach(function (x) { add(x ? 1 : 0); }); });
   m.shells.forEach(function (e) { e.n.forEach(add); add(e.t); addS(e.mat); });
   return (h1 >>> 0).toString(36) + "." + (h2 >>> 0).toString(36) + "." + cnt;
@@ -266,6 +267,7 @@ FE.prepare = function (m) {
     [e.n1, e.n2].forEach(function (v) { for (var d = 0; d < (truss ? 3 : 6); d++) conn[6 * v + d] = 1; });
   });
   m.shells.forEach(function (e) { e.n.forEach(function (v) { for (var d = 0; d < 6; d++) conn[6 * v + d] = 1; }); });
+  Object.keys(m.spr || {}).forEach(function (v) { m.spr[v].forEach(function (k, d) { if (k > 0) conn[6 * v + d] = 1; }); });
   /* restrain DOFs with no stiffness at all (e.g. rotations at pure truss joints) */
   var eq2 = new Int32Array(6 * n).fill(-1); neq = 0;
   order.forEach(function (v) { for (var d = 0; d < 6; d++) if (eq[6 * v + d] >= 0 && conn[6 * v + d]) eq2[6 * v + d] = neq++; });
@@ -362,6 +364,7 @@ FE.assemble = function (m, Nfr) {
     cache.fr[k] = d;
     FE.addSky(m, A, m._elDofs([e.n1, e.n2]), FE.rotate(d.R, 4, d.K));
   });
+  Object.keys(m.spr || {}).forEach(function (v) { m.spr[v].forEach(function (k, d) { var i = m._eq[6 * v + d]; if (k > 0 && i >= 0) A[m._maxa[i]] += k; }); });   /* support springs */
   return { A: A, cache: cache };
 };
 /* load vector for a load case: {nodal:[{n,f[6]}], frameUDL:[{e,w[3]}], shellP:[{e,q[3]}], self: factor (gravity -Z)} */
@@ -575,7 +578,7 @@ FE.linear = function (m, cases, combos, opt) {
     var Fn = new Float64Array(6 * m.nodes.length);
     lcs.forEach(function (p) { var c = res.cases[p[0]].lv.Ffull; for (var i = 0; i < Fn.length; i++) Fn[i] += p[1] * c[i]; });
     var reac = {};
-    Object.keys(m.sup).forEach(function (v) { reac[v] = []; for (var t = 0; t < 6; t++) reac[v].push(m.sup[v][t] ? Rr[6 * v + t] - Fn[6 * v + t] : 0); });
+    Object.keys(m.sup).forEach(function (v) { reac[v] = []; for (var t = 0; t < 6; t++) reac[v].push(m.sup[v][t] ? Rr[6 * v + t] - Fn[6 * v + t] : m.spr && m.spr[v] && m.spr[v][t] ? -m.spr[v][t] * U[6 * v + t] : 0); });
     res.combos.push({ name: cb.name, U: U, fr: fr, sh: sh, reac: reac, N: N, pdIter: it, pdAmp: amp, pdConv: conv, pdResid: hist.length ? hist[hist.length - 1] : null });
     if (cb.__case) { res.caseReac = res.caseReac || {}; res.caseReac[lcs[0][0]] = reac; res.combos.pop(); }
     if (conv && it > 10) (res.warn = res.warn || []).push("P-Delta converged slowly for " + cb.name + " (" + it + " iterations): structure is approaching instability.");

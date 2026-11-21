@@ -6,7 +6,7 @@ var SU = (function () {
     src: "gen", bx: "4, 4, 4", by: "5, 5", hs: "3.5, 3.2, 3.2", slabs: true, walls: false, brace: false, mesh: 1,
     dmode: "3d", dunits: "auto", dmesh: 1, roles: {},
     method: "lsm", mat: "rcc", fck: 25, fy: 500, fys: 250, colSec: "400x400", beamSec: "300x450", braceSec: "ISA 75x75x6", tSlab: 150, tWall: 200,
-    crack: true, existing: false, pcCol: 2, pcBeam: 1, kcol: 1.2,
+    crack: true, existing: false, pcCol: 2, pcBeam: 1, kcol: 1.2, base: "fixed", ksoil: 40000, fL: 2, fB: 2, supOver: "",
     ff: 1.5, ll: 3, ffRoof: 2.5, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0,
     eq: true, zone: "V", I: 1.2, R: 5, soil: "II", sys: "rc", wind: false, vbp: "Srinagar", terrain: 2, cf: 1.3, trib: 4,
     pdir: 0, ppat: "parabolic", pdrift: 4, ppd: true, pev: 80, secOver: "", loadOver: "",
@@ -48,7 +48,7 @@ var SU = (function () {
   function sel(k, label, opts) { return '<label class="fld"><span>' + label + '</span><select data-k="' + k + '">' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(P[k]) === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + (String(dflt(k)) === String(o[0]) ? " (default)" : "") + '</option>'; }).join("") + '</select></label>'; }
   function chk(k, label) { return '<label class="fld ck"><span><input data-k="' + k + '" type="checkbox"' + (P[k] ? " checked" : "") + '> ' + label + '</span></label>'; }
   var BAD = [];
-  var LBL = { sbc: "SBC", fck: "fck", fy: "fy", fys: "steel fy", colSec: "columns", beamSec: "beams", braceSec: "braces", tSlab: "slab t", tWall: "wall t", ff: "floor finish", ll: "LL", ffRoof: "roof finish", llRoof: "roof LL", wall: "wall load", parapet: "parapet", zone: "zone", I: "I", R: "R", soil: "soil", sys: "period formula", method: "design method", vbp: "wind speed", terrain: "terrain", cf: "Cf", kcol: "k (col)" };
+  var LBL = { sbc: "SBC", fck: "fck", fy: "fy", fys: "steel fy", colSec: "columns", beamSec: "beams", braceSec: "braces", tSlab: "slab t", tWall: "wall t", ff: "floor finish", ll: "LL", ffRoof: "roof finish", llRoof: "roof LL", wall: "wall load", parapet: "parapet", zone: "zone", I: "I", R: "R", soil: "soil", sys: "period formula", method: "design method", vbp: "wind speed", terrain: "terrain", cf: "Cf", kcol: "k (col)", base: "base", ksoil: "ks", fL: "footing L", fB: "footing B" };
   function grab(root) {
     BAD = [];
     root.querySelectorAll("[data-k]").forEach(function (el) {
@@ -117,7 +117,7 @@ var SU = (function () {
       txt("hs", "Storey heights, bottom up (m)") + num("mesh", "Shell mesh size", "m") + chk("slabs", "Slabs as shell elements") + chk("walls", "Shear walls in end bays (Y)") + chk("brace", "X-bracing in end bays") +
       '<div class="btns"><button class="pri" id="bGen" type="button">Generate model</button></div></div>';
     var lay = S.dx ? Object.keys(S.dx.layers).sort() : [];
-    var roles = [["auto", "Auto (by direction)"], ["column", "Column"], ["beam", "Beam / rafter"], ["brace", "Brace (pinned)"], ["slab", "Slab / plate"], ["wall", "Wall (shell)"], ["fixed", "Fixed support"], ["pin", "Pinned support"], ["ignore", "Ignore"]];
+    var roles = [["auto", "Auto (by direction)"], ["column", "Column"], ["beam", "Beam / rafter"], ["brace", "Brace (pinned)"], ["slab", "Slab / plate"], ["wall", "Wall (shell)"], ["fixed", "Fixed support"], ["pin", "Pinned support"], ["roller", "Roller support"], ["ignore", "Ignore"]];
     var h = '<div class="form inner"><label class="fld full"><span>DXF file (ASCII, AutoCAD R12–2018)</span><input type="file" id="dxfFile" accept=".dxf,.DXF,application/dxf,text/plain,*/*"></label>' +
       sel("dmode", "Drawing type", [["3d", "3D model (X, Y, Z)"], ["2d", "2D elevation (X horizontal, Y up)"]]) +
       sel("dunits", "Drawing units", [["auto", "Auto ($INSUNITS)"], ["mm", "Millimetres"], ["cm", "Centimetres"], ["m", "Metres"], ["ft", "Feet"], ["in", "Inches"]]) + num("dmesh", "Shell mesh size", "m");
@@ -159,6 +159,10 @@ var SU = (function () {
       sel("exposure", "Exposure condition (IS 456 Table 3)", [["mild", "Mild — cover 20, ≥ M20"], ["moderate", "Moderate — cover 30, ≥ M25"], ["severe", "Severe — cover 45, ≥ M30"], ["very severe", "Very severe — cover 50, ≥ M35"], ["extreme", "Extreme — cover 75, ≥ M40"]]) +
       sel("fire", "Fire resistance (IS 456 Table 16A)", [["0.5", "0.5 h"], ["1", "1 h"], ["1.5", "1.5 h"], ["2", "2 h"], ["3", "3 h"], ["4", "4 h"]]) + chk("crack", "Cracked stiffness (IS 1893 cl 6.4.3.1: beams 0.35, columns 0.70)") + chk("existing", "Checking an existing structure — allow member sizes and grades outside the code limits") +
       num("pcCol", "Column steel for hinges / P-M", "%") + num("pcBeam", "Beam steel (both faces) for hinges", "%") + num("kcol", "Column effective length factor", "", "IS 456 Table 28 / Annex E (1.2 for sway frames)") +
+      sel("base", "Base condition", [["fixed", "Fixed"], ["pinned", "Pinned (hinged)"], ["spring", "Spring — footing on soil (IS 2950)"]]) +
+      num("ksoil", "Modulus of subgrade reaction ks (spring base)", "kN/m³", "IS 2950 Pt 1 / plate load test: loose sand ≈ 15 000, medium ≈ 40 000, dense ≈ 100 000; soft clay ≈ 12 000, stiff ≈ 25 000") +
+      num("fL", "Footing size along X (spring base)", "m") + num("fB", "Footing size along Y (spring base)", "m") +
+      area("supOver", "Support rules (optional)", "One rule per line: <i>nodes = fixed / pinned / roller / spring / guided / free</i>, e.g. <i>N12 = pinned</i>, <i>3-5 = roller</i>, <i>N9 = free</i> (removes a support). Tap a node in the 3D view to set it directly. Later lines win.", "N1 = pinned\nN4 = roller") +
       area("secOver", "Member section overrides (optional)", "One rule per line: <i>which = section</i>. Which: member numbers (12, 1-12, F20), <i>columns / beams / braces / all</i>, optionally with <i>storey 1</i>, <i>storey 2-4</i>, <i>level 3.5</i> (m) or <i>layer NAME</i>. Later lines win. Tap a member in the 3D view to assign it directly.", "columns storey 1-2 = 450x450\nbeams storey 3 = 300x400\n15, 18-20 = ISMB 350") +
       '<div class="btns full"><button type="button" class="rstd" data-p="p2">Clear my entries (use defaults)</button></div><div class="note full">Priority: override rules › section written in the DXF layer name › the default sections above. Sections are standard-table values (SP 6).</div></div>';
   }
@@ -423,6 +427,7 @@ var SU = (function () {
   }
   /* ---------- viewer: scene built once per result state, drawn by the GPU (WebGL) with a light 2D overlay; redraws limited to the screen refresh ---------- */
   var PRJ = null, SCN = null, rafR = 0, GLC = null, VW = { noGL: false };
+  document.addEventListener("isd-theme", function () { SCN = null; if (document.getElementById("cv") && S.m) try { render(); } catch (e) { } });
   function render() {
     if (rafR) return;
     var f0 = function () { rafR = 0; paint(); };
@@ -450,7 +455,7 @@ var SU = (function () {
     var util = {}; if (S.des) ["beams", "cols", "steel"].forEach(function (gk) { S.des[gk].forEach(function (r) { util[r.k] = r; }); });
     var frCol = [], frW = [];
     m.frames.forEach(function (e, k) {
-      var col = e.type === "column" ? (dark ? "#9ab6d8" : "#1d3557") : e.type === "brace" ? "#7a5bbf" : (dark ? "#f0a050" : "#c4621a");
+      var col = e.type === "column" ? (VW.col && VW.col.pri || (dark ? "#9ab6d8" : "#1d3557")) : e.type === "brace" ? "#7a5bbf" : (VW.col && VW.col.acc || (dark ? "#f0a050" : "#c4621a"));
       if (disp === "util" && util[k]) col = util[k].ok ? (util[k].ratio > 0.85 ? "#e0a020" : "#1e8e4a") : "#c62828";
       var sel = S.sel && S.sel.t === "f" && S.sel.k === k; if (sel) col = "#00a3ff";
       frCol[k] = col; frW[k] = sel ? 4 : e.type === "brace" ? 1.4 : 2.2;
@@ -489,9 +494,10 @@ var SU = (function () {
   function paint() {
     var cv = $("cv"); if (!cv || !S.m) return;
     var W = cv.clientWidth || 340, H = Math.round(Math.min(560, Math.max(300, W * 0.8))), dpr = HW.dpr();
-    var dark = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
+    var dark = window.ISDTHEME ? ISDTHEME.isDark() : window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches, cs = getComputedStyle(document.documentElement);
+    VW.col = { acc: cs.getPropertyValue("--acc").trim() || "#c4621a", pri: cs.getPropertyValue("--pri").trim() || "#1d3557", bg: cs.getPropertyValue("--card").trim(), pal: document.documentElement.getAttribute("data-pal") || "gold" };
     var m = S.m, v = S.view, cy = Math.cos(v.yaw), sy = Math.sin(v.yaw), cp = Math.cos(v.pitch), sp = Math.sin(v.pitch);
-    var key = [S.state, S.disp, S.sel ? S.sel.t + S.sel.k : "", dark ? 1 : 0, S.res ? S.res.ms : 0, S.po ? S.po.U.length + ":" + S.po.hinges.length : 0, S.des ? S.des.fails : -1, m.nodes.length, m.frames.length, m.shells.length].join("|");
+    var key = [VW.col.pal, S.state, S.disp, S.sel ? S.sel.t + S.sel.k : "", dark ? 1 : 0, S.res ? S.res.ms : 0, S.po ? S.po.U.length + ":" + S.po.hinges.length : 0, S.des ? S.des.fails : -1, m.nodes.length, m.frames.length, m.shells.length].join("|");
     if (!SCN || SCN.key !== key || SCN.m !== m) SCN = scene(key, dark);
     var span = SCN.span, c0 = SCN.c0, s = Math.min(W, H) * 0.8 / span * v.zoom, Pw = SCN.Pw;
     function pr(x, y, z) {
@@ -503,7 +509,7 @@ var SU = (function () {
     PRJ = { pr: pr, P: P };
     if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.height = H + "px"; }
     var g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    var bgc = dark ? "#0f1620" : "#fbfcfe", gcv = $("cvgl"), usedGL = false;
+    var bgc = VW.col && VW.col.bg || (dark ? "#0f1620" : "#fbfcfe"), gcv = $("cvgl"), usedGL = false;
     if (gcv && HW.useGL && !VW.noGL) {
       if (gcv.width !== Math.round(W * dpr) || gcv.height !== Math.round(H * dpr)) { gcv.width = Math.round(W * dpr); gcv.height = Math.round(H * dpr); gcv.style.height = H + "px"; }
       if (!GLC || GLC.canvas !== gcv) { GLC = GLV.init(gcv); if (GLC) GLC.canvas = gcv; else VW.noGL = true; }
@@ -539,7 +545,8 @@ var SU = (function () {
         g.beginPath(); g.arc(x, y, 4.5, 0, 6.3); g.fillStyle = colr[h.state] || "#c62828"; g.fill(); g.strokeStyle = "#fff"; g.lineWidth = 1; g.stroke();
       });
     }
-    Object.keys(m.sup).forEach(function (i) { var q = P(+i), fx = m.sup[i][3]; g.fillStyle = fx ? "#2e7d32" : "#8d6e63"; g.beginPath(); g.moveTo(q[0], q[1]); g.lineTo(q[0] - 6, q[1] + 9); g.lineTo(q[0] + 6, q[1] + 9); g.closePath(); g.fill(); });
+    Object.keys(m.sup).forEach(function (i) { supGlyph(g, P(+i), (m.supType && m.supType[i]) || (m.sup[i][3] ? "fixed" : "pinned")); });
+    if (S.sel && S.sel.t === "n") { var qn = P(S.sel.k); g.strokeStyle = "#00a3ff"; g.lineWidth = 2.5; g.beginPath(); g.arc(qn[0], qn[1], 7, 0, 2 * Math.PI); g.stroke(); }
     if (S.sel && S.sel.t === "s") { var e2 = m.shells[S.sel.k]; g.beginPath(); e2.n.map(P).forEach(function (q, i) { i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); }); g.closePath(); g.strokeStyle = "#00a3ff"; g.lineWidth = 3; g.stroke(); }
     var o = [34, H - 30], ax = [[1, 0, 0, "X", "#c62828"], [0, 1, 0, "Y", "#2e7d32"], [0, 0, 1, "Z", "#1565c0"]];
     ax.forEach(function (a) { var p0 = pr(c0[0], c0[1], c0[2]), p1 = pr(c0[0] + a[0] * span / s * 22, c0[1] + a[1] * span / s * 22, c0[2] + a[2] * span / s * 22); var dx = p1[0] - p0[0], dy = p1[1] - p0[1], l = Math.hypot(dx, dy) || 1; if (m.twoD && a[3] === "Y") return; g.strokeStyle = a[4]; g.lineWidth = 2; g.beginPath(); g.moveTo(o[0], o[1]); g.lineTo(o[0] + dx / l * 22 * Math.min(1, l / 22), o[1] + dy / l * 22 * Math.min(1, l / 22)); g.stroke(); g.fillStyle = a[4]; g.font = "11px sans-serif"; g.fillText(a[3], o[0] + dx / l * 27, o[1] + dy / l * 27 + 4); });
@@ -550,9 +557,20 @@ var SU = (function () {
     for (var i = 1; i < st.length; i++) if (t <= st[i][0]) { var u = (t - st[i - 1][0]) / (st[i][0] - st[i - 1][0]), c = st[i - 1][1].map(function (x, j) { return Math.round(x + (st[i][1][j] - x) * u); }); return "rgba(" + c.join(",") + ",.85)"; }
     return "rgba(178,24,43,.85)";
   }
+  /* support symbols on the 2D overlay: fixed (hatched base), pinned (triangle), roller (triangle on wheels), spring (zig-zag), guided (sleeve) */
+  function supGlyph(g, q, t) {
+    var x = q[0], y = q[1], col = t === "fixed" ? "#2e7d32" : t === "spring" ? "#b7791f" : t === "roller" ? "#1565c0" : "#8d6e63";
+    g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 1.6; g.beginPath();
+    if (t === "fixed") { g.fillRect(x - 8, y, 16, 3); for (var k = -8; k <= 6; k += 4) { g.moveTo(x + k, y + 3); g.lineTo(x + k - 3, y + 8); } g.stroke(); return; }
+    if (t === "spring") { g.moveTo(x, y); for (var j = 1; j <= 5; j++) g.lineTo(x + (j % 2 ? 4 : -4), y + j * 2.4); g.lineTo(x, y + 14); g.moveTo(x - 7, y + 14); g.lineTo(x + 7, y + 14); g.stroke(); return; }
+    if (t === "guided") { g.strokeRect(x - 5, y - 6, 10, 12); g.moveTo(x - 9, y + 9); g.lineTo(x + 9, y + 9); g.stroke(); return; }
+    g.moveTo(x, y); g.lineTo(x - 6, y + 9); g.lineTo(x + 6, y + 9); g.closePath(); g.globalAlpha = .85; g.fill(); g.globalAlpha = 1;
+    if (t === "roller") { g.beginPath(); g.arc(x - 3.5, y + 12, 2.2, 0, 7); g.arc(x + 3.5, y + 12, 2.2, 0, 7); g.stroke(); }
+  }
   function pick(e) {
     var cv = $("cv"), r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, best = null, m = S.m;
-    m.frames.forEach(function (fr, k) {
+    m.nodes.forEach(function (nd, k) { var q = PRJ.P(k), d = Math.hypot(q[0] - x, q[1] - y); if (d < 9 && (!best || d < best.d)) best = { t: "n", k: k, d: d }; });
+    if (!best) m.frames.forEach(function (fr, k) {
       var a = PRJ.P(fr.n1), b = PRJ.P(fr.n2), dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / l2));
       var d = Math.hypot(a[0] + t * dx - x, a[1] + t * dy - y); if (d < 14 && (!best || d < best.d)) best = { t: "f", k: k, d: d };
     });
@@ -568,6 +586,12 @@ var SU = (function () {
     var box = $("selinfo"), sl = S.sel, m = S.m; if (!box) return;
     if (!sl) { box.innerHTML = ""; return; }
     var st = S.res && S.state ? stateOf(S.state) : null, h = '<div class="selbox">';
+    if (sl.t === "n") {
+      var nd = m.nodes[sl.k], cur = (m.supType && m.supType[sl.k]) || (m.sup[sl.k] ? "fixed" : "free");
+      h += '<h4>Node N' + (sl.k + 1) + ' · (' + f(nd.x, 2) + ', ' + f(nd.y, 2) + ', ' + f(nd.z, 2) + ') m</h4><div class="small">Support: <b>' + esc(cur) + '</b>' + (m.spr && m.spr[sl.k] ? ' — springs Kv ' + f(m.spr[sl.k][2], 0) + ' kN/m, Kθx ' + f(m.spr[sl.k][3], 0) + ', Kθy ' + f(m.spr[sl.k][4], 0) + ' kNm/rad' : '') + '</div>';
+      if (st && st.reac && st.reac[sl.k]) { var rq = st.reac[sl.k]; h += '<div class="small">' + esc(S.state) + ' — reactions Fx ' + f(rq[0], 1) + ', Fy ' + f(rq[1], 1) + ', Fz ' + f(rq[2], 1) + ' kN · Mx ' + f(rq[3], 1) + ', My ' + f(rq[4], 1) + ' kNm</div>'; }
+      h += '<div class="asg"><select id="supSel">' + MD.SUP_OPTS.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === cur ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '</select><button id="supBtn" type="button">Set support</button></div>';
+    }
     if (sl.t === "f") {
       var e = m.frames[sl.k], A = m.nodes[e.n1], B = m.nodes[e.n2];
       h += '<h4>' + cap(e.type) + ' F' + (sl.k + 1) + ' — ' + esc(e.sec.name) + ' <i class="small">(' + esc(e.src || "default") + ')</i> · L = ' + f(e.L, 3) + ' m · nodes ' + (e.n1 + 1) + '→' + (e.n2 + 1) + (e.layer ? ' · layer ' + esc(e.layer) : '') + '</h4>';
@@ -581,7 +605,7 @@ var SU = (function () {
       var dr = S.des && (S.des.beams.concat(S.des.cols, S.des.steel).filter(function (r) { return r.k === sl.k; })[0]);
       if (dr) { h += desText(dr, e); var stp = CALC.forMember(S.des, m, sl.k, S.p); if (stp) h += '<details class="calc" open><summary>Worked calculation (IS code equations & limits)</summary>' + CALC.html(stp, esc) + '</details>'; }
       if (S.po) S.po.hinges.filter(function (hh) { return hh.k === sl.k; }).forEach(function (hh) { h += '<div class="small">Pushover hinge at end ' + hh.end + ' (' + (hh.axis === "a" ? "axial" : "M" + hh.axis) + '): event ' + hh.ev + ', V = ' + f(hh.V, 1) + ' kN, plastic rotation ' + f(hh.rot, 4) + ' rad → <b>' + hh.state + '</b></div>'; });
-    } else {
+    } else if (sl.t === "s") {
       var s = m.shells[sl.k];
       h += '<h4>' + cap(s.kind) + ' element S' + (sl.k + 1) + ' · t = ' + f(s.t * 1000, 0) + ' mm · nodes ' + s.n.map(function (i) { return i + 1; }).join(", ") + '</h4>';
       if (st) { var fs = st.sh(sl.k); h += '<div class="small">' + esc(S.state) + ' — local axes: Nx ' + f(fs.Nx, 1) + ', Ny ' + f(fs.Ny, 1) + ', Nxy ' + f(fs.Nxy, 1) + ' kN/m · Mx ' + f(fs.Mx, 2) + ', My ' + f(fs.My, 2) + ', Mxy ' + f(fs.Mxy, 2) + ' kNm/m · Qx ' + f(fs.Qx, 1) + ', Qy ' + f(fs.Qy, 1) + ' kN/m</div>'; }
@@ -589,6 +613,13 @@ var SU = (function () {
       if (sd) h += shellText(sd) + '<details class="calc" open><summary>Worked calculation (IS code equations & limits)</summary>' + CALC.html(CALC.shell(sd, S.p), esc) + '</details>';
     }
     box.innerHTML = h + '</div>';
+    if ($("supBtn")) $("supBtn").onclick = function () {
+      var v = $("supSel").value;
+      UV.supOver = ((given("supOver") ? UV.supOver + "\n" : "") + "N" + (sl.k + 1) + " = " + v); save();
+      var ta = document.querySelector("[data-k=supOver]"); if (ta) ta.value = UV.supOver;
+      S.m = MD.make(S.geo, params()); S.res = S.des = S.po = null; status(); drawViewer(); $("results").innerHTML = ""; showSel();
+      toast("N" + (sl.k + 1) + " = " + v + " — re-run the analysis");
+    };
     if ($("asgBtn")) $("asgBtn").onclick = function () {
       var v = $("asgSec").value.trim(); if (!v) return;
       if (!MD.parseSec(v, params(), m.frames[sl.k].type)) { toast("Section not recognised: " + v); return; }
@@ -900,5 +931,5 @@ var SU = (function () {
       if (!$("srcbox")) return; a.querySelector("[data-k=src]").value = "dxf"; $("srcbox").innerHTML = srcInner(); bindSrc(); $("p1").classList.add("open"); toast("DXF loaded: " + S.dx.ents.length + " entities"); } catch (e) { err(e); }
   }
   function ctx() { return { download: download, toast: toast, rerender: renderResults, S: function () { return S; }, params: function () { return params(); }, opened: function (p) { load(); } }; }
-  return { state: function () { return S; }, analyseThen: function (t) { afterRun = t; runLinear(); }, bindBoq: function (rr) { if (typeof PRO !== "undefined") PRO.bindBoq({ S: function () { return S; }, rerender: rr, toast: toast, params: params }); }, view: view, S: S, openText: openText, ctx: ctx, download: function (n, t) { download(n, t); }, toast: function (t) { toast(t); } };
+  return { nodeXY: function (k) { var cv = $("cv"); if (!PRJ || !cv) return null; var q = PRJ.P(k), r = cv.getBoundingClientRect(); return [r.left + q[0], r.top + q[1]]; }, state: function () { return S; }, analyseThen: function (t) { afterRun = t; runLinear(); }, bindBoq: function (rr) { if (typeof PRO !== "undefined") PRO.bindBoq({ S: function () { return S; }, rerender: rr, toast: toast, params: params }); }, view: view, S: S, openText: openText, ctx: ctx, download: function (n, t) { download(n, t); }, toast: function (t) { toast(t); } };
 })();

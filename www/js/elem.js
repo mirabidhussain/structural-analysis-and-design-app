@@ -24,6 +24,7 @@ var EL = (function () {
     if (id === "slab") { var st = res.st || RCC.slabType(p); return st.type === "one" ? E.take("slab1", Object.assign({}, p, { L: st.L, support: st.support }), r, { w: st.w }) : E.take("slab2", Object.assign({}, p, { lx: st.lx, ly: st.ly }), r, x); }
     switch (id) {
       case "beam": {
+        if (res.take && res.take.bars) { var tk = res.take; T.conc = tk.conc.slice(); T.fw = tk.fw.slice(); tk.bars.forEach(function (q) { bar(q.mark, q.desc, q.dia, q.n, q.L); }); break; }
         var L = p.L, b = p.b / 1000, D = p.D / 1000, bb = res.bars || { n: 2, dia: 12 };
         conc("Beam " + p.b + " × " + p.D, L, b, D); fw("Beam soffit and sides", L, b + 2 * D);
         bar("a", "Bottom bars, span + Ld/3 into each support", bb.dia, bb.n, L * 1000 + 2 * anc(bb.dia, p));
@@ -34,7 +35,9 @@ var EL = (function () {
       case "slab1": {
         var w = x.w || 1, Ls = p.L, m = res.main, ds = res.dist;
         conc("Slab " + p.D + " mm", Ls, w, p.D / 1000); fw("Slab soffit", Ls, w);
-        if (m) bar("a", "Main bars " + m.dia + " mm @ " + m.s, m.dia, nOver(w * 1000, m.s), Ls * 1000 + 2 * anc(m.dia, p));
+        if (m && p.support === "cant") bar("a", "Main top bars " + m.dia + " mm @ " + m.s + " — projection + Ld anchorage", m.dia, nOver(w * 1000, m.s), Ls * 1000 + RCC.Ld(m.dia, p.fy, p.fck) + 10 * m.dia);
+        else if (m && p.support === "prop") { bar("a", "Top bars over the fixed edge " + m.dia + " mm @ " + m.s + " — 0.25L + 12φ + Ld", m.dia, nOver(w * 1000, m.s), 0.25 * Ls * 1000 + 12 * m.dia + RCC.Ld(m.dia, p.fy, p.fck)); if (res.bot) bar("c", "Bottom bars " + res.bot.dia + " mm @ " + res.bot.s, res.bot.dia, nOver(w * 1000, res.bot.s), Ls * 1000 + 2 * anc(res.bot.dia, p)); }
+        else if (m) bar("a", "Main bars " + m.dia + " mm @ " + m.s, m.dia, nOver(w * 1000, m.s), Ls * 1000 + 2 * anc(m.dia, p));
         if (ds) bar("b", "Distribution bars " + ds.dia + " mm @ " + ds.s, ds.dia, nOver(Ls * 1000, ds.s), w * 1000 - 2 * c);
         break;
       }

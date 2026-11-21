@@ -118,8 +118,10 @@ WS.slab1 = function (p) {
   r.h("1. Working loads (per metre width)");
   var dl = 25 * Dd / 1000, w = dl + p.LL + p.FF;
   r.eq("DL = " + U.f(dl) + " ; LL = " + p.LL + " ; FF = " + p.FF + " → w = " + U.f(w) + " kN/m² (unfactored)", "IS 875 Pt 1, 2");
-  var c = { ss: [8, 0.5], cont: [10, 0.6], cant: [2, 1.0] }[p.support], M = w * L * L / c[0], V = w * L * c[1];
+  var c = { ss: [8, 0.5], cont: [10, 0.6], cant: [2, 1.0], prop: [8, 0.625] }[p.support], M = w * L * L / c[0], V = w * L * c[1];
   r.eq("M = w L²/" + c[0] + " = " + U.f(M) + " kNm/m ; V = " + U.f(V) + " kN/m");
+  if (p.support === "prop") r.note("Propped slab (one long edge continuous): the support moment w L²/8 governs; the same bars are provided at the top over the fixed edge (extending L/4 + 12φ into the span) and at the bottom of the span (span moment 9wL²/128 is smaller) — conservative.");
+  if (p.support === "cant" && +p.Pe) { M += p.Pe * L; V += +p.Pe; r.eq("Free-edge line load Pe = " + p.Pe + " kN/m: M = " + U.f(M) + " kNm/m, V = " + U.f(V) + " kN/m"); }
   r.h("2. Main steel");
   var S = WS.slabSteel(r, M, d, fck, fy, Dd, p.dia);
   r.eq("σcbc = " + S.C.scbc + ", σst = " + S.C.sst + ", m = " + U.f(S.C.m, 2) + ", k = " + U.f(S.C.k, 3) + ", j = " + U.f(S.C.j, 3) + ", R = " + U.f(S.C.R, 3), "Tables 21, 22 ; B-3");
@@ -132,7 +134,7 @@ WS.slab1 = function (p) {
   var tv = V * 1e3 / (1000 * d), pt = 100 * S.sp.area / (1000 * d), k = U.interp([150, 175, 200, 225, 250, 275, 300], [1.30, 1.25, 1.20, 1.15, 1.10, 1.05, 1.00], Dd), tc = k * WS.tauc(fck, pt);
   r.check("τv ≤ k τc (Table 23)", tv <= tc, U.f(tv, 3) + " ≤ " + U.f(tc, 3) + " N/mm²", "B-5.2.1.1");
   r.h("4. Deflection");
-  var basic = { ss: 20, cont: 26, cant: 7 }[p.support], fs = S.C.sst * Math.min(S.Ast, S.sp.area) / S.sp.area, kt = RCC.kt(pt, fs);
+  var basic = { ss: 20, cont: 26, cant: 7, prop: 20 }[p.support], fs = S.C.sst * Math.min(S.Ast, S.sp.area) / S.sp.area, kt = RCC.kt(pt, fs);
   r.check("L/d ≤ basic × kt", L * 1000 / d <= basic * kt, U.f(L * 1000 / d, 1) + " ≤ " + U.f(basic * kt, 1), "cl 23.2.1");
   r.sum("Method", "Working stress (Annex B)"); r.sum("Thickness", Dd + " mm (d = " + U.f(d, 0) + ")"); r.sum("Main steel", S.sp.text); r.sum("Distribution", dist.text);
   return r;

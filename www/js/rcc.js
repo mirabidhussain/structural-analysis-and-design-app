@@ -148,10 +148,16 @@ RCC.slab1 = function (p) {
   r.h("1. Loads (per metre width)");
   var dl = 25 * Dd / 1000, w = dl + p.LL + p.FF, wu = 1.5 * w;
   r.eq("DL = 25 × " + Dd / 1000 + " = " + U.f(dl) + " ; LL = " + p.LL + " ; FF = " + p.FF + " → w = " + U.f(w) + " kN/m² ; wu = 1.5w = " + U.f(wu) + " kN/m²", "IS 875 Pt 1, 2 ; Table 18");
-  var c = { ss: [8, 0.5], cont: [10, 0.6], cant: [2, 1.0] }[p.support];
-  var Mu = wu * L * L / c[0], Vu = wu * L * c[1];
-  r.eq("Mu = wu L²/" + c[0] + " = " + U.f(Mu) + " kNm/m ; Vu = " + U.f(Vu) + " kN/m");
-  r.h("2. Main steel");
+  var c = { ss: [8, 0.5], cont: [10, 0.6], cant: [2, 1.0], prop: [8, 0.625] }[p.support];
+  var Mu = wu * L * L / c[0], Vu = wu * L * c[1], Pe = p.support === "cant" ? +p.Pe || 0 : 0, Msag = 0;
+  if (p.support === "prop") {
+    Msag = 9 * wu * L * L / 128;
+    r.eq("Propped (one edge fixed / continuous, the other simply supported): Mu,support = wu L²/8 = " + U.f(Mu) + " kNm/m (top) ; Mu,span = 9 wu L²/128 = " + U.f(Msag) + " kNm/m at 3L/8 from the supported edge ; Vu = 5 wu L/8 = " + U.f(Vu) + " kN/m", "elastic analysis");
+  } else if (Pe) {
+    Mu += 1.5 * Pe * L; Vu += 1.5 * Pe;
+    r.eq("Cantilever with a line load Pe = " + U.f(Pe) + " kN/m at the free edge (parapet): Mu = wu L²/2 + 1.5 Pe L = " + U.f(Mu) + " kNm/m ; Vu = wu L + 1.5 Pe = " + U.f(Vu) + " kN/m");
+  } else r.eq("Mu = wu L²/" + c[0] + " = " + U.f(Mu) + " kNm/m ; Vu = " + U.f(Vu) + " kN/m");
+  r.h(p.support === "cant" ? "2. Main steel (top — cantilever)" : p.support === "prop" ? "2. Main steel — top over the fixed edge" : "2. Main steel");
   r.row("d = D - cover - φ/2", U.f(d, 0), "mm");
   var Mlim = RCC.mulim(1000, d, fck, fy);
   r.check("Mu ≤ Mu,lim", Mu <= Mlim, U.f(Mu) + " ≤ " + U.f(Mlim) + " kNm", "Annex G-1.1");
@@ -161,7 +167,14 @@ RCC.slab1 = function (p) {
   r.row("Ast minimum", U.f(Amin, 0), "mm²/m", "cl 26.5.2.1");
   var main = U.spacing(Math.max(Ast, Amin), p.dia, Math.min(3 * d, 300));
   r.row("Provide main bars", main.text, "", "max spacing min(3d,300) cl 26.3.3(b)");
-  var dist = U.spacing(Amin, 8, Math.min(5 * d, 450));
+  var dist = U.spacing(Amin, 8, Math.min(5 * d, 450)), botS = null;
+  if (p.support === "prop") {
+    var Asg = RCC.astFlex(Msag, 1000, d, fck, fy); botS = U.spacing(Math.max(Asg, Amin), p.dia, Math.min(3 * d, 300));
+    r.row("Bottom (span) steel: Ast = " + U.f(Asg, 0) + " mm²/m → provide", botS.text, "", "Annex G-1.1(b)");
+    r.eq("Top bars over the fixed edge extend 0.25 L + max(d, 12φ) = " + U.f(0.25 * L * 1000 + Math.max(d, 12 * p.dia), 0) + " mm into the span (point of contraflexure at L/4 for UDL) and Ld = " + U.f(RCC.Ld(p.dia, fy, fck), 0) + " mm into the support", "cl 26.2.3.4");
+  }
+  if (p.support === "cant") r.note("Stability (chajja / balcony, IS 456 cl 20.1): the restoring moment from the wall or back-span, taking only 0.9 × its dead load, must be ≥ 1.2 × the overturning moment of the dead load + 1.4 × that of the imposed load. Overturning moment per metre (characteristic): DL " + U.f((dl + p.FF) * L * L / 2 + (Pe || 0) * L) + " kNm/m, LL " + U.f(p.LL * L * L / 2) + " kNm/m → required restoring moment ≥ " + U.f(1.2 * ((dl + p.FF) * L * L / 2 + (Pe || 0) * L) + 1.4 * p.LL * L * L / 2) + " kNm/m.");
+  if (p.support === "cant") r.eq("Top bars run to the free edge and are anchored Ld = " + U.f(RCC.Ld(p.dia, fy, fck), 0) + " mm beyond the support face; nominal bottom bars as distribution steel", "cl 26.2.3.3");
   r.row("Distribution bars", dist.text, "", "cl 26.3.3(b)(2)");
   r.h("3. Shear");
   var tv = Vu * 1e3 / (1000 * d), pt = 100 * main.area / (1000 * d);
@@ -169,13 +182,14 @@ RCC.slab1 = function (p) {
   var tc = k * RCC.tauc(fck, pt);
   r.check("τv ≤ k τc", tv <= tc, U.f(tv, 3) + " ≤ " + U.f(k, 2) + " × " + U.f(tc / k, 3) + " = " + U.f(tc, 3) + " N/mm²", "cl 40.2.1.1");
   r.h("4. Deflection");
-  var basic = { ss: 20, cont: 26, cant: 7 }[p.support];
+  var basic = { ss: 20, cont: 26, cant: 7, prop: 20 }[p.support];
   var fs = 0.58 * fy * Math.min(Ast, main.area) / main.area, kt = RCC.kt(pt, fs);
   r.check("L/d ≤ basic × kt", L * 1000 / d <= basic * kt, U.f(L * 1000 / d, 1) + " ≤ " + U.f(basic * kt, 1), "cl 23.2.1");
   r.sum("Thickness", Dd + " mm (d = " + U.f(d, 0) + ")");
-  r.sum("Main steel", main.text);
+  r.sum(p.support === "cant" ? "Main steel (top)" : p.support === "prop" ? "Top over the fixed edge" : "Main steel", main.text);
+  if (botS) r.sum("Bottom (span)", botS.text);
   r.sum("Distribution", dist.text);
-  r.res = { Mu: Mu, Ast: Ast, main: main, dist: dist, D: Dd };
+  r.res = { Mu: Mu, Ast: Ast, main: main, dist: dist, D: Dd, bot: botS, support: p.support };
   return r;
 };
 
@@ -185,8 +199,8 @@ RCC.slabType = function (p) {
   var c = +p.case_ || 4, a = +p.lx, b = +p.ly;
   if (c === 11) return { type: "one", support: "cant", L: a, w: b, ratio: b / a, why: "cantilever slab — one-way action over the projection " + a + " m" };
   var lx = Math.min(a, b), ly = Math.max(a, b), r = ly / lx;
-  if (r > 2) { var both = c === 1 || c === 2 || c === 5;   /* both long edges continuous */
-    return { type: "one", support: both ? "cont" : "ss", L: lx, w: ly, ratio: r, why: "ly/lx = " + U.f(r, 2) + " > 2 — one-way slab spanning the short span lx = " + lx + " m (IS 456 cl 24.4)" + (both ? ", continuous over both long edges" : ", taken as simply supported (a long edge is discontinuous)") }; }
+  if (r > 2) { var both = c === 1 || c === 2 || c === 5, one1 = c === 3 || c === 4 || c === 7;   /* long edges continuous: both / one */
+    return { type: "one", support: both ? "cont" : one1 ? "prop" : "ss", L: lx, w: ly, ratio: r, why: "ly/lx = " + U.f(r, 2) + " > 2 — one-way slab spanning the short span lx = " + lx + " m (IS 456 cl 24.4)" + (both ? ", continuous over both long edges" : one1 ? ", propped: one long edge continuous (fixed), the other simply supported" : ", taken as simply supported (a long edge is discontinuous)") }; }
   return { type: "two", lx: lx, ly: ly, ratio: r, why: "ly/lx = " + U.f(r, 2) + " ≤ 2 — two-way slab, moment coefficients of IS 456 Annex D" + (c === 10 ? " Table 27" : " Table 26") };
 };
 RCC.slabAuto = function (p, one, two) {

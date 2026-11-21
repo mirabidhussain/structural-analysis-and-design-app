@@ -11,27 +11,31 @@
   var meth = { type: "select", label: "Design method", opts: [["lsm", "Limit state method (default)"], ["wsm", "Working stress method (Annex B)"]], def: "lsm", help: "Loads: factored for LSM, working (service) for WSM" };
   function by(l, w) { return function (p) { return p.method === "wsm" ? w(p) : l(p); }; }
   function sel(label, opts, def, num) { return { type: "select", label: label, opts: opts, def: def, num: !!num }; }
-  var supp = sel("Support condition", [["ss", "Simply supported"], ["cont", "Continuous"], ["cant", "Cantilever"]], "ss");
+  var supp = sel("Support condition", [["ss", "Simply supported"], ["cont", "Continuous"], ["cant", "Cantilever"], ["prop", "Propped cantilever (one edge fixed)"]], "ss");
   var isa = [["auto", "Auto-select lightest"]].concat(D.ISA.map(function (a) { return [a.name, a.name]; }));
   var ismb = [["auto", "Auto-select lightest"]].concat(D.ISMB.map(function (a) { return [a.name, a.name]; }));
   var places = Object.keys(D.vb).filter(function (k) { return k !== "Custom"; }).map(function (k) { return [k, k + " (" + D.vb[k] + " m/s)"]; }).concat([["Custom", "Custom - enter below"]]);
 
   var M = [
-    { id: "beam", grp: "RCC", icon: "━", t: "RCC Beam", d: "Flexure, shear, deflection, Ld", code: "IS 456", fn: by(RCC.beam, WS.beam), f: {
+    { id: "beam", grp: "RCC", icon: "━", t: "RCC Beam", d: "Any end conditions — simply supported, cantilever, propped, fixed; BMD/SFD, curtailment, BBS", code: "IS 456", fn: function (p) { return MODS.beam(p); }, f: {
       method: meth, b: n("Width b", 230, "mm"), D: n("Overall depth D", 450, "mm"), exp: expo("mild"), cover: n("Clear cover to stirrups", 25, "mm"), stir: bar("Stirrup dia", 8, "tie"), dia: bar("Main bar dia (for d)", 16, "main"),
-      L: n("Effective span L", 5, "m"), support: supp, mode: sel("Design forces", [["load", "From factored UDL"], ["direct", "Enter Mu, Vu"]], "load"),
-      wu: n("Design UDL w", 30, "kN/m", "LSM: factored 1.5(DL+LL) · WSM: working DL+LL"), Mu: n("M (if direct)", 100, "kNm", "factored (LSM) / working (WSM)"), Vu: n("V (if direct)", 80, "kN"), fck: fck, fy: fy } },
+      L: n("Effective span L", 5, "m"), endL: sel("Left end support", RCC.BEAM_ENDS, "pinned"), endR: sel("Right end support", RCC.BEAM_ENDS, "roller"),
+      mode: sel("Design forces", [["load", "From loads"], ["direct", "Enter Mu, Vu"]], "load"),
+      wu: n("Design UDL w", 30, "kN/m", "LSM: factored 1.5(DL+LL) · WSM: working DL+LL"), P1: n("Point load P1", 0, "kN", "factored; e.g. a tip load on a cantilever or a secondary beam"), a1: n("P1 distance from the left end", 2.5, "m"),
+      P2: n("Point load P2", 0, "kN"), a2: n("P2 distance from the left end", 0, "m"), ksL: n("Spring stiffness (left, if spring)", 5000, "kN/m", "vertical spring support, e.g. a supporting beam or soil"), ksR: n("Spring stiffness (right, if spring)", 5000, "kN/m"),
+      Mu: n("M (if direct)", 100, "kNm", "factored (LSM) / working (WSM)"), Vu: n("V (if direct)", 80, "kN"), fck: fck, fy: fy } },
     { id: "slab", grp: "RCC", icon: "▦", t: "Slab Design", d: "One-way or two-way decided from lx, ly — Annex D coefficients, cantilever", code: "IS 456 cl 24, Annex D", fn: function (p) { return RCC.slabAuto(p, p.method === "wsm" ? WS.slab1 : RCC.slab1, p.method === "wsm" ? WS.slab2 : RCC.slab2); }, f: {
       method: meth, lx: n("Span lx", 4, "m", "the app takes the shorter of lx, ly as the short span"), ly: n("Span ly", 5, "m", "ly/lx > 2 → one-way, otherwise two-way"), case_: sel("Edge condition (IS 456 Table 26)", RCC.SLAB_CASES, "4", true),
-      D: n("Thickness D", 150, "mm"), exp: expo("mild"), cover: n("Clear cover", 20, "mm"), dia: bar("Bar dia", 10, "slab"), LL: n("Live load", 3, "kN/m²", "IS 875 Pt 2: residential 2, office 2.5–4"), FF: n("Floor finish", 1, "kN/m²"), fck: fck, fy: fy } },
+      D: n("Thickness D", 150, "mm"), exp: expo("mild"), cover: n("Clear cover", 20, "mm"), dia: bar("Bar dia", 10, "slab"), LL: n("Live load", 3, "kN/m²", "IS 875 Pt 2: residential 2, office 2.5–4"), FF: n("Floor finish", 1, "kN/m²"),
+      Pe: n("Line load at the free edge", 0, "kN/m", "cantilever (case 11) only — parapet or railing, unfactored"), fck: fck, fy: fy } },
     { id: "slab1", grp: "RCC", hidden: true, icon: "▭", t: "One-way Slab", d: "ly/lx > 2, cantilever, continuous", code: "IS 456", fn: by(RCC.slab1, WS.slab1), f: {
       method: meth, L: n("Effective span", 3.0, "m"), D: n("Thickness D", 150, "mm"), exp: expo("mild"), cover: n("Clear cover", 20, "mm"), dia: bar("Bar dia", 10, "slab"),
       LL: n("Live load", 3, "kN/m²", "IS 875 Pt 2: office 2.5-4"), FF: n("Floor finish", 1, "kN/m²"), support: supp, fck: fck, fy: fy } },
     { id: "slab2", grp: "RCC", hidden: true, icon: "▦", t: "Two-way Slab", d: "Table 26/27 coefficients, 10 edge cases", code: "IS 456 Annex D", fn: by(RCC.slab2, WS.slab2), f: {
       method: meth, lx: n("Short span lx", 4, "m"), ly: n("Long span ly", 5, "m"), case_: sel("Edge condition", D.T26.map(function (c, i) { return [String(i + 1), c.name]; }), "4", true),
       D: n("Thickness D", 150, "mm"), exp: expo("mild"), cover: n("Clear cover", 20, "mm"), dia: bar("Bar dia", 10, "slab"), LL: n("Live load", 3, "kN/m²"), FF: n("Floor finish", 1, "kN/m²"), fck: fck, fy: fy } },
-    { id: "column", grp: "RCC", icon: "┃", t: "RCC Column", d: "Axial + biaxial bending, slender", code: "IS 456 cl 39", fn: by(RCC.column, WS.column), f: {
-      method: meth, b: n("Width b", 300, "mm"), D: n("Depth D", 450, "mm"), L: n("Unsupported length", 3, "m"), lex: n("Effective length lex", 3, "m"), ley: n("Effective length ley", 3, "m"),
+    { id: "column", grp: "RCC", icon: "┃", t: "RCC Column", d: "Axial + biaxial bending, slender", code: "IS 456 cl 39", fn: function (p) { return MODS.column(p); }, f: {
+      method: meth, b: n("Width b", 300, "mm"), D: n("Depth D", 450, "mm"), L: n("Unsupported length", 3, "m"), lecx: sel("Effective length about x (IS 456 Table 28)", B1.LE_OPTS, "manual"), lex: n("Effective length lex", 3, "m", "used when 'Enter the effective length' is chosen"), lecy: sel("Effective length about y (IS 456 Table 28)", B1.LE_OPTS, "manual"), ley: n("Effective length ley", 3, "m"),
       Pu: n("Axial load P", 1500, "kN", "factored (LSM) / working (WSM)"), Mux: n("Mx", 60, "kNm"), Muy: n("My", 30, "kNm"), exp: expo("mild"), cover: n("Clear cover to ties", 40, "mm", "IS 456 cl 26.4.2.1: ≥ 40 mm to the main bars"), tie: bar("Tie dia", 8, "tie"),
       dia: bar("Main bar dia", 16, "col"),
       arr: sel("Bar arrangement", [["four", "Equal on four faces"], ["two", "Two faces (parallel to b)"]], "four"), pmax: n("Max steel %", 4, "%"), fck: fck, fy: fy } },
@@ -73,6 +77,7 @@
       purl: n("Purlins (on slope)", 0.06, "kN/m²"), s0: n("Ground snow load s0", 1.5, "kN/m²", "Kashmir valley 1.5-2.5; confirm locally"),
       vb: sel("Basic wind speed (place)", places, "Srinagar"), vbc: n("Custom Vb (if Custom)", 39, "m/s"), k1: n("k1 (risk coefficient)", 1.0, ""), terrain: sel("Terrain category", [["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"]], "2", true),
       h: n("Height to ridge", 10, "m"), hw: n("h/w of building", 0.5, ""), cpi: n("Cpi (±)", 0.2, "", "0.2 normal, 0.5 large openings"),
+      tsup: sel("Bearings", [["pr", "Pinned + roller (sliding) — determinate"], ["pp", "Pinned at both ends — horizontal thrust"]], "pr"),
       purlinSp: n("Purlin spacing (top chord restraint)", 1.0, "m"), bracing: n("Bottom chord bracing spacing", 3.2, "m"), gusset: n("Gusset thickness", 8, "mm"), webMin: n("Min web angle leg", 50, "mm"),
       fy: sel("Steel fy", [["250", "E250"], ["350", "E350"]], "250", true), fu: n("Steel fu", 410, "N/mm²") } },
     { id: "purlin", grp: "Steel", icon: "═", t: "Purlin", d: "Angle / channel, biaxial bending", code: "IS 800 cl 8, 9", fn: ST.purlin, f: {
@@ -84,15 +89,15 @@
       L: n("Length", 2.5, "m"), conn: sel("End connection", [["bolt", "Bolted (one leg)"], ["weld", "Welded"]], "bolt"), db: bar("Bolt dia", 16, "bolt", "M"), bgrade: sel("Bolt grade", [["4.6", "4.6"], ["8.8", "8.8"]], "4.6"),
       nb: n("Bolts in line", 6, ""), pitch: n("Pitch", 50, "mm"), e: n("End distance", 30, "mm"), g: n("Gauge (heel to bolt line)", 35, "mm"), Lw: n("Weld length (if welded)", 150, "mm"),
       tg: n("Gusset thickness", 8, "mm"), gap: n("Gap between angles", 8, "mm"), lmax: n("Max L/r", 400, ""), fy: n("fy", 250, "N/mm²"), fu: n("fu", 410, "N/mm²") } },
-    { id: "comp", grp: "Steel", icon: "↕", t: "Compression Member", d: "Struts & columns, buckling curves", code: "IS 800 Sec 7", fn: ST.compression, f: {
+    { id: "comp", grp: "Steel", icon: "↕", t: "Compression Member", d: "Struts & columns, buckling curves", code: "IS 800 Sec 7", fn: function (p) { return MODS.comp(p); }, f: {
       Pu: n("Factored axial load Pu", 200, "kN"), type: sel("Member type", [["sa", "Single angle (cl 7.5.1.2)"], ["da", "Double angle back-to-back"], ["mb", "ISMB column"], ["mc", "ISMC"]], "da"),
       sec: sel("Section (or auto)", [["auto", "Auto-select lightest"]].concat(D.ISA.concat(D.ISMB, D.ISMC).map(function (a) { return [a.name, a.name]; })), "auto"),
-      L: n("Length", 2.5, "m"), Ly: n("Length about minor axis (ISMB)", 0, "m", "0 = same as L"), K: n("Effective length factor K", 0.85, "", "Table 11"),
+      L: n("Length", 2.5, "m"), Ly: n("Length about minor axis (ISMB)", 0, "m", "0 = same as L"), Kc: sel("End conditions (IS 800 Table 11)", B1.LE_OPTS, "manual"), K: n("Effective length factor K", 0.85, "", "used when 'Enter' is chosen; Table 11"),
       endc: sel("Single angle end condition", [["fixed2", "≥ 2 bolts / welded, fixed"], ["hinged2", "≥ 2 bolts, hinged"], ["fixed1", "1 bolt, fixed"], ["hinged1", "1 bolt, hinged"]], "fixed2"),
       gap: n("Gap (double angles)", 8, "mm"), lmax: n("Max KL/r", 180, ""), fy: n("fy", 250, "N/mm²") } },
-    { id: "sbeam", grp: "Steel", icon: "⌶", t: "Steel Beam", d: "ISMB, LTB, shear, deflection", code: "IS 800 Sec 8", fn: ST.beam, f: {
+    { id: "sbeam", grp: "Steel", icon: "⌶", t: "Steel Beam", d: "ISMB, LTB, shear, deflection", code: "IS 800 Sec 8", fn: function (p) { return MODS.sbeam(p); }, f: {
       sec: sel("Section", ismb, "auto"), L: n("Span", 6, "m"), support: sel("Support", [["ss", "Simply supported"], ["cant", "Cantilever"]], "ss"), wu: n("Factored UDL wu", 30, "kN/m"),
-      Pu: n("Factored mid-span / tip point load", 0, "kN"), lat: sel("Compression flange", [["1", "Laterally supported"], ["", "Laterally unsupported"]], "1"), Lun: n("Unbraced length (if unsupported)", 6, "m"),
+      Pu: n("Factored mid-span / tip point load", 0, "kN"), lat: sel("Compression flange", [["1", "Laterally supported"], ["", "Laterally unsupported"]], "1"), ltb: sel("Support restraint for LTB (IS 800 Table 15)", B1.T15_OPTS, "manual"), Lun: n("Unbraced length (if unsupported)", 6, "m"),
       destab: sel("Load on top flange (destabilising)", [["", "No"], ["1", "Yes"]], ""), dl: n("Deflection limit span /", 300, ""), fy: n("fy", 250, "N/mm²") } },
     { id: "bolts", grp: "Steel", icon: "⊙", t: "Bolts & Welds", d: "Bearing bolts, fillet welds", code: "IS 800 Sec 10", fn: ST.bolts, f: {
       Vu: n("Factored shear on bolt group", 120, "kN"), db: bar("Bolt dia", 16, "bolt", "M"), grade: sel("Bolt grade", [["4.6", "4.6"], ["8.8", "8.8"], ["10.9", "10.9"]], "4.6"),
@@ -624,8 +629,36 @@
   var tb = document.createElement("nav"); tb.className = "tabbar noprint";
   tb.innerHTML = [["home", "#", "home", "Home"], ["projects", "#projects", "projects", "Projects"], ["estimate", "#estimate", "estimate", "Estimate"], ["model", "#model", "frame", "Analysis"], ["report", "#report", "report", "Report"]].map(function (t) { return '<a href="' + t[1] + '" data-t="' + t[0] + '">' + IC.svg(t[2]) + '<span>' + t[3] + '</span></a>'; }).join("");
   document.body.appendChild(tb);
-  function theme(t) { try { if (t) localStorage.setItem("isd_theme", t); t = localStorage.getItem("isd_theme") || "auto"; } catch (e) { t = t || "auto"; } document.documentElement.setAttribute("data-theme", t); var b = document.getElementById("themeBtn"); if (b) b.innerHTML = IC.svg(t === "dark" ? "sun" : "moon"); }
-  var thb = document.getElementById("themeBtn"); if (thb) thb.onclick = function () { var cur = document.documentElement.getAttribute("data-theme"), dark = cur === "dark" || (cur === "auto" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches); theme(dark ? "light" : "dark"); };
+  /* colour themes (palette) × light / dark / auto — stored per device; reports, PDF and Excel stay neutral */
+  var PALS = [["gold", "Charcoal & Gold", ["#121418", "#d9b25c", "#f3f5f9"]], ["navy", "Classic Navy", ["#14284a", "#c2410c", "#f3f5f9"]], ["blueprint", "Blueprint", ["#0b3d6e", "#0a6f7a", "#eaf1fa"]],
+    ["forest", "Forest", ["#17331f", "#94570f", "#f2f5f1"]], ["graphite", "Graphite", ["#232529", "#4652c8", "#f4f4f5"]], ["hc", "High Contrast", ["#000000", "#ffd400", "#ffffff"]]];
+  function stored(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
+  function keep(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
+  function applyTheme() {
+    var t = stored("isd_theme", "auto"), pl = stored("isd_pal", "gold"), de = document.documentElement;
+    de.setAttribute("data-theme", t); if (pl === "gold") de.removeAttribute("data-pal"); else de.setAttribute("data-pal", pl);
+    var b = document.getElementById("themeBtn"); if (b) b.innerHTML = IC.svg(isDark() ? "sun" : "moon");
+    var mt = document.querySelector('meta[name="theme-color"]'); if (mt) mt.setAttribute("content", (getComputedStyle(de).getPropertyValue("--nav") || "#121418").trim());
+    try { document.dispatchEvent(new Event("isd-theme")); } catch (e) { }
+  }
+  function isDark() { var t = document.documentElement.getAttribute("data-theme"); return t === "dark" || (t === "auto" && !!window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches); }
+  window.ISDTHEME = { isDark: isDark, apply: applyTheme, PALS: PALS };
+  function theme(t) { if (t) keep("isd_theme", t); applyTheme(); }
+  function themeSheet() {
+    var old = document.querySelector(".thsheet"); if (old) { old.remove(); return; }
+    var sh = document.createElement("div"); sh.className = "thsheet noprint";
+    function draw() {
+      var pl = stored("isd_pal", "gold"), t = stored("isd_theme", "auto");
+      sh.innerHTML = '<div class="thp" role="dialog" aria-label="Colour theme"><b>Colour theme</b><div class="thg">' + PALS.map(function (q) { return '<button type="button" data-pal="' + q[0] + '"' + (q[0] === pl ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"') + '><i>' + q[2].map(function (c) { return '<s style="background:' + c + '"></s>'; }).join("") + '</i>' + q[1] + '</button>'; }).join("") +
+        '</div><div class="thm" role="group" aria-label="Brightness">' + [["light", "Light"], ["dark", "Dark"], ["auto", "Auto"]].map(function (q) { return '<button type="button" data-th="' + q[0] + '"' + (q[0] === t ? ' class="on"' : '') + '>' + q[1] + '</button>'; }).join("") + '</div><small>Auto follows the phone setting. Reports, PDF and Excel files keep neutral print colours.</small></div>';
+      sh.querySelectorAll("[data-pal]").forEach(function (bt) { bt.onclick = function () { keep("isd_pal", bt.getAttribute("data-pal")); applyTheme(); draw(); }; });
+      sh.querySelectorAll("[data-th]").forEach(function (bt) { bt.onclick = function () { keep("isd_theme", bt.getAttribute("data-th")); applyTheme(); draw(); }; });
+    }
+    sh.onclick = function (ev) { if (ev.target === sh) sh.remove(); };
+    draw(); document.body.appendChild(sh);
+  }
+  var thb = document.getElementById("themeBtn"); if (thb) { thb.onclick = themeSheet; thb.setAttribute("aria-label", "Colour theme"); }
+  if (window.matchMedia) try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme); } catch (e) { }
   theme();
   window.addEventListener("hashchange", route);
   window.ISD = { modules: M, route: route, store: store };

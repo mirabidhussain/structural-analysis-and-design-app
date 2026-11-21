@@ -639,9 +639,9 @@ console.log('\n== Q. Slab design: one-way or two-way from the spans; sketches');
 (function () {
   const { SK } = c, f = p => RCC.slabAuto(p, RCC.slab1, RCC.slab2), b = { method: 'lsm', lx: 4, ly: 5, case_: 4, D: 150, exp: 'mild', cover: 20, dia: 10, LL: 3, FF: 1, fck: 20, fy: 500, __defaults: [] };
   const t1 = RCC.slabType(b), t2 = RCC.slabType(Object.assign({}, b, { ly: 8.1 })), t3 = RCC.slabType(Object.assign({}, b, { lx: 9, ly: 3, case_: 1 })), t4 = RCC.slabType(Object.assign({}, b, { case_: 11, lx: 1.5, ly: 4 })), t5 = RCC.slabType(Object.assign({}, b, { ly: 8 }));
-  ok('Slab Q1: ly/lx ≤ 2 → two-way (8/4 = 2.0 stays two-way); > 2 → one-way over the shorter span; spans entered in either order', t1.type === 'two' && t5.type === 'two' && t2.type === 'one' && t2.L === 4 && t3.type === 'one' && t3.L === 3 && t3.support === 'cont' && t2.support === 'ss');
+  ok('Slab Q1: ly/lx ≤ 2 → two-way (8/4 = 2.0 stays two-way); > 2 → one-way over the shorter span; spans entered in either order', t1.type === 'two' && t5.type === 'two' && t2.type === 'one' && t2.L === 4 && t3.type === 'one' && t3.L === 3 && t3.support === 'cont' && t2.support === 'prop');
   ok('Slab Q2: cantilever option spans the projection', t4.type === 'one' && t4.support === 'cant' && t4.L === 1.5);
-  const r2 = f(b), r2b = RCC.slab2(Object.assign({}, b)), p1 = Object.assign({}, b, { ly: 9 }), r1 = f(p1), r1b = RCC.slab1(Object.assign({}, p1, { L: 4, support: 'ss' }));
+  const r2 = f(b), r2b = RCC.slab2(Object.assign({}, b)), p1 = Object.assign({}, b, { ly: 9 }), r1 = f(p1), r1b = RCC.slab1(Object.assign({}, p1, { L: 4, support: 'prop' }));
   ok('Slab Q3: results identical to the two-way and one-way routines', r2.checks.length === r2b.checks.length && r2.checks.every((q, i) => q.d === r2b.checks[i].d) && r1.checks.every((q, i) => q.d === r1b.checks[i].d) && /two-way/.test(r2.title) && /one-way/.test(r1.title) && r1.summary[0][0] === 'Slab type');
   const ids = ['beam', 'slab', 'column', 'footing', 'strip', 'stair'], P = { beam: { b: 230, D: 450, L: 5, support: 'cant', mode: 'load', wu: 30, cover: 25, stir: 8, dia: 16 }, slab: b, column: { b: 300, D: 450, cover: 40, tie: 8, dia: 16, arr: 'two', Pu: 1500, Mux: 60, Muy: 30, L: 3, lex: 3, ley: 3 }, footing: { P: 1000, cb: 300, cd: 450, sbc: 150 }, strip: { w: 150, tw: 350, sbc: 150 }, stair: { R: 150, T: 250, t: 175, L: 3.5 } };
   ok('Sketch Q4: live input sketches for beam, slab, column, footings and stair draw without missing values', ids.every(id => { const s = SK.draw(id, P[id]); return s.length > 500 && !/NaN|undefined/.test(s); }) && /TWO-WAY/.test(SK.draw('slab', b)) && /ONE-WAY/.test(SK.draw('slab', p1)));
@@ -659,6 +659,60 @@ console.log('\n== R. DXF import for the roof truss and the foundation modules');
   ok('DXF R3: column plan — rectangles on COLUMN, marks from nearby text, coordinates from the lowest-left column, size of the commonest column, circle column added', pl.cols.length === 7 && pl.cols[0].mark === 'C1' && pl.cols[0].x === 0 && pl.cols[0].y === 0 && pl.cols.find(q => q.mark === 'C6').x === 12 && pl.cols.find(q => q.mark === 'C6').y === 5 && pl.size.join() === '450,600' && pl.cols.find(q => q.mark === 'C7').x === 18, pl.cols.map(q => q.mark + '(' + q.x + ',' + q.y + ')').join(' '));
   const pp = { cols: 'C1, 0, 0, 1800\nC2, 6, 0, 0\nC3, 0, 5', Dp: 500, Lp: 15, cb: 450, cd: 450, fos: 2.5, sp: 3, pcov: 75, edge: 150, fck: 25, Qg: 0 };
   ok('DXF R4: columns read without loads are flagged before the design runs', LIM.check('pile', pp).some(x => x.hard && x.k === 'cols' && /C2, C3/.test(x.msg)) && LIM.check('raft', { cols: 'C1, 0, 0, 0, 0', sbc: 200, cb: 450, cd: 450, matMesh: 0.5, fck: 25 }).some(x => x.hard && x.k === 'cols'));
+})();
+
+console.log('\n== S. v3.11 supports, cantilever and propped cantilever, effective lengths, frame bases');
+(function () {
+  const { B1, RCC, MODS, MD, FE, TR, ST } = c, near1 = (a, b, tol) => Math.abs(a - b) <= (tol || 1e-6) * Math.max(1, Math.abs(b));
+  const w = 10, L = 6;
+  const ss = B1.solve({ x: [0, L], sup: ['pinned', 'roller'], w: [w], P: [] }), es = B1.extremes(ss);
+  ok('S1: simply supported UDL — M = wL²/8 at mid-span, R = wL/2', near1(es.Msag, w * L * L / 8) && near1(es.xs, 3, 1e-3) && near1(ss.reac[0].V, 30));
+  const pc = B1.solve({ x: [0, L], sup: ['fixed', 'roller'], w: [w], P: [] }), ep = B1.extremes(pc);
+  ok('S2: propped cantilever — fixed-end M = wL²/8, span M = 9wL²/128 at 3L/8 from the prop, R = 5wL/8 and 3wL/8, contraflexure at L/4', near1(ep.Mhog, w * L * L / 8) && near1(ep.Msag, 9 * w * L * L / 128, 1e-4) && near1(L - ep.xs, 3 * L / 8, 2e-3) && near1(pc.reac[0].V, 5 * w * L / 8) && near1(pc.reac[1].V, 3 * w * L / 8) && ep.zeros.some(z => near1(z, L / 4, 2e-3)));
+  const ff = B1.extremes(B1.solve({ x: [0, L], sup: ['fixed', 'fixed'], w: [w], P: [] }));
+  ok('S3: fixed–fixed — end M = wL²/12, span M = wL²/24', near1(ff.Mhog, w * L * L / 12) && near1(ff.Msag, w * L * L / 24, 1e-4));
+  const ct = B1.solve({ x: [0, 2], sup: ['fixed', 'free'], w: [w], P: [{ x: 2, P: 5 }] });
+  ok('S4: cantilever with UDL and tip load — M = wL²/2 + PL, V = wL + P', near1(B1.extremes(ct).Mhog, w * 4 / 2 + 10) && near1(ct.reac[0].V, 25));
+  let mech = false; try { B1.solve({ x: [0, L], sup: ['free', 'pinned'], w: [w], P: [] }); } catch (e) { mech = /mechanism/i.test(e.message); }
+  ok('S5: unstable supports (free + pinned) rejected as a mechanism', mech);
+  const sp = B1.extremes(B1.solve({ x: [0, L], sup: ['fixed', 'spring'], ks: [0, 1e12], w: [w], P: [], EI: 1e4 }));
+  ok('S6: a very stiff spring support behaves as a prop', near1(sp.Mhog, w * L * L / 8, 1e-4));
+  ok('S7: effective length factors — IS 456 Table 28 / IS 800 Table 11', B1.keff('fixed', 'fixed').k === 0.65 && B1.keff('pinned', 'fixed').k === 0.80 && B1.keff('pinned', 'pinned').k === 1 && B1.keff('guided', 'fixed').k === 1.2 && B1.keff('fixed', 'free').k === 2 && B1.keff('pinned', 'guided').k === 2);
+  const bm = { method: 'lsm', b: 230, D: 450, exp: 'mild', cover: 25, stir: 8, dia: 16, L: 5, mode: 'load', wu: 30, P1: 0, a1: 0, P2: 0, a2: 0, ksL: 5000, ksR: 5000, fck: 20, fy: 500, __defaults: [] };
+  const rss = MODS.beam(Object.assign({}, bm, { endL: 'pinned', endR: 'roller' })), rold = RCC.beam(Object.assign({}, bm, { support: 'ss' }));
+  ok('S8: simply supported beam by end conditions gives the same steel and stirrups as the v3.10 design', rss.res.bars.text === rold.res.bars.text && rss.res.sv === rold.res.sv && near1(rss.res.Msag, rold.res.Mu));
+  const rpc = MODS.beam(Object.assign({}, bm, { endL: 'fixed', endR: 'roller' }));
+  ok('S9: propped cantilever beam — top steel over the fixed end extends past the contraflexure point by max(d, 12φ, L/16); bottom steel for 9wL²/128', /propped/.test(rpc.title) && rpc.res.top.L && near1(rpc.res.Msag, 9 * 30 * 25 / 128, 1e-3) && rpc.res.cut.L.ext > 1.25 && rpc.res.take.bars.length >= 4 && /<svg/.test(rpc.svg) && rpc.dxf.length > 1000);
+  const rct = MODS.beam(Object.assign({}, bm, { L: 2, endL: 'fixed', endR: 'free', wu: 20, P1: 15, a1: 2 }));
+  ok('S10: cantilever beam — top steel for wL²/2 + PL, deflection basic L/d 7, bars anchored Ld beyond the support', /cantilever/.test(rct.title) && near1(rct.res.ML, 20 * 4 / 2 + 30) && rct.items.some(i => /Basic span\/d = 7/.test(i.t || '')) && rct.res.cut.L.full);
+  let werr = ''; try { MODS.beam(Object.assign({}, bm, { method: 'wsm', endL: 'fixed', endR: 'roller' })); } catch (e) { werr = e.message; }
+  ok('S11: working-stress beam limited to ss / fixed–fixed / cantilever with a clear message', /limit state/.test(werr) && MODS.beam(Object.assign({}, bm, { method: 'wsm', endL: 'fixed', endR: 'free' })).title.length > 0);
+  const sl = { method: 'lsm', lx: 1.2, ly: 4, case_: '11', D: 150, exp: 'mild', cover: 20, dia: 10, LL: 3, FF: 1, Pe: 2, fck: 20, fy: 500, __defaults: [] };
+  const rsl = MODS.slab(sl), r0 = MODS.slab(Object.assign({}, sl, { Pe: 0 }));
+  ok('S12: cantilever slab (chajja) — parapet line load adds 1.5·Pe·L to Mu; stability check of IS 456 cl 20.1 reported', near1(rsl.res.Mu - r0.res.Mu, 1.5 * 2 * 1.2) && rsl.items.some(i => /cl 20\.1/.test(i.t || '')));
+  const rp = MODS.slab(Object.assign({}, sl, { lx: 3, ly: 7, case_: '4', Pe: 0 }));
+  ok('S13: one-way slab with one long edge continuous designed as propped — top wL²/8, bottom 9wL²/128', rp.res.support === 'prop' && rp.res.bot && /Top over the fixed edge/.test(rp.summary.map(x => x[0]).join()));
+  const col = { method: 'lsm', b: 300, D: 450, L: 3, lecx: 'fixed|pinned', lex: 3, lecy: 'fixed|guided', ley: 3, Pu: 1500, Mux: 60, Muy: 30, exp: 'mild', cover: 40, tie: 8, dia: 16, arr: 'four', pmax: 4, fck: 20, fy: 500, __defaults: [] };
+  const rc = MODS.column(col), rcm = RCC.column(Object.assign({}, col, { lex: 2.4, ley: 3.6 }));
+  ok('S14: column effective lengths from the end conditions (0.80 L braced, 1.20 L sway) give the same design as entering them', /0\.80 × 3 = 2\.4 m/.test(rc.items[0].t) && /1\.20 × 3 = 3\.6 m/.test(rc.items[1].t) && JSON.stringify(rc.summary) === JSON.stringify(rcm.summary));
+  const cm = MODS.comp({ Pu: 200, type: 'da', sec: 'auto', L: 2.5, Ly: 0, Kc: 'pinned|pinned', K: 0.85, endc: 'fixed2', gap: 8, lmax: 180, fy: 250, __defaults: [] }), cm1 = ST.compression({ Pu: 200, type: 'da', sec: 'auto', L: 2.5, Ly: 0, K: 1, endc: 'fixed2', gap: 8, lmax: 180, fy: 250, __defaults: [] });
+  ok('S15: steel strut K from IS 800 Table 11 end conditions', /K = 1\.00/.test(cm.items[0].t) && JSON.stringify(cm.summary) === JSON.stringify(cm1.summary));
+  const sb = { sec: 'ISMB 400', L: 6, support: 'ss', wu: 30, Pu: 0, lat: '', Lun: 6, destab: '', dl: 300, fy: 250, __defaults: [] };
+  const s07 = MODS.sbeam(Object.assign({}, sb, { ltb: 'ff' })), s42 = ST.beam(Object.assign({}, sb, { Lun: 4.2 }));
+  ok('S16: steel beam LTB length from IS 800 Table 15 (0.70 L) equals entering 4.2 m', JSON.stringify(s07.summary) === JSON.stringify(s42.summary) && /Table 15/.test(s07.items[0].t));
+  const base = { type: 'pratt', span: 12, slope: 25, n: 3, spacing: 3, sheet: 0.08, purl: 0.06, s0: 1.5, vb: 39, k1: 1, terrain: 2, h: 10, hw: 0.5, cpi: 0.2, purlinSp: 1, bracing: 3, gusset: 8, webMin: 50, fy: 250, fu: 410, __defaults: [] };
+  const tpr = TR.design(base), tpp = TR.design(Object.assign({}, base, { tsup: 'pp' })), hb = tpp.items.find(i => i.head && i.head.includes('HB'));
+  ok('S17: truss pinned at both ends — under gravity the bearing thrusts are equal and opposite; bottom chord tension reduced', hb && Math.abs(+hb.rows[0][1].replace(/,/g, '') + +hb.rows[0][3].replace(/,/g, '')) < 0.02 && +hb.rows[0][1].replace(/,/g, '') > 1 && tpp.res.env[1].T < tpr.res.env[1].T);
+  const p0 = { fck: 25, fy: 500, fys: 250, crack: true, pcCol: 2, pcBeam: 1, colSec: '400x400', beamSec: '300x450', braceSec: 'ISA 75x75x6', tSlab: 150, tWall: 200, ff: 1.5, ffRoof: 2.5, ll: 3, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0, eq: true, zone: 'V', I: 1.2, R: 5, soil: 'II', sys: 'rc', wind: false, vb: 39, terrain: 2, cf: 1.3, trib: 4, kcol: 1.2, method: 'lsm' };
+  const g = MD.generate({ bx: '5, 4', by: '', hs: '3.5, 3.2', twoD: true, slabs: false, mesh: 1 });
+  function run(x) { const P = Object.assign({}, p0, x), m = MD.make(g, P), Lc = MD.cases(m, P), cb = MD.combos(Lc.cases, P.method), res = FE.linear(m, Lc.cases, cb, {}); return { m, res, r: res.combos[0].reac, U: Math.max(...res.combos.map(q => Math.abs(q.U[6 * (m.nodes.length - 1)]))) }; }
+  const fx = run({}), pn = run({ base: 'pinned' }), sw = run({ base: 'spring', ksoil: 40000, fL: 2, fB: 2 }), st = run({ base: 'spring', ksoil: 4e12, fL: 2, fB: 2 });
+  const k0 = Object.keys(fx.r)[0];
+  ok('S18: frame base condition — pinned bases carry no moment and sway more; soil springs lie between; a very stiff spring equals fixed', Math.abs(pn.r[k0][4]) < 1e-6 && pn.U > sw.U && sw.U > fx.U && near1(st.U, fx.U, 1e-5) && near1(st.r[k0][4], fx.r[k0][4], 1e-4) && Math.abs(sw.r[k0][4]) < Math.abs(fx.r[k0][4]));
+  const sumV = q => Object.keys(q.r).reduce((a, k) => a + q.r[k][2], 0);
+  ok('S19: vertical reactions balance the same loads for every base condition (spring reaction = k·settlement)', near1(sumV(pn), sumV(fx), 1e-6) && near1(sumV(sw), sumV(fx), 1e-6));
+  const ov = MD.make(g, Object.assign({}, p0, { supOver: 'N1 = roller\nN99 = fixed\nnonsense' }));
+  ok('S20: support rules per node — roller set, bad rules reported', ov.supType[0] === 'roller' && ov.sup[0].join() === '0,0,1,0,0,0' && ov.warn.some(w => /node 99/.test(w)) && ov.warn.some(w => /ignored/.test(w)));
 })();
 
 console.log(`\n${pass} passed, ${fail} failed`);

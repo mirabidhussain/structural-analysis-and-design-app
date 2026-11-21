@@ -75,6 +75,7 @@ DXF.parse = function (text) {
 /* default role from layer name */
 DXF.guessRole = function (name) {
   var s = name.toUpperCase();
+  if (/ROLL/.test(s)) return "roller";
   if (/SUPP|FIX|BASE|RESTR/.test(s)) return /PIN|HINGE/.test(s) ? "pin" : "fixed";
   if (/PIN|HINGE/.test(s)) return "pin";
   if (/SLAB|FLOOR|ROOF|DECK|PLATE/.test(s)) return "slab";
@@ -118,7 +119,7 @@ DXF.build = function (dx, opt) {
   }
   var lines = [], faces = [], sups = [];
   dx.ents.forEach(function (e) {
-    if (e.k === "point") { var r = opt.roles[e.layer] || DXF.guessRole(e.layer); sups.push({ p: P(e.p[0]), r: r === "pin" ? "pin" : "fixed" }); return; }
+    if (e.k === "point") { var r = opt.roles[e.layer] || DXF.guessRole(e.layer); sups.push({ p: P(e.p[0]), r: r === "pin" || r === "roller" ? r : "fixed" }); return; }
     var pts = e.p.map(P);
     var lr = opt.roles[e.layer] || DXF.guessRole(e.layer);
     if (lr === "ignore") return;
@@ -129,7 +130,7 @@ DXF.build = function (dx, opt) {
       return;
     }
     if (lr === "slab" || lr === "wall") { warn.push("Open polyline/line on " + lr + " layer " + e.layer + " ignored"); return; }
-    if (lr === "fixed" || lr === "pin") { pts.forEach(function (p) { sups.push({ p: p, r: lr }); }); return; }
+    if (lr === "fixed" || lr === "pin" || lr === "roller") { pts.forEach(function (p) { sups.push({ p: p, r: lr }); }); return; }
     var segs = []; for (var i = 0; i + 1 < pts.length; i++) segs.push([pts[i], pts[i + 1]]);
     if (e.k === "poly" && e.closed && pts.length > 2) segs.push([pts[pts.length - 1], pts[0]]);
     segs.forEach(function (s) {
@@ -194,7 +195,7 @@ DXF.build = function (dx, opt) {
   });
   /* supports */
   var sup = {};
-  sups.forEach(function (s) { sup[s.n] = s.r === "pin" ? [1, 1, 1, 0, 0, 0] : [1, 1, 1, 1, 1, 1]; });
+  sups.forEach(function (s) { sup[s.n] = s.r === "pin" ? [1, 1, 1, 0, 0, 0] : s.r === "roller" ? [0, 0, 1, 0, 0, 0] : [1, 1, 1, 1, 1, 1]; });
   if (!Object.keys(sup).length && nodes.length) {
     var zmin = Math.min.apply(null, nodes.map(function (n) { return n.z; }));
     nodes.forEach(function (n, i) { if (n.z - zmin < tol) sup[i] = [1, 1, 1, 1, 1, 1]; });

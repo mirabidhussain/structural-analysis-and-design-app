@@ -43,7 +43,7 @@ var HW = (function () {
 var PAR = (function () {
   var P = {}, src = null, srcP = null, url = null, pool = [], disabled = false, seq = 0, waiting = {};
   /* engine scripts: the same files the tests load (no screen code) */
-  P.ENGINE = ["data", "core", "lim", "units", "rcc", "wsm", "steel", "loads", "truss", "fem", "pushover", "dxf", "model", "se", "dt", "mat", "fdn", "reg", "pipe", "boq", "elem", "est", "auto"];
+  P.ENGINE = ["data", "core", "lim", "units", "rcc", "wsm", "steel", "loads", "truss", "fem", "pushover", "dxf", "model", "se", "dt", "mat", "fdn", "reg", "beam1d", "beamx", "pipe", "boq", "elem", "est", "auto"];
   var BOOT = [
     "var PDB = { current: function () { return self.__proj || null; } };",
     "function __strip(o, seen) { if (!o || typeof o !== 'object') return; if (seen.has(o)) return; seen.add(o); if (ArrayBuffer.isView(o)) return; var ks = Object.keys(o); for (var i = 0; i < ks.length; i++) { var v = o[ks[i]]; if (typeof v === 'function') delete o[ks[i]]; else if (v && typeof v === 'object') __strip(v, seen); } }",

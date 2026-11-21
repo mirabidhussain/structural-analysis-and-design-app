@@ -43,7 +43,7 @@ TR.solve = function (g, loads) {
     }
   });
   loads.forEach(function (l) { F[2 * l.node] += l.fx; F[2 * l.node + 1] += l.fy; });
-  var fixed = [2 * g.sup[0], 2 * g.sup[0] + 1, 2 * g.sup[1] + 1];
+  var fixed = g.pp ? [2 * g.sup[0], 2 * g.sup[0] + 1, 2 * g.sup[1], 2 * g.sup[1] + 1] : [2 * g.sup[0], 2 * g.sup[0] + 1, 2 * g.sup[1] + 1];
   var free = []; for (a = 0; a < 2 * n; a++) if (fixed.indexOf(a) < 0) free.push(a);
   var m = free.length, A2 = [], b2 = [];
   for (var i = 0; i < m; i++) { A2.push(free.map(function (j) { return K[free[i]][j]; })); b2.push(F[free[i]]); }
@@ -59,10 +59,10 @@ TR.solve = function (g, loads) {
     return ((u[2 * m.j] - u[2 * m.i]) * m.c + (u[2 * m.j + 1] - u[2 * m.i + 1]) * m.s) / m.L;   /* EA = 1 -> axial force, + tension */
   });
   /* reactions */
-  var R = { RAx: 0, RAy: 0, RBy: 0 };
+  var R = { RAx: 0, RAy: 0, RBy: 0, RBx: 0 };
   var Fint = new Array(2 * n).fill(0);
   g.M.forEach(function (m, k) { var f = forces[k]; Fint[2 * m.i] += f * m.c; Fint[2 * m.i + 1] += f * m.s; Fint[2 * m.j] -= f * m.c; Fint[2 * m.j + 1] -= f * m.s; });   /* tension pulls node i towards j */
-  R.RAx = -(F[2 * g.sup[0]] + Fint[2 * g.sup[0]]); R.RAy = -(F[2 * g.sup[0] + 1] + Fint[2 * g.sup[0] + 1]); R.RBy = -(F[2 * g.sup[1] + 1] + Fint[2 * g.sup[1] + 1]);
+  R.RAx = -(F[2 * g.sup[0]] + Fint[2 * g.sup[0]]); R.RAy = -(F[2 * g.sup[0] + 1] + Fint[2 * g.sup[0] + 1]); R.RBy = -(F[2 * g.sup[1] + 1] + Fint[2 * g.sup[1] + 1]); if (g.pp) R.RBx = -(F[2 * g.sup[1]] + Fint[2 * g.sup[1]]);
   return { f: forces, R: R };
 };
 
@@ -95,7 +95,7 @@ TR.design = function (p) {
     p = Object.assign({}, p, { span: Math.round(g.span * 1000) / 1000, slope: Math.round(g.slope * 10) / 10 });
   } else var g = TR.geometry(p.type, p.span, p.slope, p.n);
   var ld = LD.roof({ span: p.span, slope: p.slope, sheet: p.sheet, purl: p.purl, s0: p.s0, vb: p.vb, k1: p.k1, terrain: p.terrain, h: p.h, k3: 1, k4: 1, kd: 0.9, ka: 1, kc: 0.9, hw: p.hw, cpi: p.cpi });
-  var sp = p.spacing;
+  var sp = p.spacing; g.pp = p.tsup === "pp";
   r.h("1. Geometry & loads");
   r.row("Truss", (fromDxf ? "From the DXF drawing (" + g.N.length + " joints, " + g.M.length + " members: " + ["top", "bot", "web"].map(function (k) { return g.M.filter(function (m) { return m.g === k; }).length + " " + { top: "top chord", bot: "bottom chord", web: "web" }[k]; }).join(", ") + ")" : { pratt: "Pratt", howe: "Howe", fink: "Fink (W)" }[p.type]) + ", span " + p.span + " m, rise " + U.f(g.h, 3) + " m (" + p.slope + "°" + (fromDxf ? " average" : "") + "), spacing " + sp + " m", "");
   if (fromDxf && g.warn.length) r.note(g.warn.join("; "));
@@ -121,12 +121,13 @@ TR.design = function (p) {
   combos.forEach(function (cb) {
     var f = g.M.map(function (_, k) { var s = 0; for (var key in cb[1]) s += cb[1][key] * cases[key].f[k]; return s; });
     f.forEach(function (v, k) { if (v > env[k].T) { env[k].T = v; env[k].Tc = cb[0]; } if (v < env[k].C) { env[k].C = v; env[k].Cc = cb[0]; } });
-    var R = { RAx: 0, RAy: 0, RBy: 0 };
-    for (var key in cb[1]) { R.RAx += cb[1][key] * cases[key].R.RAx; R.RAy += cb[1][key] * cases[key].R.RAy; R.RBy += cb[1][key] * cases[key].R.RBy; }
-    reac.push([cb[0], U.f(R.RAx, 2), U.f(R.RAy, 2), U.f(R.RBy, 2)]);
+    var R = { RAx: 0, RAy: 0, RBy: 0, RBx: 0 };
+    for (var key in cb[1]) { R.RAx += cb[1][key] * cases[key].R.RAx; R.RAy += cb[1][key] * cases[key].R.RAy; R.RBy += cb[1][key] * cases[key].R.RBy; R.RBx += cb[1][key] * cases[key].R.RBx; }
+    reac.push(g.pp ? [cb[0], U.f(R.RAx, 2), U.f(R.RAy, 2), U.f(R.RBx, 2), U.f(R.RBy, 2)] : [cb[0], U.f(R.RAx, 2), U.f(R.RAy, 2), U.f(R.RBy, 2)]);
   });
   r.h("2. Support reactions (kN)  [+ up]");
-  r.table(["Combination", "HA", "VA", "VB"], reac);
+  r.table(g.pp ? ["Combination", "HA", "VA", "HB", "VB"] : ["Combination", "HA", "VA", "VB"], reac);
+  r.note(g.pp ? "Supports: pinned at both ends (both bearings held horizontally) — the truss is externally indeterminate; forces found with equal member stiffness EA, the bottom chord carries less tension and the bearings take horizontal thrust HB. Anchor both bearings and the supporting columns for H." : "Supports: pinned at the left end, roller (free to slide) at the right end — statically determinate; slotted holes at the roller bearing.");
   /* design */
   r.h("3. Member design (envelope of " + combos.length + " combinations)");
   var cfg = { fy: p.fy, fu: p.fu, conn: "weld", Lw: 100, db: 16, g: 30, nb: 2, pitch: 50, e: 30 };

@@ -24,12 +24,17 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
     ok('Module ' + id + ': design passes with drawings, DXF, bar bending schedule and JKSOR estimate', mv.dw >= 3 && mv.dxf && mv.pass && mv.bbs && mv.est, JSON.stringify(mv));
   }
   await pg.evaluate(() => { location.hash = ''; }); await pg.waitForTimeout(300);
-  await pg.evaluate(() => document.getElementById('themeBtn').click()); const th = await pg.evaluate(() => document.documentElement.getAttribute('data-theme'));
-  await pg.evaluate(() => document.getElementById('themeBtn').click());
-  ok('Theme switch (light / dark) is remembered', th === 'dark' || th === 'light', th);
+  await pg.evaluate(() => document.getElementById('themeBtn').click()); await pg.waitForSelector('.thsheet .thg');
+  await pg.click('.thsheet [data-th=dark]'); await pg.click('.thsheet [data-pal=forest]');
+  const th = await pg.evaluate(() => ({ t: document.documentElement.getAttribute('data-theme'), p: document.documentElement.getAttribute('data-pal'), st: localStorage.getItem('isd_theme') + '/' + localStorage.getItem('isd_pal'), bg: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(), n: document.querySelectorAll('.thsheet .thg button').length }));
+  await pg.click('.thsheet [data-pal=hc]'); await pg.click('.thsheet [data-th=light]');
+  const hc = await pg.evaluate(() => ({ ink: getComputedStyle(document.documentElement).getPropertyValue('--ink').trim(), bg: getComputedStyle(document.body).backgroundColor }));
+  await pg.click('.thsheet [data-pal=gold]'); await pg.click('.thsheet [data-th=auto]'); await pg.evaluate(() => document.querySelector('.thsheet').click());
+  ok('Colour themes: six palettes, each light / dark / auto, applied and remembered', th.n === 6 && th.t === 'dark' && th.p === 'forest' && th.st === 'dark/forest' && th.bg === '#0b140e' && hc.ink === '#000000', JSON.stringify(th) + JSON.stringify(hc));
+  ok('Theme picker closes and the default theme is restored', await pg.evaluate(() => !document.querySelector('.thsheet') && !document.documentElement.hasAttribute('data-pal') && document.documentElement.getAttribute('data-theme') === 'auto'));
   for (const id of ids) {
     await pg.evaluate(i => { location.hash = '#' + i; }, id); await pg.waitForTimeout(120);
-    await pg.click('button.pri'); await pg.waitForTimeout(200);
+    await pg.click('button.pri'); await pg.waitForSelector('#out .badge, #out .err', { timeout: 60000 }).catch(() => {});
     const r = await pg.evaluate(() => { const x = document.querySelector('#out .badge'), e = document.querySelector('#out .err'); return { badge: x ? x.textContent : null, err: e ? e.textContent : null }; });
     ok('Module "' + id + '" produces a report with defaults (all inputs blank)', !!r.badge && !r.err, r.badge || r.err || 'no report');
   }
@@ -211,6 +216,29 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   ok('Analysis runs on a background core (cancel works) and gives results identical to the main thread; GPU draws the model', canc && wk.ok && wk.same && wk.gpu === 'GPU' && wk.gl === 'block', JSON.stringify(wk));
   await pg.evaluate(() => { location.hash = '#about'; }); await pg.waitForSelector('#hwinfo');
   ok('About shows the device: CPU cores, memory, GPU, tier and background workers', await pg.evaluate(() => /CPU cores/.test(document.getElementById('hwinfo').textContent) && /background worker/.test(document.getElementById('hwinfo').textContent)));
+  /* v3.11: supports, cantilever / propped design, node supports */
+  await pg.evaluate(() => { location.hash = '#beam'; }); await pg.waitForSelector('#f');
+  await pg.selectOption('#f [name=endL]', 'fixed'); await pg.selectOption('#f [name=endR]', 'free'); await pg.fill('#f [name=L]', '2'); await pg.fill('#f [name=P1]', '10'); await pg.fill('#f [name=a1]', '2'); await pg.waitForTimeout(300);
+  const skc = await pg.evaluate(() => ({ wall: !!document.querySelector('#sk .wall'), free: /free/.test(document.querySelector('#sk').textContent), cs: /Cantilever/.test(document.querySelector('#sk').textContent) }));
+  await pg.click('button.pri'); await pg.waitForSelector('#out .rep', { timeout: 30000 }); await pg.waitForTimeout(300);
+  const cb = await pg.evaluate(() => ({ t: document.querySelector('#out h2, #out .rep h2') ? document.querySelector('#out .rep h2').textContent : document.querySelector('#out').textContent.slice(0, 80), bmd: document.querySelectorAll('#out svg.bmd').length, dw: document.querySelectorAll('#out .dwgs svg').length, dxf: !!document.querySelector('#out [data-dxf], #out .dxfdl, #out button[id*=dxf], #out a[download$=".dxf"]'), bbs: /Bar bending|Mark/.test(document.querySelector('#out').textContent) }));
+  ok('Beam end conditions: cantilever sketch shows the fixed wall and free end; design gives BMD/SFD, drawings and BBS', skc.wall && skc.free && skc.cs && /cantilever/i.test(cb.t) && cb.bmd === 2 && cb.dw >= 4 && cb.bbs, JSON.stringify(skc) + JSON.stringify(cb));
+  await pg.selectOption('#f [name=endR]', 'roller'); await pg.fill('#f [name=L]', '5'); await pg.fill('#f [name=P1]', '0'); await pg.click('button.pri'); await pg.waitForTimeout(600);
+  ok('Propped cantilever beam designed with top steel past the contraflexure point', await pg.evaluate(() => /propped cantilever/i.test(document.querySelector('#out').textContent) && /point of contraflexure/.test(document.querySelector('#out').textContent)));
+  await pg.selectOption('#f [name=endL]', 'pinned'); await pg.selectOption('#f [name=endR]', 'free'); await pg.waitForTimeout(300);
+  ok('Unstable supports (pinned + free) are flagged on the form', await pg.evaluate(() => { const l = document.querySelector('.fld[data-fk=endR] .lim'); return !!l && !l.hidden && /mechanism/.test(l.textContent); }));
+  await pg.evaluate(() => document.getElementById('rst').click());
+  await pg.evaluate(() => { location.hash = '#model'; }); await pg.waitForSelector('#bAna');
+  await pg.evaluate(() => { const e = document.querySelector('[data-k=base]'); e.value = 'spring'; e.dispatchEvent(new Event('change', { bubbles: true })); }); await pg.click('#bAna'); await pg.waitForSelector('#results .rh', { timeout: 120000 }); await pg.waitForTimeout(500);
+  const sp = await pg.evaluate(() => { const m = SU.state().m; return { spr: !!m.spr, n: Object.keys(m.spr || {}).length, t: Object.values(m.supType).join() }; });
+  const xy = await pg.evaluate(() => { const m = SU.state().m, k = Object.keys(m.sup)[0]; return { k: +k, p: SU.nodeXY(+k) }; });
+  await pg.mouse.click(xy.p[0], xy.p[1]); await pg.waitForSelector('#supSel', { timeout: 5000 }).catch(() => {});
+  const sel = await pg.evaluate(() => ({ box: !!document.getElementById('supSel'), h: document.querySelector('#selinfo h4') ? document.querySelector('#selinfo h4').textContent : '' }));
+  if (sel.box) { await pg.selectOption('#supSel', 'pinned'); await pg.click('#supBtn'); await pg.waitForTimeout(300); }
+  const after = await pg.evaluate(k => ({ rule: document.querySelector('[data-k=supOver]').value, t: SU.state().m.supType[k] }), xy.k);
+  ok('Frame base condition "spring" gives soil springs at every base; tapping a node lets its support be changed (rule written)', sp.spr && sp.n >= 4 && /spring/.test(sp.t) && sel.box && /^Node N/.test(sel.h) && after.t === 'pinned' && new RegExp('N' + (xy.k + 1) + ' = pinned').test(after.rule), JSON.stringify([sp, sel, after]));
+  await pg.evaluate(() => { const t = document.querySelector('[data-k=supOver]'); t.value = ''; t.dispatchEvent(new Event('input', { bubbles: true })); t.dispatchEvent(new Event('change', { bubbles: true })); });
+  await pg.evaluate(() => { const e = document.querySelector('[data-k=base]'); e.value = 'fixed'; e.dispatchEvent(new Event('change', { bubbles: true })); });
   ok('No JavaScript errors', errs.length === 0, errs.slice(0, 3).join(' | '));
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);

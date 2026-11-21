@@ -38,7 +38,15 @@ var LIM = (function () {
         hard("cover", p.cover < p.stir || p.cover + p.stir < p.dia, "cover must not be less than the bar diameter", "IS 456 cl 26.4.1");
         hard("D", p.D <= 2 * (p.cover + p.stir) + 2 * p.dia, "overall depth leaves no room for the bars", "");
         var d = p.D - p.cover - p.stir - p.dia / 2;
-        if (p.L > 0 && d > 0) { var bs = basic[p.support] || 20, r = p.L * 1000 / d; hard("D", r > bs * 2 * 1.5, "span/d = " + f0(r) + " exceeds " + bs + " × 2.0 × 1.5 (largest factors of Fig 4 and 5) — minimum d ≈ " + Math.ceil(p.L * 1000 / (bs * 3)) + " mm", "IS 456 cl 23.2.1"); }
+        if (p.endL && typeof B1 !== "undefined") {
+          var cs = RCC.beamCase(p.endL, p.endR || "roller"), holds = function (t) { return t !== "free"; };
+          hard("endR", !holds(p.endL) && !holds(p.endR), "both ends free — the beam has no support", "");
+          hard("endR", (p.endL === "free" && p.endR !== "fixed") || (p.endR === "free" && p.endL !== "fixed"), "a free end needs a fixed support at the other end (cantilever); a " + (p.endL === "free" ? p.endR : p.endL) + " support alone is a mechanism", "");
+          hard("endR", p.endL === "spring" && p.endR === "spring", "two spring ends alone cannot hold the beam — make one end fixed or pinned", "");
+          if (p.mode !== "direct") [["a1", p.P1, p.a1], ["a2", p.P2, p.a2]].forEach(function (q) { hard(q[0], q[1] > 0 && (q[2] < 0 || q[2] > p.L), "point load position must lie on the span (0 to " + p.L + " m)", ""); });
+          if (cs.id === "cant") warn("L", p.L > 10, "cantilever over 10 m — IS 456 needs the deflection calculated", "IS 456 cl 23.2.1(b)");
+        }
+        if (p.L > 0 && d > 0) { var bs = (p.endL ? RCC.beamCase(p.endL, p.endR || "roller").basic : basic[p.support]) || 20, r = p.L * 1000 / d; hard("D", r > bs * 2 * 1.5, "span/d = " + f0(r) + " exceeds " + bs + " × 2.0 × 1.5 (largest factors of Fig 4 and 5) — minimum d ≈ " + Math.ceil(p.L * 1000 / (bs * 3)) + " mm", "IS 456 cl 23.2.1"); }
         warn("b", p.b < 200, "width below 200 mm is not permitted in seismic zones III–V", "IS 13920 cl 6.1.2");
         warn("b", p.b / p.D < 0.3, "b/D = " + f0(p.b / p.D * 100) / 100 + " < 0.3 (ductile detailing)", "IS 13920 cl 6.1.1");
         if (p.L > 0 && d > 0) { var lim = p.support === "cant" ? Math.min(25 * p.b, 100 * p.b * p.b / d) : Math.min(60 * p.b, 250 * p.b * p.b / d); warn("L", p.L * 1000 > lim, "check lateral stability: clear distance between restraints should not exceed " + f0(lim / 1000) + " m", "IS 456 cl 23.3"); }

@@ -64,6 +64,7 @@ var GLV = (function () {
   /* "#rrggbb" or "rgba(r,g,b,a)" → [r,g,b,a 0-255] */
   G.rgba = function (s) {
     var m;
+    s = String(s || "").trim(); if ((m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(s))) s = "#" + m[1] + m[1] + m[2] + m[2] + m[3] + m[3];
     if ((m = /^#([0-9a-f]{6})$/i.exec(s))) { var n = parseInt(m[1], 16); return [n >> 16 & 255, n >> 8 & 255, n & 255, 255]; }
     if ((m = /rgba?\(([^)]+)\)/.exec(s))) { var a = m[1].split(",").map(parseFloat); return [a[0], a[1], a[2], a.length > 3 ? Math.round(a[3] * 255) : 255]; }
     return [128, 128, 128, 255];
