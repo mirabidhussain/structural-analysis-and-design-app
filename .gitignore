@@ -11,3 +11,8 @@ test/*.xlsx
 test/r_*
 node_modules/
 test/xci/
+dist-modeller/
+modeller-android/.gradle/
+modeller-android/build/
+modeller-android/app/build/
+modeller-android/local.properties

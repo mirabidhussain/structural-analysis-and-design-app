@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121418">
+<title>IS StructModeller</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{--bg:#f4f2ee;--card:#fff;--ink:#1b1d21;--mut:#6b7078;--line:#e2ded6;--acc:#b5862a;--acc2:#8a6418;--hdr:#121418;--hdri:#f3efe6;--ok:#1f7a4d;--warn:#b26b00;--err:#b42318;--sel:#d97706;
+  --col:#334155;--beam:#1d4ed8;--slab:#16a34a;--wall:#6b7280;--brace:#a21caf;--grid:#9ca3af;--cv:#fbfaf7}
+html[data-th=dark]{--bg:#14161a;--card:#1c1f24;--ink:#e8e6e1;--mut:#9aa0a8;--line:#2c3037;--hdr:#0d0f12;--cv:#181b20;--col:#cbd5e1;--beam:#60a5fa;--slab:#4ade80;--wall:#9ca3af;--grid:#4b5563}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);overscroll-behavior:none}
+header{position:sticky;top:0;z-index:20;background:var(--hdr);color:var(--hdri);display:flex;align-items:center;gap:10px;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top))}
+header img{width:30px;height:30px;border-radius:7px}
+header .t{flex:1;min-width:0}header .t b{display:block;font-size:16px;letter-spacing:.2px}header .t small{display:block;color:#b9b3a6;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header button{background:transparent;border:0;color:var(--hdri);font-size:20px;padding:6px 8px;border-radius:8px}
+nav.tabs{display:flex;gap:4px;padding:8px 10px;background:var(--card);border-bottom:1px solid var(--line);overflow-x:auto;position:sticky;top:50px;z-index:15}
+nav.tabs button{flex:0 0 auto;border:1px solid var(--line);background:transparent;color:var(--ink);padding:7px 13px;border-radius:999px;font-weight:600;font-size:14px}
+nav.tabs button.on{background:var(--hdr);color:var(--hdri);border-color:var(--hdr)}
+main{padding:10px 10px 90px;max-width:1100px;margin:0 auto}
+section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
+.card h3{margin:0 0 8px;font-size:15px}
+label.f{display:block;margin:6px 0}label.f span{display:block;font-size:12.5px;color:var(--mut);margin-bottom:3px}
+input,select,textarea{width:100%;font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:9px 13px;border-radius:10px;font:inherit;font-weight:600;margin:3px 2px}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}.btn.dan{color:var(--err)}.btn:disabled{opacity:.45}
+.btns{display:flex;flex-wrap:wrap;gap:2px;margin-top:6px}
+.note{font-size:13px;color:var(--mut);margin:6px 0}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px}
+.chip{flex:0 0 auto;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:6px 11px;border-radius:999px;font-size:13px;font-weight:600}
+.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.tools{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:8px}
+.tools button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:6px 2px;font-size:11.5px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px}
+.tools button i{font-style:normal;font-size:18px;line-height:1}
+.tools button.on{background:var(--hdr);color:var(--hdri);border-color:var(--hdr)}
+.cvw{position:relative;background:var(--cv);border:1px solid var(--line);border-radius:14px;overflow:hidden;touch-action:none}
+.cvw canvas{display:block;width:100%;touch-action:none}
+.cvw .hud{position:absolute;left:8px;top:8px;font-size:12px;color:var(--mut);background:color-mix(in srgb,var(--card) 85%,transparent);padding:3px 8px;border-radius:8px;pointer-events:none}
+.cvw .fl{position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:6px}
+.cvw .fl button{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:17px}
+.cvw .fin{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:none}
+#props{display:none}
+.list .it{display:flex;gap:8px;align-items:flex-start;padding:8px 2px;border-top:1px solid var(--line);font-size:14px}.list .it:first-child{border-top:0}
+.sev{flex:0 0 auto;font-weight:700}.sev.err{color:var(--err)}.sev.warn{color:var(--warn)}.sev.info{color:var(--mut)}.sev.ok{color:var(--ok)}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line)}th{font-size:12px;color:var(--mut);font-weight:600}td.n{text-align:right;font-variant-numeric:tabular-nums}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--hdr);color:var(--hdri);padding:10px 16px;border-radius:12px;font-size:14px;z-index:50;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.on{opacity:1}
+.menu{position:fixed;right:10px;top:54px;z-index:40;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.18);display:none;min-width:230px;padding:6px}
+.menu.on{display:block}.menu button{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--ink);padding:10px 12px;border-radius:10px;font:inherit}
+.menu button:hover{background:var(--bg)}.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.leg{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--mut);margin-top:6px}.leg i{display:inline-block;width:12px;height:4px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:14px}.kv b{font-weight:600}
+@media (min-width:900px){#plan .wrap{display:grid;grid-template-columns:1fr 300px;gap:10px}.tools{grid-template-columns:repeat(7,1fr)}}
+.hud{max-width:calc(100% - 64px)}
+</style>
+</head>
+<body>
+<header>
+  <img src="icon-192.png" alt="">
+  <div class="t"><b>IS StructModeller</b><small id="pname">Building modeller · DXF for analysis</small></div>
+  <button id="bUndo" title="Undo" aria-label="Undo">↶</button><button id="bRedo" title="Redo" aria-label="Redo">↷</button><button id="bMenu" aria-label="Menu">⋮</button>
+</header>
+<div class="menu" id="menu">
+  <button data-m="new">New building</button><button data-m="sample">Open the sample (G+3)</button><button data-m="open">Open project file…</button><button data-m="save">Save project file</button>
+  <hr><button data-m="dxf">Export DXF — analysis model (3D)</button><button data-m="plans">Export DXF — framing plans (2D)</button>
+  <hr><button data-m="theme">Light / dark theme</button><button data-m="about">About</button>
+</div>
+<input type="file" id="fOpen" accept=".json,.ism,application/json,text/plain,*/*" hidden>
+<nav class="tabs" id="tabs">
+  <button data-t="setup" class="on">Setup</button><button data-t="plan">Plan</button><button data-t="v3d">3D</button><button data-t="checks">Checks</button><button data-t="qty">Quantities</button><button data-t="export">Export</button>
+</nav>
+<main>
+<section id="setup" class="on">
+  <div class="card"><h3>Building</h3>
+    <label class="f"><span>Name</span><input id="sName"></label>
+    <div class="row"><label class="f"><span>Concrete grade</span><select id="sFck"><option>20</option><option>25</option><option>30</option><option>35</option><option>40</option></select></label>
+    <label class="f"><span>Rebar grade</span><select id="sFy"><option>415</option><option>500</option><option>550</option></select></label></div>
+  </div>
+  <div class="card"><h3>Grids and storeys</h3>
+    <label class="f"><span>Spacings along X between grid lines 1, 2, 3 … (m) — "3*4.5" repeats</span><input id="sGx" placeholder="4, 4.5, 4"></label>
+    <label class="f"><span>Spacings along Y between grid lines A, B, C … (m)</span><input id="sGy" placeholder="3.5, 4.5, 3.5"></label>
+    <label class="f"><span>Storey heights, ground floor first (m)</span><input id="sHs" placeholder="3.6, 3*3.2"></label>
+    <label class="f"><span>Storey names (optional, comma separated)</span><input id="sHn" placeholder="Ground floor, First floor, …"></label>
+    <div class="btns"><button class="btn pri" id="bGrid">Apply grids and storeys</button><button class="btn" id="bGen">Generate full frame</button></div>
+    <div class="note">Apply keeps what you have drawn. Generate replaces the model with columns at every grid point, beams on every grid line and a slab in every bay, on every storey — then edit in Plan.</div>
+  </div>
+  <div class="card"><h3>Default sizes for new members</h3>
+    <div class="row"><label class="f"><span>Column along X (mm)</span><input id="dCx" type="number"></label><label class="f"><span>Column along Y (mm)</span><input id="dCy" type="number"></label></div>
+    <div class="row"><label class="f"><span>Beam width b (mm)</span><input id="dBb" type="number"></label><label class="f"><span>Beam depth D (mm)</span><input id="dBd" type="number"></label></div>
+    <div class="row3"><label class="f"><span>Slab (mm)</span><input id="dSt" type="number"></label><label class="f"><span>Wall (mm)</span><input id="dWt" type="number"></label><label class="f"><span>Base supports</span><select id="dSup"><option value="fixed">Fixed</option><option value="pinned">Pinned</option></select></label></div>
+    <label class="f"><span>Brace section</span><select id="dBr"><option>ISA 50x50x6</option><option>ISA 65x65x6</option><option>ISA 75x75x8</option><option>ISA 90x90x8</option><option>ISA 100x100x10</option><option>ISMB 150</option><option>ISMB 200</option></select></label>
+    <div class="btns"><button class="btn" id="bDef">Save defaults</button></div>
+  </div>
+</section>
+
+<section id="plan">
+  <div class="chips" id="stChips"></div>
+  <div class="tools" id="tools">
+    <button data-tool="sel" class="on"><i>☝</i>Select</button><button data-tool="col"><i>▣</i>Column</button><button data-tool="beam"><i>━</i>Beam</button><button data-tool="slab"><i>▦</i>Slab</button><button data-tool="wall"><i>▮</i>Wall</button><button data-tool="brace"><i>╱</i>Brace</button><button data-tool="del"><i>✕</i>Delete</button>
+  </div>
+  <div class="wrap">
+    <div>
+      <div class="cvw" id="pw"><canvas id="pc"></canvas><div class="hud" id="phud"></div><div class="fl"><button id="pFit" title="Fit">⤢</button><button id="pIn">+</button><button id="pOut">−</button></div><button class="btn pri fin" id="pFin">Finish</button></div>
+      <div class="leg"><span><i style="background:var(--col)"></i>Column (storey below this floor)</span><span><i style="background:var(--beam)"></i>Beam</span><span><i style="background:var(--slab)"></i>Slab</span><span><i style="background:var(--wall)"></i>Wall</span><span><i style="background:var(--brace)"></i>Brace</span></div>
+    </div>
+    <div>
+      <div class="card" id="props"></div>
+      <div class="card"><h3>This storey</h3>
+        <div class="btns"><button class="btn" id="aCols">Columns at all grid points</button><button class="btn" id="aBeams">Beams on all grid lines</button><button class="btn" id="aSlabs">Slabs in all bays</button><button class="btn" id="aCopy">Copy storey to…</button><button class="btn dan" id="aClear">Clear storey</button></div>
+        <div class="note" id="stInfo"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="v3d">
+  <div class="cvw" id="tw"><canvas id="tc"></canvas><div class="hud" id="thud">Drag to rotate · pinch or scroll to zoom</div><div class="fl"><button id="tFit" title="Reset">⤢</button><button id="tSl" title="Slabs and walls on/off">▦</button></div></div>
+</section>
+
+<section id="checks"><div class="card"><h3>Model checks</h3><div class="list" id="chkList"></div><div class="btns"><button class="btn" id="bTidy">Tidy: remove duplicates</button></div></div></section>
+<section id="qty"><div class="card"><h3>Quantities</h3><div id="qtyBox"></div></div></section>
+
+<section id="export">
+  <div class="card"><h3>Analysis model — DXF (3D)</h3>
+    <div class="note">Columns, beams, braces, slabs, walls and supports on the layers IS StructDesign reads: <b>COL_b×D</b>, <b>BEAM_b×D</b>, <b>BRACE_section</b>, <b>SLAB_t</b>, <b>WALL_t</b>, <b>SUPPORT_FIXED / SUPPORT_PIN</b>. Units metres. In IS StructDesign: Frame &amp; FE analysis → Model source → Import DXF drawing; sections and slab thicknesses come from the layer names.</div>
+    <div class="btns"><button class="btn pri" id="eDxf">Export analysis DXF</button></div>
+  </div>
+  <div class="card"><h3>Framing plans — DXF (2D)</h3>
+    <div class="note">One plan per floor with grids and bubbles, dimensions, columns, beams (double lines with marks and sizes), slabs, walls and a column schedule, side by side — opens in AutoCAD, LibreCAD, DraftSight or any DXF viewer.</div>
+    <div class="btns"><button class="btn pri" id="ePlans">Export plans DXF</button></div>
+  </div>
+  <div class="card"><h3>Project</h3><div class="btns"><button class="btn" id="eSave">Save project file</button><button class="btn" id="eOpen">Open project file</button></div><div class="note">The model is also kept on this device automatically.</div></div>
+</section>
+</main>
+<div class="toast" id="toast"></div>
+<script src="js/mcore.js"></script>
+<script src="js/mui.js"></script>
+</body>
+</html>

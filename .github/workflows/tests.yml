@@ -29,6 +29,8 @@ jobs:
         run: node test/std_verify.js | tee std.txt && ! grep -q FAIL std.txt
       - name: v4 modules — continuous beam, retaining wall, combined footing
         run: node test/v4_verify.js | tee v4.txt && ! grep -q FAIL v4.txt
+      - name: IS StructModeller engine and DXF round trip into IS StructDesign
+        run: node modeller/test/core_test.js
       - name: Sample design report (diagnostic, not pass/fail)
         run: node test/smoke.js
 
@@ -47,6 +49,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: python build.py
       - run: node test/ui_ci.js
+      - name: IS StructModeller browser test
+        run: python modeller/build.py && node modeller/test/ui_test.js
 
   excel:
     name: Excel formulas recomputed by LibreOffice

@@ -1,0 +1,60 @@
+name: Build IS StructModeller APK
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'modeller/**', 'modeller-android/**', '.github/workflows/build-modeller-apk.yml' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Engine test
+        run: node modeller/test/core_test.js
+      - name: Version
+        run: |
+          VER=$(sed -n 's/.*C\.VERSION = "\([0-9.]*\)".*/\1/p' modeller/www/js/mcore.js | head -1)
+          echo "VER=$VER" >> $GITHUB_ENV
+          echo "VERSION_NAME=$VER.${{ github.run_number }}" >> $GITHUB_ENV
+          echo "VERSION_CODE=$(( ${{ github.run_number }} + 100 ))" >> $GITHUB_ENV
+          echo "BUILT=$(TZ=Asia/Kolkata date '+%d %b %Y %H:%M IST')" >> $GITHUB_ENV
+      - name: Build debug APK
+        run: gradle -p modeller-android assembleDebug --no-daemon
+      - name: Collect files
+        run: |
+          python3 modeller/build.py
+          cp modeller-android/app/build/outputs/apk/debug/app-debug.apk "IS-StructModeller-v$VER.apk"
+          cp dist-modeller/index.html "IS-StructModeller-v$VER.html"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IS-StructModeller-apk
+          path: IS-StructModeller-v*.apk
+      # One permanent release per modeller version ("modeller-v1.0", …). Never marked latest, so IS StructDesign's
+      # "latest-apk" link stays where it is.
+      - name: Keep a release for this version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf 'IS StructModeller %s — companion to IS StructDesign (built %s, commit %s).\n\nModel a building on grids and storeys (columns, beams, slabs, walls, braces), check it, and export:\n- Analysis DXF (3D) → IS StructDesign: Frame & FE analysis → Model source → Import DXF drawing. Member sizes travel in the layer names.\n- Framing plans DXF (2D) for AutoCAD / LibreCAD / DraftSight.\n\nAPK: install on Android (it is a separate app; IS StructDesign is not affected). HTML: open in any browser, works offline.\n' "$VERSION_NAME" "$BUILT" "${GITHUB_SHA::7}" > notes.md
+          TAG="modeller-v$VER"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "IS-StructModeller-v$VER.apk" "IS-StructModeller-v$VER.html" --clobber
+            gh release edit "$TAG" --notes-file notes.md --title "IS StructModeller v$VER"
+          else
+            gh release create "$TAG" "IS-StructModeller-v$VER.apk" "IS-StructModeller-v$VER.html" --target "$GITHUB_SHA" --title "IS StructModeller v$VER" --notes-file notes.md --latest=false
+          fi
