@@ -62,4 +62,31 @@ m={nodes:[{x:0,y:0,z:0},{x:4,y:0,z:0},{x:2,y:0,z:2}],sup:{0:[1,1,1,0,0,0],1:[0,1
 r=FE.linear(m,{P:{nodal:[{n:2,f:[0,0,-10,0,0,0]}]}},[{name:'P',f:{P:1}}]);
 near('Truss bottom chord tension = 5 kN', -r.combos[0].fr[0].f[0], 5, 1e-6);
 near('Truss rafter compression = 7.071 kN', r.combos[0].fr[1].f[0], 5*Math.SQRT2, 1e-6);
+// 8 Timoshenko shear deformation (Avy): cantilever tip deflection PL^3/3EI + PL/(G Av), and fixed beam UDL mid deflection wL^4/384EI + wL^2/(8 G Av)
+const tsh=Object.assign({},sec,{Avy:0.004,Avz:0.004});
+m={nodes:[0,1,2,3].map(i=>({x:i,y:0,z:0})),sup:{0:fix()},frames:[0,1,2].map(i=>({n1:i,n2:i+1,type:'beam',sec:tsh})),shells:[]};
+r=FE.linear(m,{P:{nodal:[{n:3,f:[0,0,-10,0,0,0]}]}},[{name:'P',f:{P:1}}]);
+near('Timoshenko cantilever tip PL^3/3EI + PL/GAv', -r.combos[0].U[6*3+2], 10*27/(3*E*2e-5)+10*3/(E/2.6*0.004), 1e-6);
+m={nodes:[0,1,2,3,4].map(i=>({x:i*1.5,y:0,z:0})),sup:{0:fix(),4:fix()},frames:[0,1,2,3].map(i=>({n1:i,n2:i+1,type:'beam',sec:tsh})),shells:[]};
+r=FE.linear(m,{W:{frameUDL:[0,1,2,3].map(e=>({e,w:[0,0,-12]}))}},[{name:'W',f:{W:1}}]);
+near('Timoshenko fixed beam end moment still wL^2/12', Math.abs(r.combos[0].fr[0].f[5]), 36, 1e-6);
+near('Timoshenko fixed beam mid deflection', -r.combos[0].U[6*2+2], 12*Math.pow(6,4)/(384*E*2e-5)+12*36/(8*E/2.6*0.004), 1e-6);
+// 9 member point / partial / triangular loads (frameLoads): fixed beam L=6, P=30 at a=2 -> M1 = Pab^2/L^2, M2 = Pa^2b/L^2
+m={nodes:[{x:0,y:0,z:0},{x:6,y:0,z:0}],sup:{0:fix(),1:fix()},frames:[{n1:0,n2:1,type:'beam',sec}],shells:[]};
+r=FE.linear(m,{P:{frameLoads:[{e:0,k:'p',P:[0,0,-30],a:2}]}},[{name:'P',f:{P:1}}]);
+near('Fixed beam point load M1 = Pab^2/L^2', Math.abs(r.combos[0].fr[0].f[5]), 30*2*16/36, 1e-9);
+near('Fixed beam point load R1 = Pb^2(3a+b)/L^3', r.combos[0].reac[0][2], 30*16*(6+4)/216, 1e-9);
+dg=FE.frameDiagram(r.combos[0].fr[0],6); near('Moment under the load (diagram) = 2Pa^2b^2/L^3', dg[2].Mz, 2*30*4*16/216, 1e-9);
+// same load through a node: cantilever-free comparison with a split model
+let m2={nodes:[{x:0,y:0,z:0},{x:2,y:0,z:0},{x:6,y:0,z:0}],sup:{0:fix(),2:fix()},frames:[{n1:0,n2:1,type:'beam',sec},{n1:1,n2:2,type:'beam',sec}],shells:[]};
+let r2=FE.linear(m2,{P:{nodal:[{n:1,f:[0,0,-30,0,0,0]}]}},[{name:'P',f:{P:1}}]);
+near('Member point load = nodal load on split beam (deflection under load)', FE.frameDiagram(r.combos[0].fr[0],6)[2].Mz, FE.frameDiagram(r2.combos[0].fr[0],1)[1].Mz, 1e-9);
+// SS beam, triangular load 0 -> 12 kN/m over L=6: Mmax = wL^2/(9 sqrt 3) at x = L/sqrt3
+m={nodes:[{x:0,y:0,z:0},{x:6,y:0,z:0}],sup:{0:[1,1,1,1,0,0],1:[0,1,1,0,0,0]},frames:[{n1:0,n2:1,type:'beam',sec}],shells:[]};
+r=FE.linear(m,{T:{frameLoads:[{e:0,k:'d',w1:[0,0,0],w2:[0,0,-12],a:0,b:6}]}},[{name:'T',f:{T:1}}]);
+dg=FE.frameDiagram(r.combos[0].fr[0],600); near('SS triangular load Mmax = wL^2/(9 sqrt3)', Math.max.apply(null,dg.map(q=>q.Mz)), 12*36/(9*Math.sqrt(3)), 1e-4);
+near('SS triangular load reaction at heavy end = wL/3', r.combos[0].reac[1][2], 12*6/3, 1e-9);
+// partial UDL on SS beam: w=10 from 1 to 4 on L=6 -> R1 = w*3*(6-2.5)/6
+r=FE.linear(m,{U:{frameLoads:[{e:0,k:'d',w1:[0,0,-10],w2:[0,0,-10],a:1,b:4}]}},[{name:'U',f:{U:1}}]);
+near('SS partial UDL reaction R1', r.combos[0].reac[0][2], 10*3*3.5/6, 1e-9);
 console.log(`\n${pass} passed, ${fail} failed`);

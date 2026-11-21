@@ -510,7 +510,7 @@ RCC.stair = function (p) {
   r.h("1. Loads per m² of horizontal area");
   var ws = 25 * (t / 1000) * hyp / T, wst = 25 * (R_ / 1000) / 2;
   var w = ws + wst + p.FF + p.LL, wu = 1.5 * w;
-  r.eq("Waist = 25 t √(R²+T²)/T = " + U.f(ws) + " ; steps = 25 R/2 = " + U.f(wst) + " ; FF = " + p.FF + " ; LL = " + p.LL + " → wu = " + U.f(wu) + " kN/m²", "IS 875 Pt 2 (LL 3/5 kN/m²)");
+  r.eq("Waist = 25 t √(R²+T²)/T = " + U.f(ws) + " ; steps = 25 R/2 = " + U.f(wst) + " ; FF = " + p.FF + " ; LL = " + p.LL + " → wu = " + U.f(wu) + " kN/m²", "IS 875 Pt 2 Table 1 (stairs: 3 dwellings, 4 offices / schools, 5 assembly / retail)");
   var c = p.support === "cont" ? 10 : 8;
   var Mu = wu * L * L / c, Vu = wu * L / 2;
   r.eq("Mu = wu L²/" + c + " = " + U.f(Mu) + " kNm/m ; Vu = " + U.f(Vu) + " kN/m", "cl 33.2");

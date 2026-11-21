@@ -4,7 +4,7 @@ var SU = (function () {
   var S = { geo: null, m: null, res: null, des: null, po: null, dx: null, L: null, sel: null, view: { yaw: -0.6, pitch: 0.45, zoom: 1, px: 0, py: 0 } };
   var DEF = {
     src: "gen", bx: "4, 4, 4", by: "5, 5", hs: "3.5, 3.2, 3.2", slabs: true, walls: false, brace: false, mesh: 1,
-    dmode: "3d", dunits: "auto", dmesh: 1, roles: {},
+    dmode: "3d", dunits: "auto", dmesh: 1, roles: {}, smesh: 0, ssurf: false, stdLoads: "file", stdCrack: false, stdShear: true,
     method: "lsm", mat: "rcc", fck: 25, fy: 500, fys: 250, colSec: "400x400", beamSec: "300x450", braceSec: "ISA 75x75x6", tSlab: 150, tWall: 200,
     crack: true, existing: false, pcCol: 2, pcBeam: 1, kcol: 1.2, base: "fixed", ksoil: 40000, fL: 2, fB: 2, supOver: "",
     ff: 1.5, ll: 3, ffRoof: 2.5, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0,
@@ -30,8 +30,9 @@ var SU = (function () {
   function save() { P = eff(); if (typeof PDB !== "undefined") PDB.setInputs(UV); else try { localStorage.setItem("isd_model2", JSON.stringify(UV)); } catch (e) {} }
   /* switching project: forget the previous model and results, restore the project's DXF */
   function resetFor(pr) {
-    S.pid = pr.id; S.geo = S.m = S.res = S.des = S.po = S.det = S.se = S.boq = S.autoRes = null; S.dx = null; S.dxName = null; S.sel = null; S.state = null;
+    S.pid = pr.id; S.geo = S.m = S.res = S.des = S.po = S.det = S.se = S.boq = S.autoRes = null; S.dx = null; S.dxName = null; S.sel = null; S.state = null; S.stdM = null; S.stdName = null; S.stdErr = null;
     if (pr.dxf && pr.dxf.text) { try { S.dx = DXF.parse(pr.dxf.text); S.dxName = pr.dxf.name; } catch (e) { S.dx = null; } }
+    if (pr.std && pr.std.text) { try { S.stdM = STD.parse(pr.std.text); S.stdName = pr.std.name; } catch (e) { S.stdM = null; } }
   }
   function set(k, v) { UV[k] = v; save(); }
   function dtxt(k) { var d = dflt(k); return typeof d === "boolean" ? (d ? "on" : "off") : String(d); }
@@ -104,15 +105,37 @@ var SU = (function () {
     $("bPO").onclick = runPushover;
     $("bAuto").onclick = runAuto;
     if (S.m) { status(); drawViewer(); if (S.res || S.po) renderResults(); }
-    else { try { if (P.src === "dxf" && S.dx) buildDxf(); else if (P.src !== "dxf") buildGen(true); } catch (e) {} }
+    else { try { if (P.src === "dxf" && S.dx) buildDxf(); else if (P.src === "std" && S.stdM) buildStd(true); else if (P.src === "gen") buildGen(true); } catch (e) {} }
   }
   var PIC = { p1: "geometry", p2: "material", p3: "loads", p4: "analyse", p5: "estimate" };
   function panel(id, t, body, open) {
     var m0 = /^(\d+)\s*·\s*(.*)$/.exec(t), num0 = m0 ? m0[1] : "", tt = m0 ? m0[2] : t;
     return '<section class="pnl' + (open ? " open" : "") + '" id="' + id + '"><h3><span class="pnum">' + (typeof IC !== "undefined" ? IC.svg(PIC[id] || "frame") : num0) + '</span><span class="pt">' + (num0 ? '<small>Step ' + num0 + '</small>' : '') + tt + '</span></h3><div class="pb">' + body + '</div></section>';
   }
-  function srcForm() { return '<div class="form">' + sel("src", "Model source", [["gen", "Parametric frame generator"], ["dxf", "Import DXF drawing"]]) + '<div id="srcbox" class="full">' + srcInner() + '</div></div>'; }
+  function srcForm() { return '<div class="form">' + sel("src", "Model source", [["gen", "Parametric frame generator"], ["dxf", "Import DXF drawing"], ["std", "Import STAAD.Pro input file (.std)"]]) + '<div id="srcbox" class="full">' + srcInner() + '</div></div>'; }
+  function stdInner() {
+    var M = S.stdM, h = '<div class="form inner"><label class="fld full"><span>STAAD.Pro input file (.std — STAAD Editor: File → Save, or the input listing as plain text)</span><input type="file" id="stdFile" accept=".std,.STD,.txt,text/plain,*/*"></label>' +
+      num("smesh", "Plate mesh size", "m", "0 = plates exactly as in the file (needed for a like-for-like comparison with STAAD); about 0.5 m for meaningful slab results") +
+      chk("ssurf", "Also import STAAD surfaces (meshed at the plate mesh size, 1 m if 0) — off by default: surfaces drawn on the same outline as plates duplicate them") +
+      sel("stdLoads", "Loads and combinations", [["file", "From the STAAD file (as STAAD analyses it)"], ["app", "This app's loads (Step 3) on the imported geometry"]]) +
+      chk("stdShear", "Shear deformation in members (STAAD includes it; shear area = full area for PRIS sections)") + chk("stdCrack", "Cracked-section factors (IS 1893 cl 6.4.3.1) — STAAD files are uncracked unless they say otherwise");
+    if (S.stdErr) h += '<div class="err full">' + esc(S.stdErr) + '</div>';
+    if (M) {
+      var nj = Object.keys(M.joints).length, nm = Object.keys(M.members).length, ne = Object.keys(M.elems).length, ns = Object.keys(M.surfs).length;
+      h += '<div class="full"><div class="lbl">' + esc(S.stdName || "STAAD file") + (M.title ? ' · ' + esc(M.title) : '') + '</div><div class="tw"><table><tr><th>Joints</th><th>Members</th><th>Plates</th><th>Surfaces</th><th>Load cases</th><th>Combinations</th><th>Vertical axis</th></tr><tr><td>' + nj + '</td><td>' + nm + '</td><td>' + ne + '</td><td>' + ns + '</td><td>' + M.loads.length + '</td><td>' + M.combos.length + '</td><td>' + (M.zup ? "Z (SET Z UP)" : "Y") + '</td></tr></table></div>' +
+        '<div class="tw"><table><tr><th>Case</th><th>Type</th><th>Title</th><th>Contents</th></tr>' + M.loads.map(function (L) {
+          var c = []; if (L.self.length) c.push("self weight"); if (L.joint.length) c.push("joint loads"); if (L.member.length) c.push(L.member.length + " member load line(s)"); if (L.elem.length) c.push("plate pressures"); if (L.floor.length) c.push("floor load"); if (L.eq.length) c.push("1893 " + L.eq.map(function (q) { return q.dir + " " + q.f; }).join(", ")); if (L.wind.length) c.push("wind " + L.wind.map(function (q) { return q.dir + " " + q.f; }).join(", ")); if (L.repeat.length) c.push("repeat load");
+          return '<tr><td>' + L.id + '</td><td>' + esc(L.type || "-") + '</td><td>' + esc(L.title || "") + '</td><td>' + esc(c.join("; ") || "—") + '</td></tr>'; }).join("") + '</table></div>' +
+        (M.combos.length ? '<div class="note">Combinations: ' + M.combos.map(function (c) { return c.id + " = " + Object.keys(c.f).map(function (k) { return c.f[k] + "×L" + k; }).join(" + "); }).map(esc).join(" · ") + '</div>' : '') +
+        (M.design.fc || M.design.fy ? '<div class="note">Concrete design in the file: FC ' + (M.design.fc || "-") + ' N/mm², FYMAIN ' + (M.design.fy || "-") + ' N/mm² — set as the concrete and rebar grades in Step 2' + (M.design.cover.CLEAR || M.design.cover.CLB ? '; cover ' + (M.design.cover.CLEAR || M.design.cover.CLB) + ' mm' : '') + '.</div>' : '') +
+        (M.warn.length ? '<div class="note">' + M.warn.map(esc).join("<br>") + '</div>' : '') + '</div>';
+    }
+    h += '<div class="btns"><button class="pri" id="bStd" type="button"' + (M ? "" : " disabled") + '>Build model from STAAD file</button></div>' +
+      '<div class="note full">Read: joint coordinates (incl. generation and REPEAT), member and plate incidences, STAAD surfaces, PRIS (YD/ZD, AX/IX/IY/IZ, circular) and Indian steel table sections, materials and CONSTANTS (E, ν, density, BETA), supports (FIXED, PINNED, FIXED BUT, springs), releases, MEMBER TRUSS, and loads: self weight, joint, member (UNI, CON, TRAP, LIN — global, local and projected), plate pressure, FLOOR LOAD (two-way 45° distribution to the bounding members), IS 1893 seismic from DEFINE 1893 LOAD, wind from DEFINE WIND LOAD, REPEAT LOAD and LOAD COMBINATION. Not read: member offsets, moving / time-history / spectrum loads, steel design parameters. The file is checked for common errors — see the model checks after building.</div></div>';
+    return h;
+  }
   function srcInner() {
+    if (P.src === "std") return stdInner();
     if (P.src === "gen") return '<div class="form inner">' + txt("bx", "Bay widths along X (m)", "comma separated") + txt("by", "Bay widths along Y (m)", "leave blank for a 2D plane frame") +
       txt("hs", "Storey heights, bottom up (m)") + num("mesh", "Shell mesh size", "m") + chk("slabs", "Slabs as shell elements") + chk("walls", "Shear walls in end bays (Y)") + chk("brace", "X-bracing in end bays") +
       '<div class="btns"><button class="pri" id="bGen" type="button">Generate model</button></div></div>';
@@ -134,6 +157,23 @@ var SU = (function () {
   }
   function bindSrc() {
     if ($("bGen")) $("bGen").onclick = function () { grab(document.getElementById("app")); try { buildGen(); } catch (e) { err(e); } };
+    if ($("stdFile")) $("stdFile").onchange = function (ev) {
+      var fl = ev.target.files[0]; if (!fl) return;
+      var rd = new FileReader();
+      rd.onload = function () {
+        var txt0 = String(rd.result);
+        try { S.stdM = STD.parse(txt0); S.stdName = fl.name; S.stdErr = null; } catch (e) { S.stdM = null; S.stdErr = e.message; }
+        if (S.stdM) {
+          var d = S.stdM.design; if (d.fc && [20, 25, 30, 35, 40].indexOf(Math.round(d.fc)) >= 0) UV.fck = Math.round(d.fc); if (d.fy && [415, 500, 550].indexOf(Math.round(d.fy)) >= 0) UV.fy = Math.round(d.fy);
+          save(); if (typeof PDB !== "undefined" && PDB.setStd) PDB.setStd(fl.name, txt0);
+          var b2 = document.querySelector("#p2 .pb"); if (b2) b2.innerHTML = propForm();
+          toast(Object.keys(S.stdM.members).length + " members, " + Object.keys(S.stdM.elems).length + " plates, " + S.stdM.loads.length + " load cases read");
+        }
+        $("srcbox").innerHTML = srcInner(); bindSrc();
+      };
+      rd.readAsText(fl);
+    };
+    if ($("bStd")) $("bStd").onclick = function () { grab(document.getElementById("app")); try { buildStd(); } catch (e) { err(e); } };
     if ($("dxfFile")) $("dxfFile").onchange = function (ev) {
       var fl = ev.target.files[0]; if (!fl) return;
       var rd = new FileReader();
@@ -224,6 +264,21 @@ var SU = (function () {
     var g = MD.generate({ bx: P.bx, by: P.by, hs: P.hs, twoD: !MD.list(P.by).length, slabs: P.slabs, walls: P.walls, brace: P.brace, mesh: P.mesh || 1 });
     setGeo(g); if (!quiet) toast("Model generated");
   }
+  function buildStd(quiet) {
+    if (!S.stdM) throw new Error("Choose a STAAD file first");
+    var g = STD.toGeo(S.stdM, { mesh: P.smesh > 0 ? P.smesh : 0, surfaces: !!P.ssurf, name: S.stdName });
+    setGeo(g);
+    try { S.stdAudit = STD.audit(S.stdM, g, S.m); } catch (e) { S.stdAudit = [{ sev: "info", t: "File checks not completed", d: e.message }]; }
+    status(); if (!quiet) toast("Model built from " + (S.stdName || "STAAD file"));
+  }
+  /* list of model checks as HTML */
+  function checksHtml(list, title) {
+    if (!list || !list.length) return "";
+    var ord = { high: 0, med: 1, info: 2, ok: 3 };
+    return '<div class="mchk"><h4>' + esc(title) + '</h4>' + list.slice().sort(function (a, b) { return ord[a.sev] - ord[b.sev]; }).map(function (c) {
+      return '<div class="chk ' + (c.sev === "ok" ? "ok" : c.sev === "info" ? "inf" : "no") + '"><span>' + (c.sev === "ok" ? "✔" : c.sev === "info" ? "ℹ" : c.sev === "med" ? "⚠" : "✘") + ' ' + esc(c.t) + (c.ref ? ' <i>' + esc(c.ref) + '</i>' : '') + '</span>' + (c.d ? '<small>' + esc(c.d) + '</small>' : '') + '</div>';
+    }).join("") + '</div>';
+  }
   function buildDxf() {
     if (!S.dx) throw new Error("Choose a DXF file first");
     var u = P.dunits === "auto" ? (DXF.UNITS[S.dx.units] || null) : { mm: 0.001, cm: 0.01, m: 1, ft: 0.3048, "in": 0.0254 }[P.dunits];
@@ -241,6 +296,7 @@ var SU = (function () {
     var h = '<div class="rep"><div class="sum"><div><span>Nodes</span><b>' + m.nodes.length + '</b></div><div><span>Frame elements</span><b>' + nf + (nf ? ' (' + Object.keys(cnt).map(function (k) { return cnt[k] + " " + k + "s"; }).join(", ") + ')' : '') + '</b></div>' +
       '<div><span>Shell elements</span><b>' + ns + '</b></div><div><span>Supports</span><b>' + nsup + '</b></div><div><span>Type</span><b>' + (m.twoD ? "2D plane frame (XZ)" : "3D space structure") + '</b></div></div>';
     if (m.warn && m.warn.length) h += '<div class="note">' + m.warn.map(esc).join("<br>") + '</div>';
+    if (S.geo && S.geo.std && S.stdAudit) h += checksHtml(S.stdAudit, "Checks of the STAAD file");
     h += '<div class="btns noprint"><button type="button" id="bExp">Export model DXF</button></div></div>';
     $("mstat").innerHTML = h;
     $("bExp").onclick = function () { var mm = { nodes: m.nodes, frames: m.frames.map(function (e) { return { n1: e.n1, n2: e.n2, layer: (e.type + " " + e.sec.name).toUpperCase() }; }), shells: m.shells, sup: m.sup }; download("model.dxf", DXF.write(mm)); };
@@ -676,6 +732,14 @@ var SU = (function () {
       if (S.limits && S.limits.length) h += '<div class="note"><b>' + (S.limits.some(function (x) { return x.hard; }) ? 'Existing structure — inputs outside the code limits:' : 'Code notes on the inputs:') + '</b> ' + S.limits.map(function (x) { return esc(x.msg + " (" + x.ref + ")"); }).join("<br>") + '</div>';
       if (dfl.length) h += '<div class="note"><b>Defaults used</b> (not entered): ' + esc(dfl.join(" · ")) + '</div>';
       if (S.L.notes.length) h += '<div class="note">' + S.L.notes.map(esc).join("<br>") + '</div>';
+      var mc = []; try { mc = STD.modelChecks(S); } catch (e) { mc = []; }
+      if (S.L.std) {
+        h += '<div class="note"><b>Loads from the STAAD file.</b> ' + Object.keys(S.L.titles).map(function (k) { return k + (S.L.titles[k] ? " = " + S.L.titles[k] : ""); }).map(esc).join(" · ") + '</div>';
+        Object.keys(S.L.stdEq).forEach(function (k) { var q = S.L.stdEq[k]; h += '<div class="eq">' + k + ' (1893 LOAD ' + esc(q.dir) + ' ' + q.f + '): weights from DEFINE 1893 LOAD W = ' + f(q.W, 0) + ' kN, h = ' + f(q.H, 2) + ' m, Ta = ' + f(q.T, 3) + ' s, Sa/g = ' + f(q.Sa, 3) + ', Ah = ' + f(q.Ahd, 4) + ', Vb = ' + f(q.Vb, 1) + ' kN (Z ' + q.Z + ', R ' + q.R + ', I ' + q.I + ', soil ' + q.soil + ')' + (S.L.Wt ? ' — dead + 25 % live gives W = ' + f(S.L.Wt, 0) + ' kN' : '') + '</div>'; });
+        Object.keys(S.L.stdWind).forEach(function (k) { h += '<div class="eq">' + k + ' wind: ' + S.L.stdWind[k].map(function (q) { return "WIND LOAD " + q.dir + " " + q.f + " → " + f(q.F, 1) + " kN"; }).join(", ") + ' (windward face width × storey height × intensity)</div>'; });
+      }
+      if (S.stdAudit && S.geo && S.geo.std) mc = S.stdAudit.concat(mc);
+      h += checksHtml(mc, "Model checks");
       if (r.warn && r.warn.length) h += '<div class="note"><b>Model warnings:</b> ' + r.warn.map(esc).join("<br>") + '</div>';
       Object.keys(S.L.eq).forEach(function (k) { var q = S.L.eq[k]; h += '<div class="eq">' + k + ': h = ' + f(q.H, 2) + ' m, d = ' + f(q.d, 1) + ' m, Ta = ' + f(q.T, 3) + ' s, Sa/g = ' + f(q.Sa, 3) + ', Ah = Z/2 · Sa/g / (R/I) = ' + f(q.Ah, 4) + (q.Ahd > q.Ah ? ' → min ' + f(q.Ahd, 4) + ' (Table 7)' : '') + ', W = ' + f(q.W, 0) + ' kN, <b>Vb = ' + f(q.Vb, 1) + ' kN</b></div>'; });
       Object.keys(S.L.wind).forEach(function (k) { var q = S.L.wind[k], cp = q.cpe; h += '<div class="eq">' + k + ': exposed width ' + f(q.B, 1) + ' m, total wind force ' + f(q.F, 1) + ' kN — Vz = Vb·k1·k2·k3·k4 (k1 ' + f(q.k1, 2) + '), pd = max(Kd·Ka·Kc, 0.7)·pz; ' + (cp ? 'Cpe windward ' + f(cp.ww, 2) + ', leeward ' + f(cp.lw, 2) + ' (IS 875-3 Table 5, h/w ' + f(cp.hw, 2) + ', l/w ' + f(cp.lwr, 2) + ', wind on the ' + (cp.onLong ? 'long' : 'short') + ' face) → net ' + f(cp.net, 2) + '; internal pressure ±' + f(q.cpi, 1) + ' cancels on the frame, cladding pressures ' + f(q.clad.pos, 2) + ' / ' + f(q.clad.neg, 2) + ' × pd' + (cp.note.length ? '. ' + esc(cp.note.join("; ")) : '') : 'force coefficient Cf ' + f(q.C, 2)) + (S.L.wtor && S.L.wtor[k] ? '; torsion sets 0.75·' + k + ' ± torque 0.75·Fi·0.15B' : '') + '</div>'; });

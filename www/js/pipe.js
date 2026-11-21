@@ -3,7 +3,12 @@ var PIPE = {};
 PIPE.steps = function (S, p, pd) {
   return [
     ["Solving load cases and combinations…", function () {
-      S.L = MD.cases(S.m, p); S.cb = MD.combos(S.L.cases, p.method);
+      if (S.geo && S.geo.std && p.stdLoads !== "app") {   /* loads of the STAAD file: the app's own seismic / wind generation stays off; zone from DEFINE 1893 LOAD for the detailing rules */
+        var d93 = S.geo.std.M.def1893; p.eq = false; p.rsa = false; p.wind = false;
+        if (d93) p.zone = d93.zone <= 0.1 ? "II" : d93.zone <= 0.16 ? "III" : d93.zone <= 0.24 ? "IV" : "V";
+        S.L = STD.cases(S.m, S.geo, p); S.cb = STD.combos(S.L, S.geo, p);
+      }
+      else { S.L = MD.cases(S.m, p); S.cb = MD.combos(S.L.cases, p.method); }
       S.res = FE.linear(S.m, S.L.cases, S.cb, { pdelta: pd, caseReac: true }); S.res.pd = pd; S.res.incMap = {}; S.cb.forEach(function (c) { S.res.incMap[c.name] = c.inc || 1; });
       S.se = null;
     }],
@@ -61,6 +66,7 @@ var MODS = {
     return r;
   },
   footing: function (p) { return RCC.footing(p); }, pile: function (p) { return FD.pile(p); }, raft: function (p) { return FD.raft(p); },
+  contbeam: function (p) { return RCC.contBeam(p); }, retwall: function (p) { return RCC.retWall(p); }, combfoot: function (p) { return RCC.combFooting(p); },
   strip: function (p) { return RCC.strip(p); }, stair: function (p) { return RCC.stair(p); }, truss: function (p) { return TR.design(p); },
   purlin: function (p) { return ST.purlin(p); }, tension: function (p) { return ST.tension(p); }, comp: function (p) {
     var q = Object.assign({}, p), kf = null;

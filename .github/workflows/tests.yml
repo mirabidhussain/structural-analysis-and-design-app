@@ -25,6 +25,10 @@ jobs:
         run: node test/verify.js | tee v.txt && ! grep -q FAIL v.txt
       - name: Acceptance & independent benchmarks (expected pass / expected fail / code tables / FE benchmarks / drift)
         run: node test/acceptance.js
+      - name: STAAD.Pro import and model checks
+        run: node test/std_verify.js | tee std.txt && ! grep -q FAIL std.txt
+      - name: v4 modules — continuous beam, retaining wall, combined footing
+        run: node test/v4_verify.js | tee v4.txt && ! grep -q FAIL v4.txt
       - name: Sample design report (diagnostic, not pass/fail)
         run: node test/smoke.js
 

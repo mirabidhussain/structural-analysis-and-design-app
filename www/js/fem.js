@@ -56,12 +56,15 @@ FE.frameKe = function (L, s, truss) {
   if (truss) return K;
   var t = G * s.J / L; put(3, 3, t); put(9, 9, t); put(3, 9, -t);
   var Iz = s.Iz, Iy = s.Iy, L2 = L * L, L3 = L2 * L;
-  put(1, 1, 12 * E * Iz / L3); put(7, 7, 12 * E * Iz / L3); put(1, 7, -12 * E * Iz / L3);
-  put(1, 5, 6 * E * Iz / L2); put(1, 11, 6 * E * Iz / L2); put(5, 7, -6 * E * Iz / L2); put(7, 11, -6 * E * Iz / L2);
-  put(5, 5, 4 * E * Iz / L); put(11, 11, 4 * E * Iz / L); put(5, 11, 2 * E * Iz / L);
-  put(2, 2, 12 * E * Iy / L3); put(8, 8, 12 * E * Iy / L3); put(2, 8, -12 * E * Iy / L3);
-  put(2, 4, -6 * E * Iy / L2); put(2, 10, -6 * E * Iy / L2); put(4, 8, 6 * E * Iy / L2); put(8, 10, 6 * E * Iy / L2);
-  put(4, 4, 4 * E * Iy / L); put(10, 10, 4 * E * Iy / L); put(4, 10, 2 * E * Iy / L);
+  /* optional Timoshenko shear deformation (shear areas Avy, Avz in m², as STAAD and most programs include by default):
+     φ = 12EI/(G·Av·L²); terms 12EI/L³(1+φ), 6EI/L²(1+φ), (4+φ)EI/L(1+φ), (2−φ)EI/L(1+φ) — φ = 0 gives Euler–Bernoulli */
+  var pz = s.Avy ? 12 * E * Iz / (G * s.Avy * L2) : 0, py = s.Avz ? 12 * E * Iy / (G * s.Avz * L2) : 0, fz = 1 + pz, fy = 1 + py;
+  put(1, 1, 12 * E * Iz / L3 / fz); put(7, 7, 12 * E * Iz / L3 / fz); put(1, 7, -12 * E * Iz / L3 / fz);
+  put(1, 5, 6 * E * Iz / L2 / fz); put(1, 11, 6 * E * Iz / L2 / fz); put(5, 7, -6 * E * Iz / L2 / fz); put(7, 11, -6 * E * Iz / L2 / fz);
+  put(5, 5, (4 + pz) * E * Iz / L / fz); put(11, 11, (4 + pz) * E * Iz / L / fz); put(5, 11, (2 - pz) * E * Iz / L / fz);
+  put(2, 2, 12 * E * Iy / L3 / fy); put(8, 8, 12 * E * Iy / L3 / fy); put(2, 8, -12 * E * Iy / L3 / fy);
+  put(2, 4, -6 * E * Iy / L2 / fy); put(2, 10, -6 * E * Iy / L2 / fy); put(4, 8, 6 * E * Iy / L2 / fy); put(8, 10, 6 * E * Iy / L2 / fy);
+  put(4, 4, (4 + py) * E * Iy / L / fy); put(10, 10, (4 + py) * E * Iy / L / fy); put(4, 10, (2 - py) * E * Iy / L / fy);
   return K;
 };
 /* geometric stiffness for axial force N (tension +) */
@@ -106,18 +109,45 @@ FE.frameLoadLocal = function (L, wl) {
   return q;
 };
 /* full element data in local coordinates for given axial force (P-Delta) and releases */
-FE.frameElem = function (m, e, N, wGlobal) {
+/* fixed-end (equivalent nodal) forces of a local point load P = [Px, Py, Pz] at distance a from end 1 */
+FE.pointLoadLocal = function (L, P, a, q) {
+  var b = L - a, L2 = L * L, L3 = L2 * L, r1 = b * b * (3 * a + b) / L3, r2 = a * a * (a + 3 * b) / L3, m1 = a * b * b / L2, m2 = a * a * b / L2;
+  q[0] += P[0] * b / L; q[6] += P[0] * a / L;
+  q[1] += P[1] * r1; q[7] += P[1] * r2; q[5] += P[1] * m1; q[11] -= P[1] * m2;
+  q[2] += P[2] * r1; q[8] += P[2] * r2; q[4] -= P[2] * m1; q[10] += P[2] * m2;
+  return q;
+};
+/* member load pieces in local axes: {k: "p", P: [3], a} point load; {k: "d", w1: [3], w2: [3], a, b} load varying linearly from w1 at a to w2 at b.
+   Fixed-end forces of a distributed piece by 3-point Gauss integration of the point-load kernel (exact: cubic kernel × linear load). */
+FE.piecesLocal = function (L, pl, q) {
+  var g = [[-Math.sqrt(0.6), 5 / 9], [0, 8 / 9], [Math.sqrt(0.6), 5 / 9]];
+  (pl || []).forEach(function (c) {
+    if (c.k === "p") { FE.pointLoadLocal(L, c.P, Math.min(L, Math.max(0, c.a)), q); return; }
+    var a = Math.max(0, c.a), b = Math.min(L, c.b), h = (b - a) / 2; if (h <= 0) return;
+    g.forEach(function (gp) { var x = a + h * (1 + gp[0]), t = (x - a) / (b - a), wt = gp[1] * h; FE.pointLoadLocal(L, [0, 1, 2].map(function (d) { return wt * (c.w1[d] + (c.w2[d] - c.w1[d]) * t); }), x, q); });
+  });
+  return q;
+};
+/* global member load pieces → local (same shapes, vectors rotated) */
+FE.piecesToLocal = function (R, pg) {
+  return (pg || []).map(function (c) {
+    function loc(v) { return [dot(R[0], v), dot(R[1], v), dot(R[2], v)]; }
+    return c.k === "p" ? { k: "p", P: loc(c.P), a: c.a } : { k: "d", w1: loc(c.w1), w2: loc(c.w2), a: c.a, b: c.b };
+  });
+};
+FE.frameElem = function (m, e, N, wGlobal, pGlobal) {
   var A = m.nodes[e.n1], B = m.nodes[e.n2], R = FE.frameAxes(A, B), L = Math.hypot(B.x - A.x, B.y - A.y, B.z - A.z);
   var truss = e.type === "brace" && e.pinned;
   var K = FE.frameKe(L, e.sec, truss);
   if (N) { var Kg = FE.frameKg(L, N, truss); for (var i = 0; i < 12; i++) for (var j = 0; j < 12; j++) K[i][j] += Kg[i][j]; }
   var wl = [0, 0, 0];
   if (wGlobal) wl = [dot(R[0], wGlobal), dot(R[1], wGlobal), dot(R[2], wGlobal)];
-  var q = FE.frameLoadLocal(L, wl);
+  var q = FE.frameLoadLocal(L, wl), pl = pGlobal && pGlobal.length ? FE.piecesToLocal(R, pGlobal) : null;
+  if (pl) FE.piecesLocal(L, pl, q);
   if (truss) { q[4] = q[5] = q[10] = q[11] = 0; }
   var rel = (e.rel || []).slice();
   var c = FE.condense(K, q, rel);
-  return { R: R, L: L, K: c.K, q: c.q, cond: c, rel: rel, wl: wl, truss: truss };
+  return { R: R, L: L, K: c.K, q: c.q, cond: c, rel: rel, wl: wl, pl: pl, truss: truss };
 };
 
 /* ================= SHELL ELEMENT ================= */
@@ -375,11 +405,13 @@ FE.loadVector = function (m, lc, cache) {
   var wfr = m.frames.map(function () { return [0, 0, 0]; });
   (lc.frameUDL || []).forEach(function (l) { for (var d = 0; d < 3; d++) wfr[l.e][d] += l.w[d]; });
   if (g) m.frames.forEach(function (e, k) { wfr[k][2] -= g * e.sec.gamma * e.sec.A; });
+  var pfr = [];   /* point / partial / linearly varying member loads: {e, k: "p", P: [3], a} or {e, k: "d", w1, w2, a, b} (global vectors, m from end 1) */
+  (lc.frameLoads || []).forEach(function (l) { (pfr[l.e] = pfr[l.e] || []).push(l.k === "p" ? { k: "p", P: l.P, a: l.a } : { k: "d", w1: l.w1, w2: l.w2, a: l.a, b: l.b }); });
   var qeq = [];
   m.frames.forEach(function (e, k) {
-    var w = wfr[k]; if (!w[0] && !w[1] && !w[2]) { qeq[k] = null; return; }
-    var d = FE.frameElem(m, e, cache && cache.N ? cache.N[k] : 0, w);
-    qeq[k] = { w: w, q: d.q };
+    var w = wfr[k], pc = pfr[k]; if (!w[0] && !w[1] && !w[2] && !pc) { qeq[k] = null; return; }
+    var d = FE.frameElem(m, e, cache && cache.N ? cache.N[k] : 0, w, pc);
+    qeq[k] = { w: w, q: d.q }; if (pc) qeq[k].p = pc;
     var qg = FE.toGlobal(d.R, 4, d.q);
     [e.n1, e.n2].forEach(function (v, s) { for (var t = 0; t < 6; t++) Ffull[6 * v + t] += qg[6 * s + t]; });
   });
@@ -398,12 +430,12 @@ FE.expand = function (m, x) { var U = new Float64Array(6 * m.nodes.length); for 
 
 /* member end forces (local) for displacement vector U */
 FE.frameForces = function (m, k, U, qinfo, N) {
-  var e = m.frames[k], d = FE.frameElem(m, e, N || 0, qinfo ? qinfo.w : null);
+  var e = m.frames[k], d = FE.frameElem(m, e, N || 0, qinfo ? qinfo.w : null, qinfo ? qinfo.p : null);
   var ug = []; [e.n1, e.n2].forEach(function (v) { for (var t = 0; t < 6; t++) ug.push(U[6 * v + t]); });
   var ul = FE.toLocal(d.R, 4, ug);
   var f = FE.mv(d.K, ul).map(function (v, i) { return v - (d.q[i] || 0); });
   d.rel.forEach(function (r) { f[r] = 0; });
-  return { f: f, L: d.L, wl: d.wl, R: d.R, ul: ul, d: d };
+  return { f: f, L: d.L, wl: d.wl, pl: d.pl, R: d.R, ul: ul, d: d };
 };
 /* internal force diagrams at n points: N (tension +), Vy, Vz, T, My, Mz */
 FE.frameDiagram = function (ff, npts) {
@@ -416,11 +448,17 @@ FE.frameDiagram = function (ff, npts) {
     }
     return o2;
   }
-  var f = ff.f, L = ff.L, w = ff.wl, out = [];
+  var f = ff.f, L = ff.L, w = ff.wl, out = [], pl = ff.pl || [];
   for (var s = 0; s <= npts; s++) {
-    var x = L * s / npts;
-    out.push({ x: x, N: -(f[0] + w[0] * x), Vy: f[1] + w[1] * x, Vz: f[2] + w[2] * x, T: -f[3],
-      Mz: -f[5] + f[1] * x + w[1] * x * x / 2, My: -(f[4] + f[2] * x + w[2] * x * x / 2) });
+    var x = L * s / npts, S = [w[0] * x, w[1] * x, w[2] * x], Mo = [0, w[1] * x * x / 2, w[2] * x * x / 2];   /* load resultant and its moment about x, from end 1 */
+    pl.forEach(function (c) {
+      if (c.k === "p") { if (x > c.a + 1e-9 || (s === npts && x >= c.a - 1e-9 && c.a > L - 1e-9)) for (var d = 0; d < 3; d++) { S[d] += c.P[d]; Mo[d] += c.P[d] * (x - c.a); } return; }
+      var a = c.a, u = Math.min(x, c.b); if (u <= a) return;
+      var Lp = u - a, X = x - a, kk = c.b > a ? 1 / (c.b - a) : 0;
+      for (var d2 = 0; d2 < 3; d2++) { var q1 = c.w1[d2], k2 = (c.w2[d2] - q1) * kk; S[d2] += q1 * Lp + k2 * Lp * Lp / 2; Mo[d2] += q1 * (X * Lp - Lp * Lp / 2) + k2 * (X * Lp * Lp / 2 - Lp * Lp * Lp / 3); }
+    });
+    out.push({ x: x, N: -(f[0] + S[0]), Vy: f[1] + S[1], Vz: f[2] + S[2], T: -f[3],
+      Mz: -f[5] + f[1] * x + Mo[1], My: -(f[4] + f[2] * x + Mo[2]) });
   }
   return out;
 };
@@ -539,7 +577,10 @@ FE.linear = function (m, cases, combos, opt) {
     Object.keys(cb.f).forEach(function (cn) {
       var c = res.cases[cn], s = cb.f[cn]; if (!c) return;
       for (var i = 0; i < U.length; i++) U[i] += s * c.U[i];
-      c.lv.qeq.forEach(function (q, k) { if (!q) return; if (!qmix[k]) qmix[k] = { w: [0, 0, 0] }; for (var d = 0; d < 3; d++) qmix[k].w[d] += s * q.w[d]; });
+      c.lv.qeq.forEach(function (q, k) {
+        if (!q) return; if (!qmix[k]) qmix[k] = { w: [0, 0, 0] }; for (var d = 0; d < 3; d++) qmix[k].w[d] += s * q.w[d];
+        if (q.p) qmix[k].p = (qmix[k].p || []).concat(q.p.map(function (c) { function sc(v) { return v.map(function (x) { return s * x; }); } return c.k === "p" ? { k: "p", P: sc(c.P), a: c.a } : { k: "d", w1: sc(c.w1), w2: sc(c.w2), a: c.a, b: c.b }; }));
+      });
       lcs.push([cn, s]);
     });
     var N = null, it = 0, amp = 1, conv = null, hist = [], maxIt = opt.pdMaxIt || 30, tol = opt.pdTol || 1e-6;

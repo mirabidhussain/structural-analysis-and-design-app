@@ -159,6 +159,7 @@ button.pri{background:linear-gradient(180deg,#f08a35,#e06a12);border:0;box-shado
 .eq,.ce,.cv,table.basis td.eqc{font-family:"ISD Mono",ui-monospace,"Roboto Mono",Menlo,Consolas,monospace;font-size:12.5px;letter-spacing:-.01em}
 .eq{border-left-color:var(--pri);border-radius:0 10px 10px 0}
 .chk{border-radius:8px;padding:7px 8px;border-bottom:1px solid var(--line)}.chk.no{border-bottom-color:transparent}
+.mchk .chk{flex-direction:column;align-items:flex-start;gap:2px}.mchk .chk small{color:var(--mut);font-size:12px;line-height:1.35}.mchk .chk.inf span{color:var(--mut)}.mchk h4{margin:12px 0 4px}
 table{font-size:12.5px;font-feature-settings:"tnum";border-radius:10px;overflow:hidden}th,td{border-color:var(--line);padding:6px 8px}th{background:var(--eq);color:var(--mut);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
 tr:nth-child(even) td{background:color-mix(in srgb,var(--eq) 55%,transparent)}
 .tw{border-radius:10px;border:1px solid var(--line)}.tw table{border-style:hidden}
@@ -1240,7 +1241,7 @@ RCC.stair = function (p) {
   r.h("1. Loads per m² of horizontal area");
   var ws = 25 * (t / 1000) * hyp / T, wst = 25 * (R_ / 1000) / 2;
   var w = ws + wst + p.FF + p.LL, wu = 1.5 * w;
-  r.eq("Waist = 25 t √(R²+T²)/T = " + U.f(ws) + " ; steps = 25 R/2 = " + U.f(wst) + " ; FF = " + p.FF + " ; LL = " + p.LL + " → wu = " + U.f(wu) + " kN/m²", "IS 875 Pt 2 (LL 3/5 kN/m²)");
+  r.eq("Waist = 25 t √(R²+T²)/T = " + U.f(ws) + " ; steps = 25 R/2 = " + U.f(wst) + " ; FF = " + p.FF + " ; LL = " + p.LL + " → wu = " + U.f(wu) + " kN/m²", "IS 875 Pt 2 Table 1 (stairs: 3 dwellings, 4 offices / schools, 5 assembly / retail)");
   var c = p.support === "cont" ? 10 : 8;
   var Mu = wu * L * L / c, Vu = wu * L / 2;
   r.eq("Mu = wu L²/" + c + " = " + U.f(Mu) + " kNm/m ; Vu = " + U.f(Vu) + " kN/m", "cl 33.2");
@@ -1972,12 +1973,15 @@ FE.frameKe = function (L, s, truss) {
   if (truss) return K;
   var t = G * s.J / L; put(3, 3, t); put(9, 9, t); put(3, 9, -t);
   var Iz = s.Iz, Iy = s.Iy, L2 = L * L, L3 = L2 * L;
-  put(1, 1, 12 * E * Iz / L3); put(7, 7, 12 * E * Iz / L3); put(1, 7, -12 * E * Iz / L3);
-  put(1, 5, 6 * E * Iz / L2); put(1, 11, 6 * E * Iz / L2); put(5, 7, -6 * E * Iz / L2); put(7, 11, -6 * E * Iz / L2);
-  put(5, 5, 4 * E * Iz / L); put(11, 11, 4 * E * Iz / L); put(5, 11, 2 * E * Iz / L);
-  put(2, 2, 12 * E * Iy / L3); put(8, 8, 12 * E * Iy / L3); put(2, 8, -12 * E * Iy / L3);
-  put(2, 4, -6 * E * Iy / L2); put(2, 10, -6 * E * Iy / L2); put(4, 8, 6 * E * Iy / L2); put(8, 10, 6 * E * Iy / L2);
-  put(4, 4, 4 * E * Iy / L); put(10, 10, 4 * E * Iy / L); put(4, 10, 2 * E * Iy / L);
+  /* optional Timoshenko shear deformation (shear areas Avy, Avz in m², as STAAD and most programs include by default):
+     φ = 12EI/(G·Av·L²); terms 12EI/L³(1+φ), 6EI/L²(1+φ), (4+φ)EI/L(1+φ), (2−φ)EI/L(1+φ) — φ = 0 gives Euler–Bernoulli */
+  var pz = s.Avy ? 12 * E * Iz / (G * s.Avy * L2) : 0, py = s.Avz ? 12 * E * Iy / (G * s.Avz * L2) : 0, fz = 1 + pz, fy = 1 + py;
+  put(1, 1, 12 * E * Iz / L3 / fz); put(7, 7, 12 * E * Iz / L3 / fz); put(1, 7, -12 * E * Iz / L3 / fz);
+  put(1, 5, 6 * E * Iz / L2 / fz); put(1, 11, 6 * E * Iz / L2 / fz); put(5, 7, -6 * E * Iz / L2 / fz); put(7, 11, -6 * E * Iz / L2 / fz);
+  put(5, 5, (4 + pz) * E * Iz / L / fz); put(11, 11, (4 + pz) * E * Iz / L / fz); put(5, 11, (2 - pz) * E * Iz / L / fz);
+  put(2, 2, 12 * E * Iy / L3 / fy); put(8, 8, 12 * E * Iy / L3 / fy); put(2, 8, -12 * E * Iy / L3 / fy);
+  put(2, 4, -6 * E * Iy / L2 / fy); put(2, 10, -6 * E * Iy / L2 / fy); put(4, 8, 6 * E * Iy / L2 / fy); put(8, 10, 6 * E * Iy / L2 / fy);
+  put(4, 4, (4 + py) * E * Iy / L / fy); put(10, 10, (4 + py) * E * Iy / L / fy); put(4, 10, (2 - py) * E * Iy / L / fy);
   return K;
 };
 /* geometric stiffness for axial force N (tension +) */
@@ -2022,18 +2026,45 @@ FE.frameLoadLocal = function (L, wl) {
   return q;
 };
 /* full element data in local coordinates for given axial force (P-Delta) and releases */
-FE.frameElem = function (m, e, N, wGlobal) {
+/* fixed-end (equivalent nodal) forces of a local point load P = [Px, Py, Pz] at distance a from end 1 */
+FE.pointLoadLocal = function (L, P, a, q) {
+  var b = L - a, L2 = L * L, L3 = L2 * L, r1 = b * b * (3 * a + b) / L3, r2 = a * a * (a + 3 * b) / L3, m1 = a * b * b / L2, m2 = a * a * b / L2;
+  q[0] += P[0] * b / L; q[6] += P[0] * a / L;
+  q[1] += P[1] * r1; q[7] += P[1] * r2; q[5] += P[1] * m1; q[11] -= P[1] * m2;
+  q[2] += P[2] * r1; q[8] += P[2] * r2; q[4] -= P[2] * m1; q[10] += P[2] * m2;
+  return q;
+};
+/* member load pieces in local axes: {k: "p", P: [3], a} point load; {k: "d", w1: [3], w2: [3], a, b} load varying linearly from w1 at a to w2 at b.
+   Fixed-end forces of a distributed piece by 3-point Gauss integration of the point-load kernel (exact: cubic kernel × linear load). */
+FE.piecesLocal = function (L, pl, q) {
+  var g = [[-Math.sqrt(0.6), 5 / 9], [0, 8 / 9], [Math.sqrt(0.6), 5 / 9]];
+  (pl || []).forEach(function (c) {
+    if (c.k === "p") { FE.pointLoadLocal(L, c.P, Math.min(L, Math.max(0, c.a)), q); return; }
+    var a = Math.max(0, c.a), b = Math.min(L, c.b), h = (b - a) / 2; if (h <= 0) return;
+    g.forEach(function (gp) { var x = a + h * (1 + gp[0]), t = (x - a) / (b - a), wt = gp[1] * h; FE.pointLoadLocal(L, [0, 1, 2].map(function (d) { return wt * (c.w1[d] + (c.w2[d] - c.w1[d]) * t); }), x, q); });
+  });
+  return q;
+};
+/* global member load pieces → local (same shapes, vectors rotated) */
+FE.piecesToLocal = function (R, pg) {
+  return (pg || []).map(function (c) {
+    function loc(v) { return [dot(R[0], v), dot(R[1], v), dot(R[2], v)]; }
+    return c.k === "p" ? { k: "p", P: loc(c.P), a: c.a } : { k: "d", w1: loc(c.w1), w2: loc(c.w2), a: c.a, b: c.b };
+  });
+};
+FE.frameElem = function (m, e, N, wGlobal, pGlobal) {
   var A = m.nodes[e.n1], B = m.nodes[e.n2], R = FE.frameAxes(A, B), L = Math.hypot(B.x - A.x, B.y - A.y, B.z - A.z);
   var truss = e.type === "brace" && e.pinned;
   var K = FE.frameKe(L, e.sec, truss);
   if (N) { var Kg = FE.frameKg(L, N, truss); for (var i = 0; i < 12; i++) for (var j = 0; j < 12; j++) K[i][j] += Kg[i][j]; }
   var wl = [0, 0, 0];
   if (wGlobal) wl = [dot(R[0], wGlobal), dot(R[1], wGlobal), dot(R[2], wGlobal)];
-  var q = FE.frameLoadLocal(L, wl);
+  var q = FE.frameLoadLocal(L, wl), pl = pGlobal && pGlobal.length ? FE.piecesToLocal(R, pGlobal) : null;
+  if (pl) FE.piecesLocal(L, pl, q);
   if (truss) { q[4] = q[5] = q[10] = q[11] = 0; }
   var rel = (e.rel || []).slice();
   var c = FE.condense(K, q, rel);
-  return { R: R, L: L, K: c.K, q: c.q, cond: c, rel: rel, wl: wl, truss: truss };
+  return { R: R, L: L, K: c.K, q: c.q, cond: c, rel: rel, wl: wl, pl: pl, truss: truss };
 };
 
 /* ================= SHELL ELEMENT ================= */
@@ -2291,11 +2322,13 @@ FE.loadVector = function (m, lc, cache) {
   var wfr = m.frames.map(function () { return [0, 0, 0]; });
   (lc.frameUDL || []).forEach(function (l) { for (var d = 0; d < 3; d++) wfr[l.e][d] += l.w[d]; });
   if (g) m.frames.forEach(function (e, k) { wfr[k][2] -= g * e.sec.gamma * e.sec.A; });
+  var pfr = [];   /* point / partial / linearly varying member loads: {e, k: "p", P: [3], a} or {e, k: "d", w1, w2, a, b} (global vectors, m from end 1) */
+  (lc.frameLoads || []).forEach(function (l) { (pfr[l.e] = pfr[l.e] || []).push(l.k === "p" ? { k: "p", P: l.P, a: l.a } : { k: "d", w1: l.w1, w2: l.w2, a: l.a, b: l.b }); });
   var qeq = [];
   m.frames.forEach(function (e, k) {
-    var w = wfr[k]; if (!w[0] && !w[1] && !w[2]) { qeq[k] = null; return; }
-    var d = FE.frameElem(m, e, cache && cache.N ? cache.N[k] : 0, w);
-    qeq[k] = { w: w, q: d.q };
+    var w = wfr[k], pc = pfr[k]; if (!w[0] && !w[1] && !w[2] && !pc) { qeq[k] = null; return; }
+    var d = FE.frameElem(m, e, cache && cache.N ? cache.N[k] : 0, w, pc);
+    qeq[k] = { w: w, q: d.q }; if (pc) qeq[k].p = pc;
     var qg = FE.toGlobal(d.R, 4, d.q);
     [e.n1, e.n2].forEach(function (v, s) { for (var t = 0; t < 6; t++) Ffull[6 * v + t] += qg[6 * s + t]; });
   });
@@ -2314,12 +2347,12 @@ FE.expand = function (m, x) { var U = new Float64Array(6 * m.nodes.length); for 
 
 /* member end forces (local) for displacement vector U */
 FE.frameForces = function (m, k, U, qinfo, N) {
-  var e = m.frames[k], d = FE.frameElem(m, e, N || 0, qinfo ? qinfo.w : null);
+  var e = m.frames[k], d = FE.frameElem(m, e, N || 0, qinfo ? qinfo.w : null, qinfo ? qinfo.p : null);
   var ug = []; [e.n1, e.n2].forEach(function (v) { for (var t = 0; t < 6; t++) ug.push(U[6 * v + t]); });
   var ul = FE.toLocal(d.R, 4, ug);
   var f = FE.mv(d.K, ul).map(function (v, i) { return v - (d.q[i] || 0); });
   d.rel.forEach(function (r) { f[r] = 0; });
-  return { f: f, L: d.L, wl: d.wl, R: d.R, ul: ul, d: d };
+  return { f: f, L: d.L, wl: d.wl, pl: d.pl, R: d.R, ul: ul, d: d };
 };
 /* internal force diagrams at n points: N (tension +), Vy, Vz, T, My, Mz */
 FE.frameDiagram = function (ff, npts) {
@@ -2332,11 +2365,17 @@ FE.frameDiagram = function (ff, npts) {
     }
     return o2;
   }
-  var f = ff.f, L = ff.L, w = ff.wl, out = [];
+  var f = ff.f, L = ff.L, w = ff.wl, out = [], pl = ff.pl || [];
   for (var s = 0; s <= npts; s++) {
-    var x = L * s / npts;
-    out.push({ x: x, N: -(f[0] + w[0] * x), Vy: f[1] + w[1] * x, Vz: f[2] + w[2] * x, T: -f[3],
-      Mz: -f[5] + f[1] * x + w[1] * x * x / 2, My: -(f[4] + f[2] * x + w[2] * x * x / 2) });
+    var x = L * s / npts, S = [w[0] * x, w[1] * x, w[2] * x], Mo = [0, w[1] * x * x / 2, w[2] * x * x / 2];   /* load resultant and its moment about x, from end 1 */
+    pl.forEach(function (c) {
+      if (c.k === "p") { if (x > c.a + 1e-9 || (s === npts && x >= c.a - 1e-9 && c.a > L - 1e-9)) for (var d = 0; d < 3; d++) { S[d] += c.P[d]; Mo[d] += c.P[d] * (x - c.a); } return; }
+      var a = c.a, u = Math.min(x, c.b); if (u <= a) return;
+      var Lp = u - a, X = x - a, kk = c.b > a ? 1 / (c.b - a) : 0;
+      for (var d2 = 0; d2 < 3; d2++) { var q1 = c.w1[d2], k2 = (c.w2[d2] - q1) * kk; S[d2] += q1 * Lp + k2 * Lp * Lp / 2; Mo[d2] += q1 * (X * Lp - Lp * Lp / 2) + k2 * (X * Lp * Lp / 2 - Lp * Lp * Lp / 3); }
+    });
+    out.push({ x: x, N: -(f[0] + S[0]), Vy: f[1] + S[1], Vz: f[2] + S[2], T: -f[3],
+      Mz: -f[5] + f[1] * x + Mo[1], My: -(f[4] + f[2] * x + Mo[2]) });
   }
   return out;
 };
@@ -2455,7 +2494,10 @@ FE.linear = function (m, cases, combos, opt) {
     Object.keys(cb.f).forEach(function (cn) {
       var c = res.cases[cn], s = cb.f[cn]; if (!c) return;
       for (var i = 0; i < U.length; i++) U[i] += s * c.U[i];
-      c.lv.qeq.forEach(function (q, k) { if (!q) return; if (!qmix[k]) qmix[k] = { w: [0, 0, 0] }; for (var d = 0; d < 3; d++) qmix[k].w[d] += s * q.w[d]; });
+      c.lv.qeq.forEach(function (q, k) {
+        if (!q) return; if (!qmix[k]) qmix[k] = { w: [0, 0, 0] }; for (var d = 0; d < 3; d++) qmix[k].w[d] += s * q.w[d];
+        if (q.p) qmix[k].p = (qmix[k].p || []).concat(q.p.map(function (c) { function sc(v) { return v.map(function (x) { return s * x; }); } return c.k === "p" ? { k: "p", P: sc(c.P), a: c.a } : { k: "d", w1: sc(c.w1), w2: sc(c.w2), a: c.a, b: c.b }; }));
+      });
       lcs.push([cn, s]);
     });
     var N = null, it = 0, amp = 1, conv = null, hist = [], maxIt = opt.pdMaxIt || 30, tol = opt.pdTol || 1e-6;
@@ -3123,9 +3165,11 @@ MD.make = function (geo, p) {
   MD.supports(m, geo, p, warn);
   geo.frames.forEach(function (f) {
     var role = f.role === "brace" ? "brace" : f.role === "column" ? "column" : "beam";
-    var s = sec(defs[role], role, f.layer || ""), src = MD.parseSec(f.layer || "", p, role) ? "DXF layer" : "default";
+    var s = f.std ? STD.section(f.std, p, role) : sec(defs[role], role, f.layer || ""), src = f.std ? "STAAD file" : MD.parseSec(f.layer || "", p, role) ? "DXF layer" : "default";
     var A = m.nodes[f.n1], B = m.nodes[f.n2], L = Math.hypot(B.x - A.x, B.y - A.y, B.z - A.z);
     var e = { n1: f.n1, n2: f.n2, type: role, sec: s, layer: f.layer, L: L, pinned: role === "brace", src: src };
+    if (f.rel) e.rel = f.rel.slice();
+    if (f.sid !== undefined) { e.sid = f.sid; e.part = f.part; e.parts = f.parts; }
     if (s.kind === "steel") {   /* member buckling capacity for pushover */
       var r = s.row, rmin = s.shape === "L" ? r.rvv : r.ry, curve = s.shape === "L" ? "c" : "b";
       var Pc = s.A * 1e6 * ST.fcd(Math.max(L * 1000 / (rmin * 10), 1), s.fy, curve) / 1e3;
@@ -3148,6 +3192,7 @@ MD.make = function (geo, p) {
   var Ec = 5000 * Math.sqrt(p.fck) * 1000;
   geo.shells.forEach(function (s) {
     var h = DXF.secHint(s.layer || ""), t = (h && h.kind === "T" ? h.t : s.kind === "wall" ? p.tWall : p.tSlab) / 1000;
+    if (s.t0) { m.shells.push({ n: s.n, kind: s.kind, layer: s.layer, t: s.t0, sid: s.sid, mat: { E: s.mat0.E * (p.stdCrack ? (s.kind === "wall" ? 0.7 : 0.25) : 1), nu: s.mat0.nu, gamma: s.mat0.gamma } }); return; }   /* imported (STAAD) plate */
     m.shells.push({ n: s.n, kind: s.kind, layer: s.layer, t: t, mat: { E: Ec * (p.crack ? (s.kind === "wall" ? 0.7 : 0.25) : 1), nu: 0.2, gamma: 25 } });
   });
   m.warn = (geo.warn || []).concat(warn);
@@ -3587,6 +3632,7 @@ MD.supports = function (m, geo, p, warn) {
     if (allFix && base !== "fixed" && MD.SUPS[base]) { sup[k] = MD.SUPS[base].slice(); types[k] = base; if (base === "spring") spr[k] = K.slice(); }
     else { sup[k] = r.slice(); types[k] = allFix ? "fixed" : r[3] || r[4] ? "partial" : r[0] ? "pinned" : "roller"; }
   });
+  Object.keys(geo.spr || {}).forEach(function (k) { if (sup[k] && !spr[k]) { spr[k] = geo.spr[k].slice(); types[k] = "spring"; } });   /* springs from an imported file */
   MD.supRules(p.supOver).forEach(function (r) {
     if (r.err) { warn.push("Support rule line " + r.line + " ignored (use e.g. 'N12 = pinned', '3-5 = roller', 'N7 = spring' or 'N9 = free'): " + r.txt); return; }
     r.nodes.forEach(function (v) {
@@ -3599,6 +3645,827 @@ MD.supports = function (m, geo, p, warn) {
   m.sup = sup; m.supType = types; if (Object.keys(spr).length) m.spr = spr;
   if (!Object.keys(sup).length) warn.push("No supports left — the model is a mechanism; restore a support (Support rules).");
 };
+
+/* js/std.js */
+/* STAAD.Pro input (.std) import: geometry, sections, materials, supports, releases, primary load cases (self weight, joint,
+   member, element, floor, IS 1893 seismic and wind loads), repeat loads, combinations and concrete design parameters.
+   STAAD's global Y is vertical unless SET Z UP; the app's Z is vertical, so (X, Y, Z)STAAD → (X, −Z, Y)app — a proper
+   rotation, so member and moment senses are kept. Units are converted to kN and m.
+   Also: STD.audit — checks of the STAAD file itself (cancelling wind, seismic weight, combinations, double-counted
+   self weight, plates) — and STD.cases / STD.combos, which turn the file's loads into the app's load cases. */
+var STD = (function () {
+  var S = {};
+  var LEN = { METER: 1, METERS: 1, METRE: 1, M: 1, MMS: 0.001, MM: 0.001, MILLIMETER: 0.001, CM: 0.01, CMS: 0.01, CENTIMETER: 0.01, DME: 0.1, DECIMETER: 0.1,
+    KM: 1000, FEET: 0.3048, FOOT: 0.3048, FT: 0.3048, FEE: 0.3048, INCHES: 0.0254, INCH: 0.0254, IN: 0.0254, INC: 0.0254 };
+  var FRC = { KN: 1, KNS: 1, KILONEWTON: 1, NEWTON: 0.001, NEWTONS: 0.001, N: 0.001, NEW: 0.001, MNS: 1000, MN: 1000, KIP: 4.4482216, KIPS: 4.4482216,
+    POUND: 0.0044482216, LBS: 0.0044482216, LB: 0.0044482216, KG: 0.00980665, KGS: 0.00980665, KILOGRAM: 0.00980665, MTON: 9.80665, MTONS: 9.80665, DNS: 0.01, DEN: 0.01 };
+  var MATDEF = { CONCRETE: { E: 2.17185e7, nu: 0.17, dens: 23.5616 }, STEEL: { E: 2.05e8, nu: 0.3, dens: 76.8195 }, ALUMINUM: { E: 6.89476e7, nu: 0.33, dens: 26.6018 } };
+  function isNum(t) { return t !== undefined && /^[-+]?(\d+\.?\d*|\.\d+)(E[-+]?\d+)?$/i.test(t); }
+
+  /* ---------- list "1 TO 30 BY 2 45 ALL" → numbers; returns {ids, i (next token)} ---------- */
+  function readList(t, i, all) {
+    var ids = [];
+    if (t[i] === "ALL") return { ids: all ? all() : [], i: i + 1, all: true };
+    if (/^(MEMB|MEMBER|JOINT|JOI|ELEM|ELEMENT|LIST|LIS)$/.test(t[i] || "")) i++;
+    if (t[i] === "ALL") return { ids: all ? all() : [], i: i + 1, all: true };
+    while (i < t.length && isNum(t[i]) && /^\d+$/.test(t[i])) {
+      var a = +t[i]; i++;
+      if (t[i] === "TO" && isNum(t[i + 1])) {
+        var b = +t[i + 1], st = 1; i += 2;
+        if (t[i] === "BY" && isNum(t[i + 1])) { st = Math.abs(+t[i + 1]) || 1; i += 2; }
+        for (var k = a; k <= b; k += st) ids.push(k);
+      } else ids.push(a);
+    }
+    return { ids: ids, i: i };
+  }
+
+  /* ---------- parse ---------- */
+  S.parse = function (text) {
+    var M = { type: "SPACE", zup: false, title: "", joints: {}, members: {}, elems: {}, thick: {}, surfs: {}, sthick: {}, props: {}, mats: {}, matOf: {}, E: {}, nu: {}, dens: {}, beta: {},
+      sup: {}, spr: {}, rel: {}, truss: {}, offsets: [], loads: [], combos: [], def1893: null, wind: {}, design: { list: null, fc: null, fy: null, ran: false, minsec: null, cover: {} },
+      warn: [], unknown: {}, loadList: null };
+    var Lf = 1, Ff = 1, mode = "", cur = null, curWind = null, d93 = null, d93sub = "", jointOrder = [], lastJ = [], memOrder = [];
+    function allMem() { return Object.keys(M.members).map(Number).concat(Object.keys(M.elems).map(Number)); }
+    function allJ() { return Object.keys(M.joints).map(Number); }
+    function W(msg) { if (M.warn.indexOf(msg) < 0 && M.warn.length < 60) M.warn.push(msg); }
+    /* lines: comments, continuation "-", then ";" splits */
+    var raw = String(text || "").replace(/\r/g, "").split("\n"), lines = [], buf = "";
+    raw.forEach(function (ln) {
+      var s = ln.replace(/\t/g, " ");
+      if (/^\s*\*/.test(s)) { if (!M.title && /JOB NAME|^\s*\*\s*\S/.test(s)) {} return; }
+      s = s.replace(/\s+$/, "");
+      if (/\s-$/.test(s) || /^-$/.test(s.trim())) { buf += s.replace(/-$/, "") + " "; return; }
+      buf += s; lines.push(buf); buf = "";
+    });
+    if (buf) lines.push(buf);
+    var st = [];
+    lines.forEach(function (ln) { ln.split(";").forEach(function (q) { q = q.trim(); if (q) st.push(q); }); });
+    for (var si = 0; si < st.length; si++) {
+      var line = st[si], U = line.toUpperCase(), t = U.split(/[\s,]+/).filter(Boolean), k0 = t[0] || "", k1 = t[1] || "";
+      /* ---- global commands ---- */
+      if (k0 === "STAAD") { M.type = k1 || "SPACE"; M.title = line.slice(6 + k1.length).trim(); mode = ""; continue; }
+      if (k0 === "SET" && k1 === "Z" && t[2] === "UP") { M.zup = true; continue; }
+      if (k0 === "SET") continue;
+      if (k0 === "UNIT" || k0 === "UNI") { t.slice(1).forEach(function (w) { if (LEN[w] !== undefined) Lf = LEN[w]; else if (FRC[w] !== undefined) Ff = FRC[w]; }); continue; }
+      if (k0 === "START" && k1 === "JOB") { mode = "job"; continue; }
+      if (k0 === "END" && k1 === "JOB") { mode = ""; continue; }
+      if (mode === "job") { if (k0 === "JOB" && k1 === "NAME") M.title = line.replace(/^\s*JOB\s+NAME\s*/i, ""); continue; }
+      if (k0 === "FINISH") break;
+      if (k0 === "INPUT" || k0 === "PAGE" || k0 === "PRINT") continue;
+      if (k0 === "PERFORM" || k0 === "PDELTA" || k0 === "CHANGE") { mode = ""; cur = null; if (k0 === "PDELTA") W("PDELTA analysis in the file — run 'Linear + P-Delta' in the app to match"); continue; }
+      if (k0 === "JOINT" && /^COOR/.test(k1)) { mode = "joint"; continue; }
+      if (k0 === "MEMBER" && /^INCI/.test(k1)) { mode = "member"; continue; }
+      if (k0 === "ELEMENT" && /^INCI/.test(k1)) { mode = "elem"; if (t[2] && t[2] !== "SHELL") W("ELEMENT INCIDENCES " + t[2] + " read as plates"); continue; }
+      if (k0 === "ELEMENT" && /^PROP/.test(k1)) { mode = "eprop"; continue; }
+      if (k0 === "SURFACE" && /^INCI/.test(k1)) { mode = "surf"; continue; }
+      if (k0 === "SURFACE" && /^PROP/.test(k1)) { mode = "sprop"; continue; }
+      if (k0 === "SURFACE" && /^CONS/.test(k1)) { mode = "skip"; continue; }
+      if (k0 === "SET" && k1 === "DIVISION") continue;
+      if (k0 === "MEMBER" && /^PROP/.test(k1)) { mode = "mprop"; continue; }
+      if (k0 === "DEFINE" && /^MAT/.test(k1)) { mode = "defmat"; continue; }
+      if (k0 === "END" && k1 === "DEFINE") { mode = ""; continue; }
+      if (k0 === "CONSTANTS" || k0 === "CONSTANT") { mode = "const"; continue; }
+      if (k0 === "SUPPORTS" || k0 === "SUPPORT") { mode = "sup"; continue; }
+      if (k0 === "MEMBER" && /^REL/.test(k1)) { mode = "rel"; continue; }
+      if (k0 === "MEMBER" && k1 === "TRUSS") { mode = "truss"; if (t.length > 2) { readList(t, 2, allMem).ids.forEach(function (m) { M.truss[m] = 1; }); } continue; }
+      if (k0 === "MEMBER" && /^OFFS/.test(k1)) { mode = "offset"; continue; }
+      if (k0 === "MEMBER" && /^(TENS|COMP|CABLE)/.test(k1)) { mode = "skip"; W("MEMBER " + k1 + " ignored — the app runs linear analysis (members act both ways)"); continue; }
+      if (k0 === "DEFINE" && k1 === "1893") { mode = "d93"; d93 = M.def1893 = { zone: 0.1, rf: 5, I: 1, ss: 2, st: 1, dm: 0.05, px: 0, pz: 0, dt: 0, self: 0, joint: [], member: [], elem: [], floor: [] }; d93sub = "";
+        readKV(t, 3); continue; }
+      if (k0 === "DEFINE" && k1 === "WIND") { mode = "dwind"; curWind = null; continue; }
+      if (k0 === "DEFINE" && /^(REF|PMEMBER|ENV|IMPERFECTION|TIME|SPECTRA|MOVING|SNOW|UBC|IBC|AISC)/.test(k1)) { mode = "skip"; W("DEFINE " + k1 + " not used by the app"); continue; }
+      if (k0 === "DEFINE") { mode = "skip"; W("DEFINE " + k1 + " not used by the app"); continue; }
+      if ((k0 === "LOAD" || k0 === "LOADING") && (k1 === "COMB" || k1 === "COMBINATION")) {
+        cur = { id: +t[2], title: line.replace(/^\s*\S+\s+\S+\s+\S+\s*/, "").trim(), f: {}, srss: false }; if (t[3] === "SRSS" || t[3] === "ABS") { cur.srss = true; W("LOAD COMBINATION " + t[2] + " " + t[3] + " read as an algebraic sum"); }
+        M.combos.push(cur); mode = "comb"; continue; }
+      if (k0 === "LOAD" && k1 === "LIST") { M.loadList = t[2] === "ALL" ? null : readList(t, 2, null).ids; continue; }
+      if ((k0 === "LOAD" || k0 === "LOADING") && isNum(k1)) {
+        var lt = "", title = "", ix = 2;
+        if (t[ix] === "LOADTYPE") { lt = (t[ix + 1] || "").toLowerCase(); ix += 2; if (t[ix] === "REDUCIBLE") ix++; }
+        var mt = line.match(/TITLE\s+(.*)$/i); title = mt ? mt[1].trim() : t[ix] && t[ix] !== "TITLE" ? line.split(/\s+/).slice(ix).join(" ") : "";
+        cur = { id: +k1, type: lt, title: title, self: [], joint: [], member: [], elem: [], floor: [], eq: [], wind: [], repeat: [], other: [] };
+        M.loads.push(cur); mode = "load"; continue; }
+      if (k0 === "START" && /^CONC/.test(k1)) { mode = "cdesign"; M.design.ran = true; continue; }
+      if (k0 === "END" && /^CONC/.test(k1)) { mode = ""; continue; }
+      if (k0 === "START" && /^STEEL/.test(k1)) { mode = "skip"; continue; }
+      if (k0 === "PARAMETER" || k0 === "CODE" && mode !== "cdesign") { mode = "skip"; continue; }
+      /* ---- block contents ---- */
+      if (mode === "joint") {
+        if (k0 === "REPEAT") {
+          var allR = k1 === "ALL", ri = allR ? 2 : 1, nrep = +t[ri], incs = t.slice(ri + 1).map(Number), base = allR ? jointOrder.slice() : lastJ.slice(), jinc = Math.max.apply(null, allJ());
+          var newIds = [];
+          for (var r = 1; r <= nrep; r++) {
+            var off = incs.length >= 3 * r ? [incs[3 * (r - 1)], incs[3 * (r - 1) + 1], incs[3 * (r - 1) + 2]] : [incs[0] * r, incs[1] * r, incs[2] * r];
+            if (incs.length >= 3 * r && r > 1) { var prev = incs.slice(0, 3 * r); off = [0, 0, 0]; for (var q = 0; q < r; q++) { off[0] += prev[3 * q]; off[1] += prev[3 * q + 1]; off[2] += prev[3 * q + 2]; } }
+            base.forEach(function (j) { var id = j + r * jinc, p0 = M.joints[j]; M.joints[id] = [p0[0] + (off[0] || 0) * Lf, p0[1] + (off[1] || 0) * Lf, p0[2] + (off[2] || 0) * Lf]; jointOrder.push(id); newIds.push(id); });
+          }
+          W("Joint REPEAT generation used — check the joint numbers against the STAAD file"); lastJ = newIds; continue;
+        }
+        var nums = t.map(Number);
+        if (t.length >= 8 && nums.every(isFinite)) {
+          var i1 = nums[0], p1 = nums.slice(1, 4), i2 = nums[4], p2 = nums.slice(5, 8), inc = nums[8] || 1, nseg = Math.round((i2 - i1) / inc);
+          lastJ = [];
+          for (var g = 0; g <= nseg; g++) { var id2 = i1 + g * inc, f = nseg ? g / nseg : 0; M.joints[id2] = [0, 1, 2].map(function (d) { return (p1[d] + (p2[d] - p1[d]) * f) * Lf; }); jointOrder.push(id2); lastJ.push(id2); }
+        } else if (t.length >= 4 && nums.slice(0, 4).every(isFinite)) { M.joints[nums[0]] = [nums[1] * Lf, nums[2] * Lf, nums[3] * Lf]; jointOrder.push(nums[0]); lastJ = [nums[0]]; }
+        else if (t.length === 3 && M.type === "PLANE" && nums.every(isFinite)) { M.joints[nums[0]] = [nums[1] * Lf, nums[2] * Lf, 0]; jointOrder.push(nums[0]); lastJ = [nums[0]]; }
+        else W("Joint line not understood: " + line);
+        continue;
+      }
+      if (mode === "member") {
+        var nm = t.map(Number);
+        if (k0 === "REPEAT") { W("MEMBER INCIDENCES REPEAT not supported — write the members out in STAAD (Edit → Input File) and import again"); continue; }
+        if (nm.length >= 3 && nm.slice(0, 3).every(isFinite)) {
+          if (nm.length >= 4 && isFinite(nm[3])) {
+            var m2 = nm[3], minc = nm[4] || 1, jinc2 = nm[5] || 1;
+            for (var mm = nm[0], kk = 0; mm <= m2; mm += minc, kk++) { M.members[mm] = [nm[1] + kk * jinc2, nm[2] + kk * jinc2]; memOrder.push(mm); }
+          } else { M.members[nm[0]] = [nm[1], nm[2]]; memOrder.push(nm[0]); }
+        } else W("Member line not understood: " + line);
+        continue;
+      }
+      if (mode === "elem") {
+        var ti = t.indexOf("TO"), en = (ti > 0 ? t.slice(0, ti) : t).map(Number);
+        if (en.length >= 4 && en.every(isFinite)) {
+          var nodes4 = en.slice(1, 5);
+          if (ti > 0) { var e2 = +t[ti + 1], einc = +(t[ti + 2] || 1), jn = +(t[ti + 3] || 1); for (var ee = en[0], kq = 0; ee <= e2; ee += einc, kq++) M.elems[ee] = nodes4.map(function (v) { return v + kq * jn; }); }
+          else M.elems[en[0]] = nodes4;
+        } else W("Element line not understood: " + line);
+        continue;
+      }
+      if (mode === "surf") {
+        var isf = t.indexOf("SURFACE"), sj = (isf > 0 ? t.slice(0, isf) : t).map(Number);
+        if (isf > 0 && sj.length >= 3 && sj.every(isFinite)) { M.surfs[+t[isf + 1]] = sj; if (sj.length > 4) W("Surface " + t[isf + 1] + " has " + sj.length + " corners — only 3- and 4-sided surfaces are imported"); }
+        else W("Surface line not understood: " + line);
+        continue;
+      }
+      if (mode === "sprop") {
+        var lsp = readList(t, 0, function () { return Object.keys(M.surfs).map(Number); }), tks = t[lsp.i] || "";
+        if (/^TH/.test(tks) && isNum(t[lsp.i + 1])) { var ths = +t[lsp.i + 1] * Lf; lsp.ids.forEach(function (e) { M.sthick[e] = ths; }); }
+        continue;
+      }
+      if (mode === "eprop") {
+        var lr = readList(t, 0, function () { return Object.keys(M.elems).map(Number); }), tk = t[lr.i] || "";
+        if (/^TH/.test(tk) && isNum(t[lr.i + 1])) { var th = +t[lr.i + 1] * Lf; lr.ids.forEach(function (e) { M.thick[e] = th; }); }
+        else W("Element property not understood: " + line);
+        continue;
+      }
+      if (mode === "mprop") {
+        if (/^(AMERICAN|INDIAN|BRITISH|EURO|AUSTRALIAN)$/.test(k0) && t.length === 1) continue;
+        var lp = readList(t, 0, function () { return Object.keys(M.members).map(Number); }), rest = t.slice(lp.i), pr = null;
+        if (/^PRI/.test(rest[0] || "")) {
+          pr = { kind: "pris" }; for (var q2 = 1; q2 + 1 < rest.length; q2 += 2) { var key = rest[q2], v = +rest[q2 + 1]; if (!isFinite(v)) { q2--; continue; } pr[key] = v; }
+          ["YD", "ZD", "YB", "ZB"].forEach(function (kq2) { if (pr[kq2]) pr[kq2] *= Lf; });
+          if (pr.AX) pr.AX *= Lf * Lf; ["IX", "IY", "IZ"].forEach(function (kq3) { if (pr[kq3]) pr[kq3] *= Math.pow(Lf, 4); });
+          if (pr.AY) pr.AY *= Lf * Lf; if (pr.AZ) pr.AZ *= Lf * Lf;
+        } else if (rest[0] === "TABLE" || rest[0] === "TAB") pr = { kind: "table", name: rest.slice(2).join(" ") || rest[1] };
+        else if (/^(ST|D|T|LD|SD|BA|TC|BC|TB)$/.test(rest[0] || "") && rest[1]) pr = { kind: "table", name: rest.slice(1).join(" ") };
+        else if (/^(ISMB|ISMC|ISA|ISHB|ISJB|ISLB|ISWB|ISMC)/.test(rest[0] || "")) pr = { kind: "table", name: rest.join(" ") };
+        if (!pr) { W("Member property not understood: " + line); continue; }
+        lp.ids.forEach(function (m) { M.props[m] = pr; });
+        continue;
+      }
+      if (mode === "defmat") {
+        if (k0 === "ISOTROPIC" || k0 === "ISO") { cur = M.mats[k1] = Object.assign({ name: k1 }, MATDEF[k1] || MATDEF[(/CONC/.test(k1) ? "CONCRETE" : /STEEL/.test(k1) ? "STEEL" : "CONCRETE")]); continue; }
+        if (cur && k0 === "E") cur.E = +k1 * Ff / (Lf * Lf); else if (cur && /^POI/.test(k0)) cur.nu = +k1; else if (cur && /^DEN/.test(k0)) cur.dens = +k1 * Ff / Math.pow(Lf, 3); else if (cur && k0 === "G") cur.G = +k1 * Ff / (Lf * Lf);
+        continue;
+      }
+      if (mode === "const") {
+        var cmd = k0;
+        if (/^MATE/.test(cmd)) { var nmat = k1, lm = readList(t, 2, allMem); lm.ids.forEach(function (m) { M.matOf[m] = nmat; }); if (!M.mats[nmat]) M.mats[nmat] = Object.assign({ name: nmat }, MATDEF[nmat] || MATDEF[/STEEL/.test(nmat) ? "STEEL" : "CONCRETE"]); continue; }
+        if (/^BETA/.test(cmd)) { var ang = +k1, lb = readList(t, 2, allMem); if (k1 === "ANGLE" || k1 === "RANGLE") { ang = k1 === "RANGLE" ? 90 : 0; lb = readList(t, 2, allMem); W("BETA " + k1 + " taken as " + ang + "°"); } lb.ids.forEach(function (m) { M.beta[m] = ang; }); continue; }
+        if (cmd === "E" || /^POI/.test(cmd) || /^DEN/.test(cmd) || cmd === "G" || /^ALPHA|^DAMP|^CDAMP/.test(cmd)) {
+          if (/^ALPHA|^DAMP|^CDAMP/.test(cmd)) continue;
+          var val, lc2, nmv = k1;
+          if (isNum(nmv)) { val = +nmv; lc2 = readList(t, 2, allMem); val = cmd === "E" || cmd === "G" ? val * Ff / (Lf * Lf) : /^DEN/.test(cmd) ? val * Ff / Math.pow(Lf, 3) : val; }
+          else { var md = M.mats[nmv] || MATDEF[nmv] || MATDEF[/STEEL/.test(nmv) ? "STEEL" : "CONCRETE"]; val = cmd === "E" ? md.E : /^POI/.test(cmd) ? md.nu : cmd === "G" ? md.G : md.dens; lc2 = readList(t, 2, allMem); }
+          var tgt = cmd === "E" ? M.E : /^POI/.test(cmd) ? M.nu : /^DEN/.test(cmd) ? M.dens : null;
+          if (tgt) lc2.ids.forEach(function (m) { tgt[m] = val; });
+          continue;
+        }
+        W("CONSTANTS line not used: " + line); continue;
+      }
+      if (mode === "sup") {
+        var ls = readList(t, 0, allJ), kw = t.slice(ls.i), fx = [1, 1, 1, 1, 1, 1], ks = [0, 0, 0, 0, 0, 0], ok = true;
+        if (kw[0] === "PINNED") fx = [1, 1, 1, 0, 0, 0];
+        else if (kw[0] === "FIXED" && kw[1] === "BUT") {
+          var DOF = { FX: 0, FY: 1, FZ: 2, MX: 3, MY: 4, MZ: 5 }, SK = { KFX: 0, KFY: 1, KFZ: 2, KMX: 3, KMY: 4, KMZ: 5 };
+          for (var q4 = 2; q4 < kw.length; q4++) {
+            if (DOF[kw[q4]] !== undefined) fx[DOF[kw[q4]]] = 0;
+            else if (SK[kw[q4]] !== undefined && isNum(kw[q4 + 1])) { var di = SK[kw[q4]]; fx[di] = 0; ks[di] = +kw[q4 + 1] * Ff / (di < 3 ? Lf : 1) ; q4++; }
+          }
+        } else if (kw[0] === "FIXED") fx = [1, 1, 1, 1, 1, 1];
+        else if (kw[0] === "ENFORCED") { fx = [1, 1, 1, 1, 1, 1]; W("ENFORCED supports read as fixed (no settlement loads)"); }
+        else { ok = false; W("Support type not supported: " + line); }
+        if (ok) ls.ids.forEach(function (j) { M.sup[j] = fx.slice(); if (ks.some(Boolean)) M.spr[j] = ks.slice(); });
+        continue;
+      }
+      if (mode === "rel") {
+        var lrl = readList(t, 0, allMem), end = t[lrl.i], dofs = t.slice(lrl.i + 1), map = { FX: 0, FY: 1, FZ: 2, MX: 3, MY: 4, MZ: 5 };
+        lrl.ids.forEach(function (m) {
+          var r0 = M.rel[m] = M.rel[m] || [];
+          dofs.forEach(function (d) { if (map[d] === undefined) return; if (end === "START" || end === "BOTH") r0.push(map[d]); if (end === "END" || end === "BOTH") r0.push(6 + map[d]); });
+        });
+        if (dofs.some(function (d) { return /^K|^\d/.test(d); })) W("Partial / spring member releases read as full releases");
+        continue;
+      }
+      if (mode === "truss") { readList(t, 0, allMem).ids.forEach(function (m) { M.truss[m] = 1; }); continue; }
+      if (mode === "offset") { W("MEMBER OFFSET ignored — members run between joint centres"); continue; }
+      if (mode === "d93") {
+        if (k0 === "SELFWEIGHT") { d93.self = isNum(k1) ? +k1 : 1; continue; }
+        if (k0 === "JOINT" && /^WEIG/.test(k1)) { d93sub = "joint"; continue; }
+        if (k0 === "MEMBER" && /^WEIG/.test(k1)) { d93sub = "member"; continue; }
+        if (k0 === "ELEMENT" && /^WEIG/.test(k1)) { d93sub = "elem"; continue; }
+        if (k0 === "FLOOR" && /^WEIG/.test(k1)) { d93sub = "floor"; continue; }
+        if (/^(ZONE|RF|I|SS|ST|DM|PX|PZ|PY|DT|GL|SA|IMPERFECTION)$/.test(k0)) { readKV(t, 0); continue; }
+        if (d93sub === "joint") { var lj = readList(t, 0, allJ), iw = t.indexOf("WEIGHT"); if (iw > 0) d93.joint.push({ ids: lj.ids, w: +t[iw + 1] * Ff }); continue; }
+        if (d93sub === "member") { var lm2 = readList(t, 0, allMem), iu = t.indexOf("UNI"); if (iu > 0) d93.member.push({ ids: lm2.ids, w: +t[iu + 1] * Ff / Lf, d1: t[iu + 2] !== undefined ? +t[iu + 2] * Lf : null, d2: t[iu + 3] !== undefined ? +t[iu + 3] * Lf : null }); else W("MEMBER WEIGHT line not understood: " + line); continue; }
+        if (d93sub === "elem") { var le = readList(t, 0, allMem), ip = t.indexOf("PRESSURE") >= 0 ? t.indexOf("PRESSURE") : t.indexOf("PR"); if (ip > 0) d93.elem.push({ ids: le.ids, p: +t[ip + 1] * Ff / (Lf * Lf) }); continue; }
+        if (d93sub === "floor") { var fw = floorSpec(t); if (fw) d93.floor.push(fw); continue; }
+        W("DEFINE 1893 LOAD line not used: " + line); continue;
+      }
+      if (mode === "dwind") {
+        if (k0 === "TYPE") { curWind = M.wind[+k1] = { type: +k1, p: [], h: [] }; continue; }
+        if (k0 === "INT" || k0 === "INTENSITY") {
+          if (!curWind) curWind = M.wind[1] = { type: 1, p: [], h: [] };
+          var ih = t.indexOf("HEIG") >= 0 ? t.indexOf("HEIG") : t.indexOf("HEIGHT");
+          var ps = t.slice(1, ih > 0 ? ih : t.length).map(Number).filter(isFinite), hs = ih > 0 ? t.slice(ih + 1).map(Number).filter(isFinite) : [];
+          curWind.p = curWind.p.concat(ps.map(function (v) { return v * Ff / (Lf * Lf); })); curWind.h = curWind.h.concat(hs.map(function (v) { return v * Lf; })); continue;
+        }
+        if (k0 === "EXP" || k0 === "EXPOSURE") { W("Wind EXPOSURE factors ignored (taken as 1.0)"); continue; }
+        W("DEFINE WIND LOAD line not used: " + line); continue;
+      }
+      if (mode === "load" && cur) {
+        if (k0 === "SELFWEIGHT" || k0 === "SELF") {
+          var dir = /^[XYZ]$/.test(k1) ? k1 : "Y", fac = isNum(t[2]) ? +t[2] : isNum(k1) ? +k1 : -1, il = t.indexOf("LIST");
+          cur.self.push({ dir: dir, f: fac, ids: il > 0 ? readList(t, il + 1, allMem).ids : null }); continue;
+        }
+        if (k0 === "JOINT" && k1 === "LOAD") { cur.sub = "joint"; continue; }
+        if (k0 === "MEMBER" && k1 === "LOAD") { cur.sub = "member"; continue; }
+        if (k0 === "ELEMENT" && (k1 === "LOAD" || k1 === "PRESSURE")) { cur.sub = "elem"; continue; }
+        if (k0 === "FLOOR" && k1 === "LOAD") { cur.sub = "floor"; continue; }
+        if (k0 === "REPEAT" && k1 === "LOAD") { cur.sub = "repeat"; continue; }
+        if (k0 === "1893" && k1 === "LOAD") { cur.eq.push({ dir: t[2], f: isNum(t[3]) ? +t[3] : 1, acc: t.indexOf("ACC") > 0 }); if (t.indexOf("ACC") > 0) W("1893 LOAD ACC (accidental torsion) not applied"); continue; }
+        if (k0 === "WIND" && k1 === "LOAD") { var it2 = t.indexOf("TYPE"); cur.wind.push({ dir: t[2], f: isNum(t[3]) ? +t[3] : 1, type: it2 > 0 ? +t[it2 + 1] : 1, raw: line }); if (/XR|YR|ZR|LIST/.test(U)) W("WIND LOAD ranges / lists ignored — the whole windward face is loaded"); continue; }
+        if (/^(TEMP|TEMPERATURE|STRAIN|SUPPORT|SPECTRUM|TIME|AREA|ONEWAY|SNOW|CHLOAD|PRESTRESS|POSTSTRESS|UBC|IBC|AISC)$/.test(k0) || (k0 === "SUPPORT" && /^DISP/.test(k1))) { cur.other.push(k0); W("Load '" + k0 + "' in load case " + cur.id + " is not supported and was ignored"); cur.sub = "skip"; continue; }
+        if (cur.sub === "joint") {
+          var lj2 = readList(t, 0, allJ), f6 = [0, 0, 0, 0, 0, 0], D6 = { FX: 0, FY: 1, FZ: 2, MX: 3, MY: 4, MZ: 5 };
+          for (var q5 = lj2.i; q5 + 1 < t.length; q5 += 2) if (D6[t[q5]] !== undefined) f6[D6[t[q5]]] += +t[q5 + 1] * Ff * (D6[t[q5]] >= 3 ? Lf : 1);
+          cur.joint.push({ ids: lj2.ids, f: f6 }); continue;
+        }
+        if (cur.sub === "member") {
+          var lmm = readList(t, 0, allMem), ty = t[lmm.i], dd = t[lmm.i + 1], vals = t.slice(lmm.i + 2).filter(isNum).map(Number);
+          if (!ty) { W("Member load not understood: " + line); continue; }
+          if (/^(UMOM|CMOM)$/.test(ty)) { W("Member moment loads (" + ty + ") ignored in load case " + cur.id); continue; }
+          if (!/^(UNI|CON|TRAP|LIN)$/.test(ty)) { W("Member load type " + ty + " ignored in load case " + cur.id); continue; }
+          cur.member.push({ ids: lmm.ids, ty: ty, dir: dd, v: vals, Ff: Ff, Lf: Lf }); continue;
+        }
+        if (cur.sub === "elem") {
+          var lel = readList(t, 0, function () { return Object.keys(M.elems).map(Number); }), ipr = lel.i;
+          if (t[ipr] === "PR" || t[ipr] === "PRESSURE") {
+            var d3 = t[ipr + 1], pv;
+            if (/^G[XYZ]$/.test(d3)) pv = +t[ipr + 2]; else if (/^(LOCALX|LOCALY|LOCALZ|LOCAL)$/.test(d3)) { pv = +t[ipr + 2]; d3 = "LOCAL"; } else { pv = +d3; d3 = "LOCAL"; }
+            if (t.slice(ipr).filter(isNum).length > 1) W("Partial element pressures (X1 Y1 X2 Y2) read as full-element pressures");
+            cur.elem.push({ ids: lel.ids, dir: d3, p: pv * Ff / (Lf * Lf) });
+          } else W("Element load not understood: " + line);
+          continue;
+        }
+        if (cur.sub === "floor") { var fl = floorSpec(t); if (fl) cur.floor.push(fl); else W("Floor load not understood: " + line); continue; }
+        if (cur.sub === "repeat") { for (var q6 = 0; q6 + 1 < t.length; q6 += 2) if (isNum(t[q6]) && isNum(t[q6 + 1])) cur.repeat.push([+t[q6], +t[q6 + 1]]); continue; }
+        W("Line in load case " + cur.id + " not used: " + line); continue;
+      }
+      if (mode === "comb" && cur) { for (var q7 = 0; q7 + 1 < t.length; q7 += 2) if (isNum(t[q7]) && isNum(t[q7 + 1])) cur.f[+t[q7]] = (cur.f[+t[q7]] || 0) + +t[q7 + 1]; continue; }
+      if (mode === "cdesign") {
+        var str = Ff / (Lf * Lf) / 1000;   /* → N/mm² */
+        if (k0 === "FC" && isNum(k1)) M.design.fc = Math.round(+k1 * str * 10) / 10;
+        else if (k0 === "FYMAIN" && isNum(k1)) M.design.fy = Math.round(+k1 * str);
+        else if (k0 === "MINSEC" && isNum(k1)) M.design.minsec = +k1 * Lf * 1000;
+        else if (/^(CLEAR|CLB|CLT|CLS)$/.test(k0) && isNum(k1)) M.design.cover[k0] = +k1 * Lf * 1000;
+        else if (k0 === "CODE") M.design.code = k1;
+        else if (k0 === "DESIGN") M.design.list = M.loadList;
+        continue;
+      }
+      if (mode === "skip") continue;
+      M.unknown[k0] = (M.unknown[k0] || 0) + 1;
+    }
+    Object.keys(M.unknown).forEach(function (k) { if (!/^(DEFINE|END|START|LOAD|STEEL|CONCRETE|TRACK|DESIGN|CHECK|SELECT|FYLD|FU|RATIO|SAVE|BEAM|NSF|LZ|LY|KZ|KY|UNL|UNB|CB|MAIN|DMAX|DMIN|TRACK)$/.test(k)) W("Command '" + k + "' not used (" + M.unknown[k] + "×)"); });
+    if (!Object.keys(M.joints).length) throw new Error("No JOINT COORDINATES found — is this a STAAD.Pro input file (.std)?");
+    if (!Object.keys(M.members).length && !Object.keys(M.elems).length) throw new Error("No members or plates found in the STAAD file");
+    return M;
+    function readKV(tt, from) { for (var q8 = from; q8 + 1 < tt.length; q8++) { var kk2 = tt[q8], vv = +tt[q8 + 1]; if (!isFinite(vv)) continue; var key2 = { ZONE: "zone", RF: "rf", I: "I", SS: "ss", ST: "st", DM: "dm", PX: "px", PZ: "pz", PY: "py", DT: "dt" }[kk2]; if (key2) { d93[key2] = vv; q8++; } } }
+    function floorSpec(tt) {
+      var o = { y: null, x: null, z: null, p: null, dir: "GY" };
+      for (var q9 = 0; q9 < tt.length; q9++) {
+        var kw2 = tt[q9];
+        if (/^(YRANGE|XRANGE|ZRANGE|YR|XR|ZR)$/.test(kw2)) { o[kw2.charAt(0).toLowerCase()] = [+tt[q9 + 1] * Lf, +tt[q9 + 2] * Lf]; q9 += 2; }
+        else if (kw2 === "FLOAD" || kw2 === "FLO") { o.p = +tt[q9 + 1] * Ff / (Lf * Lf); q9++; }
+        else if (/^G[XYZ]$/.test(kw2)) o.dir = kw2;
+        else if (kw2 === "ONE" || kw2 === "ONEWAY") { o.one = true; }
+        else if (kw2 === "GROUP" || kw2 === "INCLINED") { o.bad = true; }
+      }
+      if (o.bad) W("FLOOR LOAD by GROUP / INCLINED not supported — give Y/X/Z ranges");
+      if (o.p === null || isNaN(o.p)) return null;
+      return o;
+    }
+  };
+
+  /* ---------- coordinates & directions (STAAD → app) ---------- */
+  S.tr = function (M, v) { return M.zup ? [v[0], v[1], v[2]] : [v[0], -v[2], v[1]]; };
+  function up(M) { return M.zup ? [0, 0, 1] : [0, 1, 0]; }
+  function gdir(M, d) { var v = { X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1] }[d.replace(/^G|^P/, "")]; return v ? S.tr(M, v) : null; }
+  function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+  function crs(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+  function unit(a) { var l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+  function dotp(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+  /* STAAD member local axes in STAAD coordinates (beta = 0, then rotated by beta) */
+  S.localAxes = function (M, m) {
+    var j = M.members[m], A = M.joints[j[0]], B = M.joints[j[1]], x = unit(sub(B, A)), U = up(M), z, y;
+    if (Math.abs(dotp(x, U)) > 0.9999) z = M.zup ? [0, -1, 0] : [0, 0, 1];
+    else z = unit(crs(x, U));
+    y = crs(z, x);
+    var b = (M.beta[m] || 0) * Math.PI / 180;
+    if (b) { var c = Math.cos(b), s = Math.sin(b), y2 = [0, 1, 2].map(function (i) { return c * y[i] + s * z[i]; }), z2 = [0, 1, 2].map(function (i) { return -s * y[i] + c * z[i]; }); y = y2; z = z2; }
+    return { x: x, y: y, z: z };
+  };
+
+  /* ---------- section for a member (called by MD.make with the design parameters) ---------- */
+  S.section = function (q, p, role) {
+    var s;
+    if (q.kind === "rect") {
+      /* STAAD models are uncracked unless the file says otherwise — cracked factors only when asked for (stdCrack) */
+      s = Object.assign({}, MD.secRCC(q.b, q.D, Object.assign({}, p, { crack: false }), role));
+      if (q.mat !== "steel") {
+        var cr = p.stdCrack ? (role === "column" ? 0.7 : 0.35) : 1;
+        s.Iz = cr * q.b * Math.pow(q.D, 3) / 12e12; s.Iy = cr * q.D * Math.pow(q.b, 3) / 12e12;
+        s.J = (q.J || s.J) * (p.stdCrack ? 0.1 : 1);
+      } else s.kind = "gen";
+    } else if (q.kind === "table") {
+      var nm = q.name.replace(/\s+/g, "");
+      s = /^ISA/.test(nm) ? MD.secISA(nm.replace(/^ISA/, "ISA "), p) || MD.secISA(nm, p) : MD.secISMB(nm, p) || MD.secISMB(nm.replace(/^ISMB/, "ISMB "), p);
+      if (!s) { s = { kind: "gen", name: q.name, A: 0.01, Iz: 1e-4, Iy: 1e-5, J: 1e-6, E: 2e8, G: 7.7e7, gamma: 78.5, missing: true }; }
+      else s = Object.assign({}, s);
+    } else {
+      s = { kind: "gen", name: q.name || "PRIS", A: q.A, Iz: q.Iz, Iy: q.Iy, J: q.J || 1e-6, E: q.E || 2.17185e7, G: (q.E || 2.17185e7) / 2.34, gamma: q.dens || 23.5616 };
+    }
+    if (q.E) { s.E = q.E; s.G = q.E / (2 * (1 + (q.nu !== undefined ? q.nu : 0.17))); }
+    if (q.dens !== undefined) s.gamma = q.dens;
+    if (p.stdShear !== false) {
+      if (q.Avy) { s.Avy = q.Avy; s.Avz = q.Avz; }
+      else if (q.kind === "rect") { s.Avy = s.Avz = q.b * q.D / 1e6; }
+      else if (s.kind === "steel" && s.row && s.shape === "I") { s.Avy = s.row.D * s.row.tw / 1e6; s.Avz = 2 * s.row.bf * s.row.tf * 5 / 6 / 1e6; }
+    }
+    s.std = true;
+    return s;
+  };
+
+  /* ---------- model geometry ---------- */
+  S.toGeo = function (M, opt) {
+    opt = opt || {};
+    var nodes = [], idx = {}, grid = {}, tol = 1e-4, warn = M.warn.slice();
+    function key(a) { return Math.round(a[0] / tol) + "," + Math.round(a[1] / tol) + "," + Math.round(a[2] / tol); }
+    function node(a) { var k = key(a); if (grid[k] !== undefined) return grid[k]; nodes.push({ x: a[0], y: a[1], z: a[2] }); return (grid[k] = nodes.length - 1); }
+    var jids = Object.keys(M.joints).map(Number).sort(function (a, b) { return a - b; });
+    jids.forEach(function (j) { var a = S.tr(M, M.joints[j]); idx[j] = nodes.length; nodes.push({ x: a[0], y: a[1], z: a[2], sid: j }); var k = key(a); if (grid[k] === undefined) grid[k] = idx[j]; else warn.push("Joints " + nodes[grid[k]].sid + " and " + j + " coincide — kept separate as in STAAD"); });
+    var U = up(M), mids = Object.keys(M.members).map(Number).sort(function (a, b) { return a - b; }), eids = Object.keys(M.elems).map(Number).sort(function (a, b) { return a - b; });
+    var bad = [];
+    /* plates: as in the file, or subdivided to the mesh size */
+    var shells = [], emap = {}, meshN = opt.mesh > 0 ? opt.mesh : 0, created = {};
+    eids.forEach(function (e) {
+      var js = M.elems[e].filter(function (v, i, a) { return v && a.indexOf(v) === i; });
+      if (js.some(function (j) { return idx[j] === undefined; })) { bad.push("Plate " + e + " uses an undefined joint"); return; }
+      var P = js.map(function (j) { return S.tr(M, M.joints[j]); }), n3 = crs(sub(P[1], P[0]), sub(P[2], P[0])), horiz = Math.abs(n3[2]) > 0.7 * Math.hypot(n3[0], n3[1], n3[2]);
+      var t = M.thick[e]; if (!t) { warn.push("Plate " + e + " has no thickness — 150 mm assumed"); t = 0.15; }
+      var mat = matOf(e, "CONCRETE"); emap[e] = [];
+      var quads = [];
+      if (P.length === 3) { var c = avg(P), m01 = avg([P[0], P[1]]), m12 = avg([P[1], P[2]]), m20 = avg([P[2], P[0]]); quads.push([P[0], m01, c, m20], [P[1], m12, c, m01], [P[2], m20, c, m12]); }
+      else quads.push(P);
+      if (P.length === 3 && !meshN) { var ids3 = js.map(function (j) { return idx[j]; }); shells.push({ n: [ids3[0], ids3[1], ids3[2], ids3[2]], kind: horiz ? "slab" : "wall", layer: "STAAD plate " + e, t0: t, mat0: mat, sid: e, tri: true }); emap[e].push(shells.length - 1); return; }
+      quads.forEach(function (q) {
+        var na = meshN ? Math.max(1, Math.ceil(Math.max(dist(q[0], q[1]), dist(q[3], q[2])) / meshN - 1e-9)) : 1, nb = meshN ? Math.max(1, Math.ceil(Math.max(dist(q[1], q[2]), dist(q[0], q[3])) / meshN - 1e-9)) : 1, id = [];
+        for (var jj = 0; jj <= nb; jj++) { id.push([]); for (var ii = 0; ii <= na; ii++) { var pt = bil(q, ii / na, jj / nb), k = key(pt), ex = grid[k]; var nid = ex !== undefined ? ex : node(pt); if (ex === undefined) created[nid] = 1; id[jj].push(nid); } }
+        for (jj = 0; jj < nb; jj++) for (ii = 0; ii < na; ii++) shells.push({ n: [id[jj][ii], id[jj][ii + 1], id[jj + 1][ii + 1], id[jj + 1][ii]], kind: horiz ? "slab" : "wall", layer: "STAAD plate " + e, t0: t, mat0: mat, sid: e }), emap[e].push(shells.length - 1);
+      });
+    });
+    /* STAAD surfaces: meshed (STAAD meshes them internally) at the plate mesh size, 1 m if none */
+    var smap = {}, nsurf = 0;
+    if (opt.surfaces !== false) Object.keys(M.surfs).map(Number).sort(function (a, b) { return a - b; }).forEach(function (sf) {
+      var js = M.surfs[sf]; if (js.length > 4 || js.some(function (j) { return idx[j] === undefined; })) return;
+      var P = js.map(function (j) { return S.tr(M, M.joints[j]); }), n3 = crs(sub(P[1], P[0]), sub(P[2], P[0])), horiz = Math.abs(n3[2]) > 0.7 * Math.hypot(n3[0], n3[1], n3[2]);
+      var t = M.sthick[sf] || 0.15, mat = matOf(-1, "CONCRETE"), ms = meshN || 1, quads = [];
+      if (P.length === 3) { var c = avg(P), m01 = avg([P[0], P[1]]), m12 = avg([P[1], P[2]]), m20 = avg([P[2], P[0]]); quads.push([P[0], m01, c, m20], [P[1], m12, c, m01], [P[2], m20, c, m12]); } else quads.push(P);
+      smap[sf] = []; nsurf++;
+      quads.forEach(function (q) {
+        var na = Math.max(1, Math.ceil(Math.max(dist(q[0], q[1]), dist(q[3], q[2])) / ms - 1e-9)), nb = Math.max(1, Math.ceil(Math.max(dist(q[1], q[2]), dist(q[0], q[3])) / ms - 1e-9)), id = [];
+        for (var jj = 0; jj <= nb; jj++) { id.push([]); for (var ii = 0; ii <= na; ii++) { var pt = bil(q, ii / na, jj / nb), k = key(pt), ex = grid[k]; var nid = ex !== undefined ? ex : node(pt); if (ex === undefined) created[nid] = 1; id[jj].push(nid); } }
+        for (jj = 0; jj < nb; jj++) for (ii = 0; ii < na; ii++) { shells.push({ n: [id[jj][ii], id[jj][ii + 1], id[jj + 1][ii + 1], id[jj + 1][ii]], kind: horiz ? "slab" : "wall", layer: "STAAD surface " + sf, t0: t, mat0: mat, sid: "S" + sf }); smap[sf].push(shells.length - 1); }
+      });
+    });
+    if (nsurf) warn.push(nsurf + " STAAD surface(s) meshed at " + (meshN || 1) + " m" + (opt.surfaces === false ? "" : ""));
+    /* members, split at mesh nodes lying on them */
+    var frames = [], fmap = {}, newIds = Object.keys(created).map(Number);
+    mids.forEach(function (m) {
+      var j = M.members[m]; if (idx[j[0]] === undefined || idx[j[1]] === undefined) { bad.push("Member " + m + " uses an undefined joint"); return; }
+      var a = idx[j[0]], b = idx[j[1]], A = nodes[a], B = nodes[b], L = Math.hypot(B.x - A.x, B.y - A.y, B.z - A.z);
+      if (L < 1e-9) { bad.push("Member " + m + " has zero length"); return; }
+      var on = [];
+      newIds.forEach(function (i) { var N = nodes[i], tt = ((N.x - A.x) * (B.x - A.x) + (N.y - A.y) * (B.y - A.y) + (N.z - A.z) * (B.z - A.z)) / (L * L); if (tt <= 1e-6 || tt >= 1 - 1e-6) return; if (Math.hypot(A.x + tt * (B.x - A.x) - N.x, A.y + tt * (B.y - A.y) - N.y, A.z + tt * (B.z - A.z) - N.z) <= 1e-3) on.push([tt, i]); });
+      on.sort(function (x, y) { return x[0] - y[0]; });
+      var ch = [[0, a]].concat(on).concat([[1, b]]), dz = Math.abs(B.z - A.z), dh = Math.hypot(B.x - A.x, B.y - A.y);
+      var role = M.truss[m] ? "brace" : dh < 1e-6 * (dz + 1) ? "column" : "beam";
+      var pr = M.props[m], q = secSpec(m, pr, role);
+      fmap[m] = [];
+      for (var i = 0; i + 1 < ch.length; i++) {
+        var rel = (M.rel[m] || []).filter(function (r) { return (r < 6 && i === 0) || (r >= 6 && i === ch.length - 2); });
+        frames.push({ n1: ch[i][1], n2: ch[i + 1][1], role: role, layer: "STAAD member " + m, std: q, rel: rel.length ? rel : null, sid: m, t0: ch[i][0] * L, t1: ch[i + 1][0] * L, part: i, parts: ch.length - 1 });
+        fmap[m].push(frames.length - 1);
+      }
+    });
+    if (bad.length) throw new Error("The STAAD model has errors:\n• " + bad.slice(0, 8).join("\n• "));
+    var sup = {}, spr = {};
+    Object.keys(M.sup).forEach(function (j) {
+      if (idx[j] === undefined) { warn.push("Support at undefined joint " + j + " ignored"); return; }
+      var r = M.sup[j], k = M.spr[j], perm = M.zup ? [0, 1, 2] : [0, 2, 1], o = [r[perm[0]], r[perm[1]], r[perm[2]], r[3 + perm[0]], r[3 + perm[1]], r[3 + perm[2]]];
+      sup[idx[j]] = o; if (k) spr[idx[j]] = [k[perm[0]], k[perm[1]], k[perm[2]], k[3 + perm[0]], k[3 + perm[1]], k[3 + perm[2]]];
+    });
+    if (!Object.keys(sup).length) warn.push("No SUPPORTS in the STAAD file — the model cannot be analysed until supports are added (Support rules)");
+    var nPl = shells.length, nTri = shells.filter(function (s) { return s.tri; }).length;
+    if (nTri) warn.push(nTri + " triangular plate(s) — set a plate mesh size so they are split into quadrilaterals");
+    /* plain data only (sent to background workers) */
+    var std = { M: M, idx: idx, fmap: fmap, emap: emap, smap: smap, opt: { mesh: meshN, surfaces: opt.surfaces !== false } };
+    return { nodes: nodes, frames: frames, shells: shells, sup: sup, spr: Object.keys(spr).length ? spr : null, warn: warn, twoD: false, std: std, stdName: opt.name || "" };
+
+    function matOf(id, def) {
+      var nm = id >= 0 ? M.matOf[id] : Object.keys(M.mats)[0], md = nm ? (M.mats[nm] || MATDEF[nm]) : null, base = md || MATDEF[def];
+      return { E: M.E[id] !== undefined ? M.E[id] : base.E, nu: M.nu[id] !== undefined ? M.nu[id] : base.nu, gamma: M.dens[id] !== undefined ? M.dens[id] : base.dens, name: nm || (md ? def : "") };
+    }
+    function secSpec(m, pr, role) {
+      var mt = matOf(m, pr && pr.kind === "table" ? "STEEL" : "CONCRETE"), steel = /STEEL/.test(M.matOf[m] || "") || (pr && pr.kind === "table");
+      var q = { E: mt.E, nu: mt.nu, dens: mt.gamma, mat: steel ? "steel" : "concrete" };
+      if (!pr) { warn.push("Member " + m + " has no property — 300 × 450 assumed"); return Object.assign(q, { kind: "rect", b: 300, D: 450 }); }
+      var bt = Math.round(((M.beta[m] || 0) % 360 + 360) % 360);
+      if (bt % 90) warn.push("Member " + m + ": BETA " + bt + "° taken as the nearest multiple of 90°");
+      var sw = Math.round(bt / 90) % 2 === 1;
+      if (pr.kind === "pris" && pr.YD && pr.ZD && !pr.YB && !pr.ZB) {
+        var D = pr.YD * 1000, b = pr.ZD * 1000; if (sw) { var t0 = D; D = b; b = t0; }
+        return Object.assign(q, { kind: "rect", b: Math.round(b * 10) / 10, D: Math.round(D * 10) / 10, J: pr.IX || null, Avy: pr.AY || null, Avz: pr.AZ || null });
+      }
+      if (pr.kind === "pris" && pr.YD && !pr.ZD) { var dd = pr.YD, A = Math.PI * dd * dd / 4, I = Math.PI * Math.pow(dd, 4) / 64; warn.push("Member " + m + ": circular section Ø" + Math.round(dd * 1000) + " analysed but not designed"); return Object.assign(q, { kind: "gen", name: "Ø" + Math.round(dd * 1000), A: A, Iz: I, Iy: I, J: 2 * I }); }
+      if (pr.kind === "pris" && pr.AX) { var Iz = sw ? pr.IY : pr.IZ, Iy = sw ? pr.IZ : pr.IY; return Object.assign(q, { kind: "gen", name: "PRIS AX", A: pr.AX, Iz: Iz || 1e-4, Iy: Iy || 1e-4, J: pr.IX || 1e-6, Avy: pr.AY || null, Avz: pr.AZ || null }); }
+      if (pr.kind === "pris") { warn.push("Member " + m + ": tapered / T / trapezoidal PRIS section not supported — 300 × 450 assumed"); return Object.assign(q, { kind: "rect", b: 300, D: 450 }); }
+      if (pr.kind === "table") {
+        if (sw) warn.push("Member " + m + ": rotated steel section (BETA 90) analysed about the table axes");
+        if (!MD.secISMB(pr.name.replace(/\s+/g, ""), { fys: 250 }) && !/^ISA/.test(pr.name.replace(/\s+/g, ""))) warn.push("Member " + m + ": steel section '" + pr.name + "' is not in the app's tables (ISMB, ISA) — not analysed correctly; assign it in Section overrides");
+        return Object.assign(q, { kind: "table", name: pr.name, E: mt.E || 2.05e8 });
+      }
+      return Object.assign(q, { kind: "rect", b: 300, D: 450 });
+    }
+    function avg(a) { var o = [0, 0, 0]; a.forEach(function (p) { o[0] += p[0] / a.length; o[1] += p[1] / a.length; o[2] += p[2] / a.length; }); return o; }
+    function dist(a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); }
+    function bil(q, s, t) { var w = [(1 - s) * (1 - t), s * (1 - t), s * t, (1 - s) * t], o = [0, 0, 0]; q.forEach(function (p, i) { o[0] += w[i] * p[0]; o[1] += w[i] * p[1]; o[2] += w[i] * p[2]; }); return o; }
+  };
+
+  /* ---------- loads ---------- */
+  /* floor panels: rectangular grid cells at a level fully bounded by members (STAAD coordinates) */
+  function panels(M, spec) {
+    var vi = M.zup ? 2 : 1, hi = M.zup ? [0, 1] : [0, 2], out = [];
+    var lv = {}, mems = [];
+    Object.keys(M.members).forEach(function (m) {
+      var j = M.members[m], A = M.joints[j[0]], B = M.joints[j[1]]; if (!A || !B) return;
+      if (Math.abs(A[vi] - B[vi]) > 1e-3) return;
+      var y = A[vi], vr = M.zup ? spec.z : spec.y; if (vr && (y < Math.min(vr[0], vr[1]) - 1e-6 || y > Math.max(vr[0], vr[1]) + 1e-6)) return;
+      var ax = Math.abs(A[hi[0]] - B[hi[0]]) < 1e-4 ? 1 : Math.abs(A[hi[1]] - B[hi[1]]) < 1e-4 ? 0 : -1; if (ax < 0) return;
+      var yk = y.toFixed(3); (lv[yk] = lv[yk] || []).push({ m: +m, ax: ax, c: A[hi[1 - ax]], a: Math.min(A[hi[ax]], B[hi[ax]]), b: Math.max(A[hi[ax]], B[hi[ax]]), s: A[hi[ax]] <= B[hi[ax]] ? A[hi[ax]] : B[hi[ax]], rev: A[hi[ax]] > B[hi[ax]], L: Math.abs(B[hi[ax]] - A[hi[ax]]) });
+    });
+    Object.keys(lv).forEach(function (yk) {
+      var ms = lv[yk], xs = [], zs = [];
+      function addU(a, v) { if (!a.some(function (w) { return Math.abs(w - v) < 1e-3; })) a.push(v); }
+      ms.forEach(function (q) { if (q.ax === 0) { addU(xs, q.a); addU(xs, q.b); addU(zs, q.c); } else { addU(zs, q.a); addU(zs, q.b); addU(xs, q.c); } });
+      xs.sort(function (a, b) { return a - b; }); zs.sort(function (a, b) { return a - b; });
+      function cover(ax, c, a, b) { return ms.filter(function (q) { return q.ax === ax && Math.abs(q.c - c) < 1e-3 && q.a <= a + 1e-3 && q.b >= b - 1e-3; })[0]; }
+      for (var i = 0; i + 1 < xs.length; i++) for (var k = 0; k + 1 < zs.length; k++) {
+        var x0 = xs[i], x1 = xs[i + 1], z0 = zs[k], z1 = zs[k + 1], cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+        var h2 = M.zup ? spec.y : spec.z;
+        if (spec.x && (cx < Math.min(spec.x[0], spec.x[1]) || cx > Math.max(spec.x[0], spec.x[1]))) continue;
+        if (h2 && (cz < Math.min(h2[0], h2[1]) || cz > Math.max(h2[0], h2[1]))) continue;
+        var e1 = cover(0, z0, x0, x1), e2 = cover(0, z1, x0, x1), e3 = cover(1, x0, z0, z1), e4 = cover(1, x1, z0, z1);
+        if (!e1 || !e2 || !e3 || !e4) continue;
+        out.push({ y: +yk, x0: x0, x1: x1, z0: z0, z1: z1, edges: [[e1, x0, x1], [e2, x0, x1], [e3, z0, z1], [e4, z0, z1]] });
+      }
+    });
+    return out;
+  }
+  /* distribute a floor pressure p (kN/m², acting along vector dir) to the panel edges (45° lines; ONE-way to the long edges) */
+  function floorPieces(M, pnl, p, one) {
+    var dx = pnl.x1 - pnl.x0, dz = pnl.z1 - pnl.z0, lx = Math.min(dx, dz), out = [];
+    pnl.edges.forEach(function (ed, i) {
+      var q = ed[0], a = ed[1], b = ed[2], len = b - a, alongX = i < 2, edgeShort = Math.abs(len - lx) < 1e-6 && (alongX ? dx <= dz : dz <= dx);
+      var h = lx / 2, pts;
+      if (one) { if ((alongX ? dx : dz) >= Math.max(dx, dz) - 1e-6 && dx !== dz) pts = [[0, p * (alongX ? dz : dx) / 2], [len, p * (alongX ? dz : dx) / 2]]; else return; }
+      else if (Math.abs(dx - dz) < 1e-6 || edgeShort) pts = [[0, 0], [len / 2, p * Math.min(len / 2, h)], [len, 0]];
+      else pts = [[0, 0], [h, p * h], [len - h, p * h], [len, 0]];
+      /* positions measured along the member from its start joint */
+      for (var s = 0; s + 1 < pts.length; s++) {
+        var u0 = a + pts[s][0] - q.s, u1 = a + pts[s + 1][0] - q.s, w0 = pts[s][1], w1 = pts[s + 1][1];
+        if (q.rev) { var L = q.L; var t0 = L - u1, t1 = L - u0; out.push({ m: q.m, a: t0, b: t1, w1: w1, w2: w0 }); }
+        else out.push({ m: q.m, a: u0, b: u1, w1: w0, w2: w1 });
+      }
+    });
+    return out;
+  }
+  /* split a load piece on member m (positions from its start, m) onto the app frames of that member */
+  function onParts(geo, m, piece, push) {
+    (geo.std.fmap[m] || []).forEach(function (k) {
+      var f = geo.frames[k], a0 = f.t0, b0 = f.t1;
+      if (piece.k === "p") { if (piece.a >= a0 - 1e-9 && (piece.a < b0 - 1e-9 || (b0 >= piece.L - 1e-9 && piece.a <= b0 + 1e-9))) push(k, { k: "p", P: piece.P, a: piece.a - a0 }); return; }
+      var a = Math.max(a0, piece.a), b = Math.min(b0, piece.b); if (b - a <= 1e-9) return;
+      function wt(x) { return piece.w1.map(function (v, d) { return v + (piece.w2[d] - v) * (x - piece.a) / Math.max(piece.b - piece.a, 1e-12); }); }
+      if (piece.uni && a <= a0 + 1e-9 && b >= b0 - 1e-9) push(k, { k: "u", w: piece.w1 });
+      else push(k, { k: "d", w1: wt(a), w2: wt(b), a: a - a0, b: b - a0 });
+    });
+  }
+  S.memLen = function (M, m) { var j = M.members[m], A = M.joints[j[0]], B = M.joints[j[1]]; return Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2]); };
+
+  /* load cases of the STAAD file → app cases {name: {nodal, frameUDL, frameLoads, shellP}} */
+  S.cases = function (m, geo, p) {
+    var M = geo.std.M, idx = geo.std.idx, cases = {}, names = {}, notes = [], eqInfo = {}, windInfo = {}, titles = {};
+    var built = {};
+    function lcOf(L) {
+      if (built[L.id]) return built[L.id];
+      var lc = { nodal: [], frameUDL: [], frameLoads: [], shellP: [] };
+      function pushF(k, o) { if (o.k === "u") lc.frameUDL.push({ e: k, w: o.w }); else if (o.k === "p") lc.frameLoads.push({ e: k, k: "p", P: o.P, a: o.a }); else lc.frameLoads.push({ e: k, k: "d", w1: o.w1, w2: o.w2, a: o.a, b: o.b }); }
+      L.self.forEach(function (sw) {
+        var v = gdir(M, sw.dir).map(function (x) { return x * sw.f; }), list = sw.ids ? sw.ids : null;
+        m.frames.forEach(function (e, k) { var f = geo.frames[k]; if (list && list.indexOf(f.sid) < 0) return; var g = e.sec.gamma * e.sec.A; lc.frameUDL.push({ e: k, w: v.map(function (x) { return x * g; }) }); });
+        m.shells.forEach(function (s, k) { var f = geo.shells[k]; if (list && list.indexOf(f.sid) < 0) return; var g = s.mat.gamma * s.t; lc.shellP.push({ e: k, q: v.map(function (x) { return x * g; }) }); });
+      });
+      L.joint.forEach(function (jl) {
+        var f = S.tr(M, jl.f.slice(0, 3)), mo = S.tr(M, jl.f.slice(3, 6)), f6 = f.concat(mo);
+        jl.ids.forEach(function (j) { if (idx[j] === undefined) return; lc.nodal.push({ n: idx[j], f: f6.slice() }); });
+      });
+      L.member.forEach(function (ml) {
+        ml.ids.forEach(function (mm) {
+          if (!M.members[mm]) return;
+          var Lm = S.memLen(M, mm), dirv, d = ml.dir || "", proj = 1;
+          if (/^G[XYZ]$/.test(d)) dirv = gdir(M, d);
+          else if (/^P[XYZ]$/.test(d)) { dirv = gdir(M, d); var ax = S.localAxes(M, mm).x, gi = { X: 0, Y: 1, Z: 2 }[d.charAt(1)]; proj = Math.sqrt(Math.max(0, 1 - ax[gi] * ax[gi])); }
+          else if (/^[XYZ]$/.test(d)) { var la = S.localAxes(M, mm); dirv = S.tr(M, la[d.toLowerCase()]); if (d !== "Y" && !/^[Y]$/.test(d) && Math.abs(la.x[M.zup ? 2 : 1]) > 0.9999 && M.zup) notes.push("Local-axis member load on vertical member " + mm + " with SET Z UP — check its direction"); }
+          else { notes.push("Member load direction '" + d + "' not understood (member " + mm + ")"); return; }
+          var v = ml.v, Lfx = ml.Lf, F = ml.Ff, piece;
+          if (ml.ty === "UNI") {
+            var w = v[0] * F / Lfx * proj, a = v.length > 1 ? v[1] * Lfx : 0, b = v.length > 2 ? v[2] * Lfx : Lm;
+            if (v.length > 3 && v[3]) notes.push("UNI load offset d3 ignored (member " + mm + ")");
+            if (v.length === 2) b = Lm;
+            piece = { k: "d", w1: dirv.map(function (x) { return x * w; }), w2: dirv.map(function (x) { return x * w; }), a: a, b: b, uni: true };
+          } else if (ml.ty === "CON") {
+            var P = v[0] * F, aa = v.length > 1 ? v[1] * Lfx : Lm / 2; piece = { k: "p", P: dirv.map(function (x) { return x * P; }), a: aa, L: Lm };
+          } else if (ml.ty === "TRAP") {
+            var w1 = v[0] * F / Lfx * proj, w2 = (v.length > 1 ? v[1] : v[0]) * F / Lfx * proj, a2 = v.length > 2 ? v[2] * Lfx : 0, b2 = v.length > 3 ? v[3] * Lfx : Lm;
+            piece = { k: "d", w1: dirv.map(function (x) { return x * w1; }), w2: dirv.map(function (x) { return x * w2; }), a: a2, b: b2 };
+          } else if (ml.ty === "LIN") {
+            if (v.length >= 3 && v[2]) { var w3 = v[2] * F / Lfx; onParts(geo, mm, { k: "d", w1: [0, 0, 0], w2: dirv.map(function (x) { return x * w3; }), a: 0, b: Lm / 2 }, pushF); piece = { k: "d", w1: dirv.map(function (x) { return x * w3; }), w2: [0, 0, 0], a: Lm / 2, b: Lm }; }
+            else { var l1 = v[0] * F / Lfx, l2 = (v[1] || 0) * F / Lfx; piece = { k: "d", w1: dirv.map(function (x) { return x * l1; }), w2: dirv.map(function (x) { return x * l2; }), a: 0, b: Lm }; }
+          }
+          if (piece) onParts(geo, mm, piece, pushF);
+        });
+      });
+      L.elem.forEach(function (el) {
+        el.ids.forEach(function (e) {
+          (geo.std.emap[e] || []).forEach(function (k) {
+            var v;
+            if (el.dir === "LOCAL") {   /* local z: right-hand rule on the joint order */
+              var P = M.elems[e].map(function (j) { return M.joints[j]; }).filter(Boolean);
+              v = S.tr(M, unit(P.length > 3 ? crs(sub(P[2], P[0]), sub(P[3], P[1])) : crs(sub(P[1], P[0]), sub(P[2], P[0]))));
+            } else v = gdir(M, el.dir);
+            lc.shellP.push({ e: k, q: v.map(function (x) { return x * el.p; }) });
+          });
+        });
+      });
+      L.floor.forEach(function (fl) {
+        var dirv = gdir(M, fl.dir || "GY"), pn = panels(M, fl);
+        if (!pn.length) { notes.push("Load case " + L.id + ": FLOOR LOAD " + fl.p.toFixed(2) + " kN/m² found no closed rectangular panels in the ranges given — not applied"); return; }
+        pn.forEach(function (pl) {
+          floorPieces(M, pl, Math.abs(fl.p), fl.one).forEach(function (q) {
+            var sg = fl.p < 0 ? -1 : 1;
+            onParts(geo, q.m, { k: "d", w1: dirv.map(function (x) { return sg * x * q.w1; }), w2: dirv.map(function (x) { return sg * x * q.w2; }), a: q.a, b: q.b }, pushF);
+          });
+        });
+        L.floorPanels = (L.floorPanels || 0) + pn.length;
+      });
+      L.eq.forEach(function (q) {
+        var r = S.eq1893(M, geo, m, q.dir); if (!r) { notes.push("Load case " + L.id + ": 1893 LOAD without DEFINE 1893 LOAD — not applied"); return; }
+        r.nodal.forEach(function (nl) { lc.nodal.push({ n: nl.n, f: nl.f.map(function (x) { return x * q.f; }) }); });
+        eqInfo["L" + L.id] = Object.assign({}, r.info, { f: q.f, dir: q.dir });
+      });
+      L.wind.forEach(function (q) {
+        var r = S.windLoad(M, geo, m, q.dir, q.type, q.f < 0 ? -1 : 1); if (!r) { notes.push("Load case " + L.id + ": WIND LOAD TYPE " + q.type + " has no DEFINE WIND LOAD intensities — not applied"); return; }
+        r.nodal.forEach(function (nl) { lc.nodal.push({ n: nl.n, f: nl.f.map(function (x) { return x * Math.abs(q.f); }) }); });
+        (windInfo["L" + L.id] = windInfo["L" + L.id] || []).push({ dir: q.dir, f: q.f, F: r.F * q.f, type: q.type });
+      });
+      L.repeat.forEach(function (rp) {
+        var src = M.loads.filter(function (x) { return x.id === rp[0]; })[0]; if (!src) { notes.push("REPEAT LOAD in case " + L.id + " refers to undefined case " + rp[0]); return; }
+        var o = lcOf(src), s = rp[1];
+        o.nodal.forEach(function (x) { lc.nodal.push({ n: x.n, f: x.f.map(function (v) { return v * s; }) }); });
+        o.frameUDL.forEach(function (x) { lc.frameUDL.push({ e: x.e, w: x.w.map(function (v) { return v * s; }) }); });
+        o.frameLoads.forEach(function (x) { lc.frameLoads.push(x.k === "p" ? { e: x.e, k: "p", P: x.P.map(function (v) { return v * s; }), a: x.a } : { e: x.e, k: "d", w1: x.w1.map(function (v) { return v * s; }), w2: x.w2.map(function (v) { return v * s; }), a: x.a, b: x.b }); });
+        o.shellP.forEach(function (x) { lc.shellP.push({ e: x.e, q: x.q.map(function (v) { return v * s; }) }); });
+      });
+      built[L.id] = lc; return lc;
+    }
+    M.loads.forEach(function (L) { var nm = "L" + L.id; cases[nm] = lcOf(L); names[L.id] = nm; titles[nm] = (L.title || "") + (L.type ? " [" + L.type + "]" : ""); });
+    /* aliases DL / LL for the app's serviceability and footing checks */
+    function kindOf(L) { var t = (L.type + " " + L.title).toUpperCase(); return /DEAD|\bDL\b|SELF/.test(t) || (!L.type && L.self.length && !/LIVE|LL|IMPOSED/.test(t)) ? "D" : /LIVE|\bLL\b|IMPOSED|ROOF LIVE/.test(t) ? "L" : /SEISMIC|EARTH|\bEQ|\bEL\b/.test(t) || L.eq.length ? "E" : /WIND|\bWL\b/.test(t) || L.wind.length ? "W" : "O"; }
+    var dead = M.loads.filter(function (L) { return kindOf(L) === "D"; }), live = M.loads.filter(function (L) { return kindOf(L) === "L"; });
+    function merge(list) { var o = { nodal: [], frameUDL: [], frameLoads: [], shellP: [] }; list.forEach(function (L) { var c = cases["L" + L.id]; ["nodal", "frameUDL", "frameLoads", "shellP"].forEach(function (k) { o[k] = o[k].concat(c[k]); }); }); return o; }
+    if (dead.length) { cases.DL = merge(dead); titles.DL = "Dead = " + dead.map(function (L) { return "L" + L.id; }).join(" + "); }
+    if (live.length) { cases.LL = merge(live); titles.LL = "Live = " + live.map(function (L) { return "L" + L.id; }).join(" + "); }
+    var kinds = {}; M.loads.forEach(function (L) { kinds["L" + L.id] = kindOf(L); });
+    /* seismic weights for the report and checks: IS 1893 W from the dead and live cases */
+    var info = FE.prepare(m), W = [], Wt = 0;
+    if (cases.DL) {
+      var fd = FE.loadVector(m, cases.DL, null).Ffull, fl = cases.LL ? FE.loadVector(m, cases.LL, null).Ffull : null, zmax = -Infinity, zmin = Infinity;
+      m.nodes.forEach(function (n) { zmax = Math.max(zmax, n.z); zmin = Math.min(zmin, n.z); });
+      var llq = 0.25; m.nodes.forEach(function (n, i) { var roof = n.z > zmax - 0.05, w = -fd[6 * i + 2] - (fl && !roof ? llq * fl[6 * i + 2] : 0); W.push(n.z - zmin > 0.01 ? w : 0); Wt += W[i]; });
+    }
+    return { cases: cases, eq: {}, stdEq: eqInfo, wind: {}, stdWind: windInfo, wtor: {}, W: W, Wt: Wt, notes: notes, tor: null, snow: 0, pattern: false, std: true, titles: titles, kinds: kinds, names: names };
+  };
+  /* combinations of the file (or the app's IS 456 set built on DL/LL/EQ/WL when the file has none) */
+  S.combos = function (L, geo, p) {
+    var M = geo.std.M, out = [];
+    M.combos.forEach(function (c) {
+      var f = {}, ok = true;
+      Object.keys(c.f).forEach(function (id) { var nm = L.names[id]; if (!nm) { var cb2 = M.combos.filter(function (x) { return x.id === +id; })[0]; if (cb2) { Object.keys(cb2.f).forEach(function (j) { var n2 = L.names[j]; if (n2) f[n2] = (f[n2] || 0) + c.f[id] * cb2.f[j]; }); return; } ok = false; return; } f[nm] = (f[nm] || 0) + c.f[id]; });
+      if (!ok) L.notes.push("Combination " + c.id + " refers to an undefined load case — skipped");
+      else if (Object.keys(f).length) out.push({ name: "C" + c.id + (c.title ? " " + c.title : ""), f: f, std: c.id });
+    });
+    if (!out.length) {
+      L.notes.push("The STAAD file has no LOAD COMBINATION — primary load cases designed as given (factor 1.0). Add combinations in STAAD or use the app's loads.");
+      Object.keys(L.cases).forEach(function (nm) { if (/^L\d+$/.test(nm)) { var f = {}; f[nm] = 1; out.push({ name: nm + " " + (L.titles[nm] || ""), f: f }); } });
+    }
+    return out;
+  };
+
+  /* ---------- IS 1893 equivalent static load as STAAD generates it from DEFINE 1893 LOAD ---------- */
+  S.weights = function (M, geo, m) {
+    var d = M.def1893, idx = geo.std.idx, w = new Float64Array(m.nodes.length);
+    if (!d) return null;
+    if (d.self) {
+      m.frames.forEach(function (e, k) { var g = d.self * e.sec.gamma * e.sec.A * Math.hypot(m.nodes[e.n2].x - m.nodes[e.n1].x, m.nodes[e.n2].y - m.nodes[e.n1].y, m.nodes[e.n2].z - m.nodes[e.n1].z) / 2; w[e.n1] += g; w[e.n2] += g; });
+      m.shells.forEach(function (s, k) { var A = area(m, s), g = d.self * s.mat.gamma * s.t * A / 4; s.n.forEach(function (v) { w[v] += g; }); });
+    }
+    d.joint.forEach(function (q) { q.ids.forEach(function (j) { if (idx[j] !== undefined) w[idx[j]] += Math.abs(q.w); }); });
+    d.member.forEach(function (q) { q.ids.forEach(function (mm) { if (!M.members[mm]) return; var Lm = S.memLen(M, mm), a = q.d1 !== null ? q.d1 : 0, b = q.d2 !== null ? q.d2 : Lm, W0 = Math.abs(q.w) * (b - a), j = M.members[mm]; w[idx[j[0]]] += W0 * (1 - (a + b) / 2 / Lm); w[idx[j[1]]] += W0 * (a + b) / 2 / Lm; }); });
+    d.elem.forEach(function (q) { q.ids.forEach(function (e) { (geo.std.emap[e] || []).forEach(function (k) { var s = m.shells[k], g = Math.abs(q.p) * area(m, s) / 4; s.n.forEach(function (v) { w[v] += g; }); }); }); });
+    d.floor.forEach(function (q) {
+      panels(M, q).forEach(function (pl) {
+        var g = Math.abs(q.p) * (pl.x1 - pl.x0) * (pl.z1 - pl.z0) / 4;
+        [[pl.x0, pl.z0], [pl.x1, pl.z0], [pl.x1, pl.z1], [pl.x0, pl.z1]].forEach(function (c) { var P = M.zup ? [c[0], c[1], pl.y] : [c[0], pl.y, c[1]], a = S.tr(M, P), best = -1, bd = 1e-3; m.nodes.forEach(function (n, i) { var dd = Math.hypot(n.x - a[0], n.y - a[1], n.z - a[2]); if (dd < bd) { bd = dd; best = i; } }); if (best >= 0) w[best] += g; });
+      });
+    });
+    return w;
+  };
+  function area(m, s) { var P = s.n.map(function (v) { return m.nodes[v]; }); var c1 = crs([P[2].x - P[0].x, P[2].y - P[0].y, P[2].z - P[0].z], [P[3].x - P[1].x, P[3].y - P[1].y, P[3].z - P[1].z]); return Math.hypot(c1[0], c1[1], c1[2]) / 2; }
+  S.eq1893 = function (M, geo, m, dir) {
+    var d = M.def1893; if (!d) return null;
+    var w = S.weights(M, geo, m), sup = m.sup || geo.sup, zb = Infinity, zt = -Infinity;
+    Object.keys(sup).forEach(function (v) { zb = Math.min(zb, m.nodes[v].z); }); if (!isFinite(zb)) zb = Math.min.apply(null, m.nodes.map(function (n) { return n.z; }));
+    m.nodes.forEach(function (n) { zt = Math.max(zt, n.z); });
+    var h = zt - zb, dv = S.tr(M, { X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1] }[dir] || [1, 0, 0]), ax = Math.abs(dv[0]) > 0.5 ? 0 : 1;
+    var lo = Infinity, hi = -Infinity; m.nodes.forEach(function (n) { var v = ax ? n.y : n.x; lo = Math.min(lo, v); hi = Math.max(hi, v); });
+    var dd = Math.max(hi - lo, 1), Tg = ax ? (M.zup ? d.py : d.pz) : d.px;
+    var T = Tg > 0 ? Tg : d.st === 2 ? 0.085 * Math.pow(h, 0.75) : d.st === 3 || d.st === 4 ? 0.09 * h / Math.sqrt(d.dt > 0 ? d.dt : dd) : 0.075 * Math.pow(h, 0.75);
+    var soil = { 1: "I", 2: "II", 3: "III" }[d.ss] || "II", Sa = LD.saG(T, soil), dmf = U.interp([0, 0.02, 0.05, 0.07, 0.1, 0.15, 0.2, 0.25, 0.3], [3.2, 1.4, 1, 0.9, 0.8, 0.7, 0.6, 0.55, 0.5], d.dm || 0.05);
+    var Ah = d.zone / 2 * d.I / d.rf * Sa * dmf, rho = d.zone <= 0.1 ? 0.007 : d.zone <= 0.16 ? 0.011 : d.zone <= 0.24 ? 0.016 : 0.024, Ahd = Math.max(Ah, rho);
+    var Wt = 0, lv = {}; m.nodes.forEach(function (n, i) { if (n.z - zb < 0.01 || !w[i]) return; Wt += w[i]; var k = n.z.toFixed(2); (lv[k] = lv[k] || []).push(i); });
+    var Vb = Ahd * Wt, den = 0; Object.keys(lv).forEach(function (k) { var Wi = lv[k].reduce(function (s, i) { return s + w[i]; }, 0); den += Wi * Math.pow(+k - zb, 2); });
+    var nodal = [];
+    Object.keys(lv).forEach(function (k) { lv[k].forEach(function (i) { var Q = Vb * w[i] * Math.pow(+k - zb, 2) / den, f = [0, 0, 0, 0, 0, 0]; f[0] = Q * dv[0]; f[1] = Q * dv[1]; f[2] = Q * dv[2]; nodal.push({ n: i, f: f }); }); });
+    return { nodal: nodal, info: { T: T, Sa: Sa, Ah: Ah, Ahd: Ahd, W: Wt, Vb: Vb, H: h, d: dd, Z: d.zone, R: d.rf, I: d.I, soil: soil } };
+  };
+  /* wind: STAAD applies the intensity at each height to the exposed area; here the windward face width × storey height per level */
+  S.windLoad = function (M, geo, m, dir, type, sgn) {
+    var wd = M.wind[type] || M.wind[1]; if (!wd || !wd.p.length) return null;
+    var d0 = String(dir || "X").replace(/^-/, ""), dv = S.tr(M, { X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1] }[d0.charAt(0)] || [1, 0, 0]), sg = (sgn || 1) * (/^-/.test(dir) ? -1 : 1), ax = Math.abs(dv[0]) > 0.5 ? 0 : 1, s0 = sg * ((ax ? dv[1] : dv[0]) > 0 ? 1 : -1);   /* s0 > 0: wind towards +axis, windward face at the minimum */
+    var lv = MD.floorLevels(m), zmin = Math.min.apply(null, m.nodes.map(function (n) { return n.z; })), nodal = [], Ftot = 0;
+    var lo = Infinity, hi = -Infinity; m.nodes.forEach(function (n) { var v = ax ? n.x : n.y; lo = Math.min(lo, v); hi = Math.max(hi, v); }); var B = Math.max(hi - lo, 1);   /* face width across the wind */
+    function pAt(z) { for (var i = 0; i < wd.h.length; i++) if (z <= wd.h[i] + 1e-6) return wd.p[i]; return wd.p[wd.p.length - 1]; }
+    lv.forEach(function (z, i) {
+      if (i === 0) return;
+      var hb = (z - lv[i - 1]) / 2 + (i + 1 < lv.length ? (lv[i + 1] - z) / 2 : 0), F = pAt(z - zmin) * B * hb;
+      var at = []; m.nodes.forEach(function (n, j) { if (Math.abs(n.z - z) < 0.01) at.push(j); });
+      var ext = s0 > 0 ? Infinity : -Infinity; at.forEach(function (j) { var v = ax ? m.nodes[j].y : m.nodes[j].x; ext = s0 > 0 ? Math.min(ext, v) : Math.max(ext, v); });
+      var face = at.filter(function (j) { return Math.abs((ax ? m.nodes[j].y : m.nodes[j].x) - ext) < 0.01; }); if (!face.length) return;
+      face.forEach(function (j) { var f = [0, 0, 0, 0, 0, 0]; f[0] = sg * F / face.length * dv[0]; f[1] = sg * F / face.length * dv[1]; nodal.push({ n: j, f: f }); });
+      Ftot += F;
+    });
+    return { nodal: nodal, F: Ftot };
+  };
+
+  /* ---------- checks of the STAAD file itself ---------- */
+  S.audit = function (M, geo, m) {
+    var out = [];
+    function add(sev, t, d, ref) { out.push({ sev: sev, t: t, d: d, ref: ref || "" }); }
+    var kinds = {}, ids = {};
+    M.loads.forEach(function (L) { ids[L.id] = L; var t = (L.type + " " + L.title).toUpperCase(); kinds[L.id] = /DEAD|\bDL\b/.test(t) || (L.self.length && !/LIVE|LL/.test(t)) ? "D" : /LIVE|\bLL\b|IMPOSED/.test(t) ? "L" : L.eq.length || /SEISMIC|EARTH|\bEQ/.test(t) ? "E" : L.wind.length || /WIND/.test(t) ? "W" : "O"; });
+    /* wind loads that cancel inside one case */
+    M.loads.forEach(function (L) {
+      var by = {}; L.wind.forEach(function (w) { var k = w.dir.replace(/^-/, "") + "|" + w.type; by[k] = (by[k] || 0) + (w.dir.charAt(0) === "-" ? -1 : 1) * w.f; });
+      Object.keys(by).forEach(function (k) { var n = L.wind.filter(function (w) { return w.dir.replace(/^-/, "") + "|" + w.type === k; }).length; if (n > 1 && Math.abs(by[k]) < 1e-9) add("high", "Wind loads cancel in load case " + L.id + (L.title ? " (" + L.title + ")" : ""), "WIND LOAD " + k.split("|")[0] + " is applied with factors that sum to zero in the same case — the net wind force is zero. Put each direction (+ and −) in its own load case.", "IS 875-3"); });
+      var ebys = {}; L.eq.forEach(function (q) { ebys[q.dir] = (ebys[q.dir] || 0) + q.f; }); Object.keys(ebys).forEach(function (k) { if (L.eq.filter(function (q) { return q.dir === k; }).length > 1 && Math.abs(ebys[k]) < 1e-9) add("high", "Seismic loads cancel in load case " + L.id, "1893 LOAD " + k + " factors sum to zero in the same case.", "IS 1893"); });
+    });
+    /* self weight counted twice: SELFWEIGHT plus a member UDL equal to the member's own weight */
+    var selfCases = M.loads.filter(function (L) { return L.self.length; });
+    if (m) selfCases.forEach(function (L) {
+      var hits = 0, ex = null;
+      L.member.forEach(function (ml) { if (ml.ty !== "UNI" || ml.v.length > 1 || !/Y$|Z$/.test(ml.dir)) return; var w = Math.abs(ml.v[0] * ml.Ff / ml.Lf); ml.ids.forEach(function (mm) { var ks = geo.std.fmap[mm]; if (!ks || !ks.length) return; var s = m.frames[ks[0]].sec, g = s.gamma * s.A, g25 = 25 * s.A; if (Math.abs(w - g) < 0.03 * g || Math.abs(w - g25) < 0.03 * g25) { hits++; ex = ex || { m: mm, w: w, g: g }; } }); });
+      if (hits) add("high", "Self weight possibly counted twice in load case " + L.id, hits + " member(s) carry a uniform load equal to their own weight (e.g. member " + ex.m + ": " + ex.w.toFixed(2) + " kN/m vs γA = " + ex.g.toFixed(2) + " kN/m) in a case that also has SELFWEIGHT.", "IS 875-1");
+    });
+    if (M.def1893 && M.def1893.self && m) {
+      var d = M.def1893, hits2 = 0; d.member.forEach(function (q) { q.ids.forEach(function (mm) { var ks = geo.std.fmap[mm]; if (!ks || !ks.length) return; var s = m.frames[ks[0]].sec, g = s.gamma * s.A, g25 = 25 * s.A, w = Math.abs(q.w); if (Math.abs(w - g) < 0.03 * g || Math.abs(w - g25) < 0.03 * g25) hits2++; }); });
+      if (hits2) add("high", "Seismic weight counts member self weight twice", "DEFINE 1893 LOAD has SELFWEIGHT and MEMBER WEIGHT equal to the members' own weight on " + hits2 + " member(s).", "IS 1893 cl 7.4");
+    }
+    /* seismic weight vs dead + 25/50 % live */
+    if (M.def1893 && m) {
+      try {
+        var w = S.weights(M, geo, m), zb = Infinity; Object.keys(m.sup || {}).forEach(function (v) { zb = Math.min(zb, m.nodes[v].z); }); if (!isFinite(zb)) zb = Math.min.apply(null, m.nodes.map(function (n) { return n.z; }));
+        var Wst = 0; m.nodes.forEach(function (n, i) { if (n.z - zb > 0.01) Wst += w[i]; });
+        var L0 = S.cases(m, geo, {}), Wis = L0.Wt;
+        if (Wis > 0) {
+          var r = Wst / Wis;
+          if (r < 0.9 || r > 1.25) add(r < 0.9 ? "high" : "med", "Seismic weight " + (r < 1 ? "low" : "high") + ": " + Math.round(Wst) + " kN in DEFINE 1893 LOAD vs " + Math.round(Wis) + " kN from the dead and live cases", "IS 1893 cl 7.4 takes the full dead load and 25 % (≤ 3 kN/m²) or 50 % of the floor imposed load (roof imposed load excluded). The file's weights are " + Math.round(r * 100) + " % of that, so the base shear is about " + Math.round(Math.abs(1 - r) * 100) + " % " + (r < 1 ? "low" : "high") + ".", "IS 1893 cl 7.4.2");
+          else add("ok", "Seismic weight " + Math.round(Wst) + " kN agrees with dead + 25 % live (" + Math.round(Wis) + " kN)", "", "IS 1893 cl 7.4");
+        }
+      } catch (e) {}
+    }
+    /* combinations */
+    var cb = M.combos;
+    function has(c, k, sgn) { return Object.keys(c.f).some(function (id) { return kinds[id] === k && (sgn === undefined || Math.sign(c.f[id]) === sgn); }); }
+    function fac(c, k) { var v = 0; Object.keys(c.f).forEach(function (id) { if (kinds[id] === k) v = Math.max(v, Math.abs(c.f[id])); }); return v; }
+    var hasE = M.loads.some(function (L) { return kinds[L.id] === "E"; }), hasW = M.loads.some(function (L) { return kinds[L.id] === "W"; }), hasL = M.loads.some(function (L) { return kinds[L.id] === "L"; });
+    if (!cb.length) add("high", "No load combinations", "The members are designed for the unfactored primary load cases. IS 456 Table 18 requires factored combinations.", "IS 456 cl 36.4");
+    else {
+      if (!cb.some(function (c) { return has(c, "D") && fac(c, "D") >= 1.49 && (!hasL || fac(c, "L") >= 1.49) && !has(c, "E") && !has(c, "W"); })) add("high", "No 1.5(DL + LL) combination", "The gravity design case is missing; " + (cb.some(function (c) { return fac(c, "D") >= 1.19 && fac(c, "D") < 1.49; }) ? "only 1.2 factors are used." : "check the combinations."), "IS 456 Table 18");
+      var both = cb.filter(function (c) { return has(c, "E") && has(c, "W"); }); if (both.length) add("med", "Earthquake and wind in the same combination (" + both.map(function (c) { return c.id; }).join(", ") + ")", "They need not be taken as acting together; this is over-conservative.", "IS 875-5 cl 8 / IS 1893 cl 6.3");
+      ["E", "W"].forEach(function (k) {
+        if (!(k === "E" ? hasE : hasW)) return;
+        var cs = cb.filter(function (c) { return has(c, k); });
+        if (cs.length && !cs.some(function (c) { return has(c, k, -1); })) {
+          var dirs = {}; M.loads.forEach(function (L) {   /* net sign per direction in each case (cancelling + and − in one case count as neither) */
+            if (kinds[L.id] !== k) return; var net = {};
+            (k === "E" ? L.eq : L.wind).forEach(function (q) { var d0 = q.dir.replace(/^-/, ""); net[d0] = (net[d0] || 0) + (q.dir.charAt(0) === "-" ? -1 : 1) * q.f; });
+            Object.keys(net).forEach(function (d0) { dirs[d0] = (dirs[d0] || 0) | (net[d0] > 1e-9 ? 1 : net[d0] < -1e-9 ? 2 : 0); });
+          });
+          if (Object.keys(dirs).some(function (d) { return dirs[d] !== 3; })) add("high", "No load reversal for " + (k === "E" ? "earthquake" : "wind"), "Combinations only add the " + (k === "E" ? "seismic" : "wind") + " cases with + factors; −EL / −WL cases are missing.", "IS 1893 cl 6.3.2.2");
+        }
+        if (cs.length && !cs.some(function (c) { var dv = 0; Object.keys(c.f).forEach(function (id) { if (kinds[id] === "D") dv = c.f[id]; }); return dv > 0.85 && dv < 0.95 && !has(c, "L"); })) add("med", "No 0.9 DL ± 1.5 " + (k === "E" ? "EL" : "WL") + " combination", "Uplift / reversal in columns and footings is not checked.", "IS 456 Table 18");
+      });
+    }
+    if (M.design.ran && cb.length && (M.design.list === null || (M.design.list || []).some(function (id) { return ids[id]; })) && !M.loadList) add("high", "Design uses primary load cases", "No LOAD LIST before START CONCRETE DESIGN — STAAD designs for every case including the unfactored primary loads (e.g. EQ alone).", "STAAD");
+    /* plates */
+    var big = 0, bmax = 0;
+    Object.keys(M.elems).forEach(function (e) { var js = M.elems[e], P = js.map(function (j) { return M.joints[j]; }).filter(Boolean), mx = 0; for (var i = 0; i < P.length; i++) { var A = P[i], B = P[(i + 1) % P.length]; mx = Math.max(mx, Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2])); } if (mx > 2.0) big++; bmax = Math.max(bmax, mx); });
+    if (big) add(geo.std.opt.mesh ? "info" : "high", big + " plate(s) larger than 2 m (largest side " + bmax.toFixed(1) + " m)", geo.std.opt.mesh ? "Subdivided here to " + geo.std.opt.mesh + " m." : "A single plate per bay, joined to the frame only at its corners, gives meaningless slab results and uncertain joint restraint. Use a plate mesh size of about 0.5 m when importing.", "FE practice");
+    var seen = {}, dup = 0; Object.keys(M.elems).forEach(function (e) { var k = M.elems[e].slice().sort(function (a, b) { return a - b; }).join(","); if (seen[k]) dup++; seen[k] = 1; });
+    if (dup) add("high", dup + " duplicate plate(s) on the same joints", "Plates or surfaces defined twice double the slab stiffness and any element self weight.", "FE practice");
+    var dupS = 0; Object.keys(M.surfs).forEach(function (sf) { var k = M.surfs[sf].slice().sort(function (a, b) { return a - b; }).join(","); if (seen[k]) dupS++; });
+    if (dupS) add("high", dupS + " surface(s) on the same outline as a plate", "Each slab panel is modelled twice — as a plate element and as a STAAD surface — doubling its stiffness and self weight. Keep one of them." + (geo.std.opt.surfaces ? " (Import option: leave surfaces out.)" : " Surfaces were left out of this import."), "FE practice");
+    var dupm = 0, sm = {}; Object.keys(M.members).forEach(function (mm) { var j = M.members[mm].slice().sort(function (a, b) { return a - b; }).join(","); if (sm[j]) dupm++; sm[j] = 1; }); if (dupm) add("high", dupm + " duplicate member(s) between the same joints", "Duplicate members double the stiffness and self weight.", "FE practice");
+    if (M.design.minsec >= 12) add("info", "MINSEC " + M.design.minsec + " mm", "STAAD will not use stirrups smaller than " + M.design.minsec + " mm.", "STAAD");
+    return out;
+  };
+
+  /* checks of any analysed model (imported or built here): columns in tension under gravity, unloaded beams, net loads */
+  S.modelChecks = function (Sx) {
+    var m = Sx.m, res = Sx.res, out = []; if (!m || !res) return out;
+    function add(sev, t, d, ref) { out.push({ sev: sev, t: t, d: d, ref: ref || "" }); }
+    var L = Sx.L || {}, cases = L.cases || {}, kinds = L.kinds || {};
+    /* net horizontal force of each lateral case */
+    Object.keys(res.cases).forEach(function (cn) {
+      var F = res.cases[cn].lv.Ffull, t = [0, 0, 0]; for (var i = 0; i < F.length; i += 6) { t[0] += F[i]; t[1] += F[i + 1]; t[2] += F[i + 2]; }
+      var lat = /^(EQ|WL|T)/.test(cn) || kinds[cn] === "E" || kinds[cn] === "W", c = cases[cn] || {}, has = (c.nodal || []).length + (c.frameUDL || []).length + (c.frameLoads || []).length + (c.shellP || []).length;
+      if (lat && has && Math.hypot(t[0], t[1]) < 1e-6 * Math.max(1, Math.abs(t[2]) + has)) add("high", "Load case " + cn + (L.titles && L.titles[cn] ? " (" + L.titles[cn] + ")" : "") + " has zero net horizontal force", "The loads in this case cancel each other.", "");
+    });
+    /* gravity: column axial forces under the dead + live cases */
+    var g = {}; if (res.cases.DL) g.DL = 1; if (res.cases.LL) g.LL = 1;
+    if (Object.keys(g).length) {
+      var ten = [], small = [], Ucomb = new Float64Array(6 * m.nodes.length);
+      Object.keys(g).forEach(function (c) { var u = res.cases[c].U; for (var i = 0; i < u.length; i++) Ucomb[i] += u[i]; });
+      var qmix = m.frames.map(function (e, k) { var q = null; Object.keys(g).forEach(function (c) { var qq = res.cases[c].lv.qeq[k]; if (!qq) return; q = q || { w: [0, 0, 0], p: [] }; for (var d = 0; d < 3; d++) q.w[d] += qq.w[d]; if (qq.p) q.p = q.p.concat(qq.p); }); return q; });
+      var Ptot = 0; m.frames.forEach(function (e, k) {
+        var ff = FE.frameForces(m, k, Ucomb, qmix[k], 0), N = -ff.f[0];   /* tension + */
+        if (e.type === "column") { var A = m.nodes[e.n1], B = m.nodes[e.n2], lo = Math.min(A.z, B.z); if (N > 1) ten.push([k, N, lo]); }
+        if (e.type === "beam") { var dg = FE.frameDiagram(ff, 8), mx = 0, vx = 0; dg.forEach(function (q) { mx = Math.max(mx, Math.abs(q.Mz)); vx = Math.max(vx, Math.abs(q.Vy)); }); if (mx < 0.05 && vx < 0.05) small.push(k); }
+      });
+      if (ten.length) { ten.sort(function (a, b) { return b[1] - a[1]; }); add("high", ten.length + " column(s) in tension under dead + live load", "Largest: member " + (ten[0][0] + 1) + (m.frames[ten[0][0]].layer ? " (" + m.frames[ten[0][0]].layer + ")" : "") + " pulls " + ten[0][1].toFixed(1) + " kN. Columns of a building are compressed by gravity — check for gravity loads given upward (+Y) or a wrong sign.", "IS 456"); }
+      var nb = m.frames.filter(function (e) { return e.type === "beam"; }).length;
+      if (small.length && small.length >= Math.max(1, 0.1 * nb)) add("high", small.length + " of " + nb + " beams carry no gravity load", "Moments and shears under dead + live load are below 0.05 kN·m / kN — loads (even self weight) are not reaching them. Example: member " + (small[0] + 1) + (m.frames[small[0]].layer ? " (" + m.frames[small[0]].layer + ")" : "") + ".", "");
+      /* vertical equilibrium: reactions vs applied */
+      var Fz = 0; Object.keys(g).forEach(function (c) { var F = res.cases[c].lv.Ffull; for (var i = 2; i < F.length; i += 6) Fz += F[i]; });
+      if (Fz > 1e-6) add("high", "Net gravity load acts upward (" + Fz.toFixed(1) + " kN)", "The dead + live cases push the structure up — a load direction sign is wrong.", "");
+    }
+    return out;
+  };
+
+  return S;
+})();
+if (typeof module !== "undefined") module.exports = STD;
 
 /* js/se.js */
 /* Seismic engine — IS 1893 (Part 1):2016.
@@ -6131,7 +6998,7 @@ if (typeof module !== "undefined") module.exports = FD;
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "3.12";
+REG.ENGINE = "4.0";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],
@@ -6213,12 +7080,19 @@ REG.CHECKS = [
   ["RCC design", "Long-term deflection (IS 456 Annex C: shrinkage and creep) and vibration of floors", "Not implemented", "The span / depth rule of cl 23.2.1 is the code's deemed-to-satisfy check; calculate deflections for long spans, cantilevers over 10 m and brittle finishes"],
   ["Steel design", "Combined axial force and bending interaction (cl 9.3) — independent benchmark", "Calculated", "Implemented from the clauses; no published worked example compared yet"],
   ["Foundations", "Punching with unbalanced moment transfer (IS 456 cl 31.6.2.2) — mat foundation", "Verified", "acceptance.js T13–T14: interior and edge column polar moments and shear fractions equal the closed forms; pile caps and isolated footings check punching from the axial load"],
-  ["Audit", "Design audit on every report: verification state, checks not covered, not-for-construction stamp", "Verified", "acceptance.js T19–T20; UI test; frame report stamped until all items are reviewed and the status is Checked or Issued"]
+  ["Audit", "Design audit on every report: verification state, checks not covered, not-for-construction stamp", "Verified", "acceptance.js T19–T20; UI test; frame report stamped until all items are reviewed and the status is Checked or Issued"],
+  ["Analysis", "Member loads: point, partial and linearly varying (trapezoidal / triangular) loads on frame members", "Verified", "fem_verify.js 9: fixed-end moments Pab²/L², moment under a point load, triangular-load Mmax = wL²/(9√3), partial-UDL reactions; equal to a split model with a nodal load"],
+  ["Analysis", "Shear deformation of members (Timoshenko, shear areas Avy / Avz) — used for STAAD imports", "Verified", "fem_verify.js 8: cantilever tip PL³/3EI + PL/(G·Av) and fixed-beam mid-span deflection to closed form"],
+  ["Import", "STAAD.Pro input (.std): geometry, sections, materials, supports, releases, self weight, joint / member / plate / floor loads, IS 1893 and wind loads, repeat loads, combinations", "Verified", "std_verify.js: hand results for point / partial / floor (two-way 45°) loads, unit conversion, Z-up, generation, 1893 base shear Ah·W; G+5 report re-analysed: beam 133 dead-load end forces and the 1893 seismic weight (10 979 kN) agree with STAAD's printed output. Wind from DEFINE WIND LOAD applied to the windward face per storey — simplified against STAAD's exposed-area method"],
+  ["Import", "Model checks: cancelling load cases, columns in tension under gravity, unloaded beams, seismic weight vs dead + 25/50 % live, missing 1.5(DL+LL), EQ + WL together, no reversals, large or duplicate plates, self weight counted twice", "Verified", "std_verify.js 5 and the G+5 STAAD file: every error found by hand in that report is flagged"],
+  ["RCC design", "Continuous beam: IS 456 cl 22.4.1 load arrangements, envelope, cl 37.1.1 redistribution (≤ 30 %, 70 % of the elastic envelope, xu/d ≤ 0.6 − δ), flexure, shear, deflection, crack width, curtailment", "Verified", "v4_verify.js: two-span wL²/8 and 9wL²/128, three-span 0.1G + 0.117Q at the support and 0.025G + 0.075Q in the middle span, 20 % redistribution, cantilever end wL²/2"],
+  ["Foundations", "Cantilever retaining wall: Rankine Ka (level and sloping backfill), IS 456 cl 20.1 overturning and cl 20.2 sliding, base pressure, stem / heel / toe design", "Calculated", "v4_verify.js: weights, restoring moment, stability ratios, toe pressure and stem moment equal independent statics; Ka for β = 15°. No published worked example reproduced yet"],
+  ["Foundations", "Combined footing (two columns): centred on the resultant or on a property line, longitudinal bending by statics, punching (3-sided at the boundary), one-way shear, transverse column bands", "Calculated", "v4_verify.js: resultant at the centre, hogging moment equal to statics (wx²/2 − Pu1(x − a)); column band width column + 0.75 d each side (practice, not code)"]
 ];
 /* stable ids of REG.CHECKS rows, used by the verification mode */
 REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "mmc", "timehist",
   "rcbeam", "rccol", "rcslab", "rcwallel", "rcwall", "servic", "stfcd", "stltb", "stklen", "dtbeam", "dtcol", "scwb", "joint", "dtslab", "bbs",
-  "foot", "footpress", "mat", "matsoil", "pilecap", "pilelat", "pilegrp", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto", "inlim", "fixes", "units", "elements", "slabauto", "dxfmore", "perf", "aids", "beam1d", "framesup", "beamends", "cantslab", "efflen", "trussbear", "servlt", "stcomb", "punchmt", "audit"];
+  "foot", "footpress", "mat", "matsoil", "pilecap", "pilelat", "pilegrp", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto", "inlim", "fixes", "units", "elements", "slabauto", "dxfmore", "perf", "aids", "beam1d", "framesup", "beamends", "cantslab", "efflen", "trussbear", "servlt", "stcomb", "punchmt", "audit", "memload", "timosh", "stdimp", "stdchk", "contbeam", "retwall", "combfoot"];
 REG.byId = function (id) { var i = REG.IDS.indexOf(id); return i >= 0 ? { id: id, area: REG.CHECKS[i][0], t: REG.CHECKS[i][1], st: REG.CHECKS[i][2], ev: REG.CHECKS[i][3] } : null; };
 REG.RANK = { "Not implemented": 0, Simplified: 1, Approximate: 1, Calculated: 2, Verified: 3 };
 /* checks behind each kind of result; the weakest decides the result's verification state */
@@ -6240,7 +7114,8 @@ if (typeof module !== "undefined") module.exports = REG;
    engineer has checked it — the app never issues one by itself */
 REG.MOD = { beam: ["beam1d", "beamends", "rcbeam", "servic"], slab: ["slabauto", "cantslab", "dtslab"], slab1: ["slabauto", "cantslab"], slab2: ["slabauto", "dtslab"], column: ["rccol", "efflen"],
   footing: ["foot", "footpress"], strip: ["foot", "footpress"], pile: ["pilecap", "pilelat", "pilegrp"], raft: ["mat", "matsoil"], stair: ["dtslab"], truss: ["frame", "stfcd", "trussbear", "wind"],
-  purlin: ["stltb"], tension: [], comp: ["stfcd", "efflen"], sbeam: ["stltb", "efflen"], bolts: [], roof: ["wind", "snow"], seismic: ["statbase", "spectrum"] };
+  purlin: ["stltb"], tension: [], comp: ["stfcd", "efflen"], sbeam: ["stltb", "efflen"], bolts: [], roof: ["wind", "snow"], seismic: ["statbase", "spectrum"],
+  contbeam: ["beam1d", "contbeam", "rcbeam", "servic"], retwall: ["retwall"], combfoot: ["combfoot", "foot"] };
 REG.GAPS = {
   beam: ["Long-term deflection is not calculated (IS 456 Annex C) — the span / effective depth rule of cl 23.2.1 is used, as the code allows", "Crack width uses the service moment taken as factored ÷ 1.5", "Loads are entered by the designer — confirm them against IS 875 and the layout"],
   slab: ["Crack width is not calculated — bar spacing limits of cl 26.3.3 control cracking", "Long-term deflection is not calculated — span / depth rule of cl 23.2.1 / 24.1"],
@@ -6255,7 +7130,10 @@ REG.GAPS = {
   truss: ["Connections other than the gusset check are not designed", "Wind pressure coefficients for the roof are taken from the generator inputs — confirm against IS 875-3 Tables 6, 7"],
   roof: ["Snow drift and unbalanced snow (IS 875-4) are not modelled"],
   seismic: ["Equivalent static method only — use dynamic analysis where IS 1893 cl 7.7.1 requires it"],
-  tension: [], comp: [], sbeam: ["Web bearing and buckling under concentrated loads are not checked"], bolts: [], purlin: []
+  tension: [], comp: [], sbeam: ["Web bearing and buckling under concentrated loads are not checked"], bolts: [], purlin: [],
+  contbeam: ["Interior supports are knife-edge: columns monolithic with the beam (frame action) are not modelled — use the frame analysis for that", "Long-term deflection is not calculated — span / effective depth rule of cl 23.2.1", "Torsion from eccentric loads or edge slabs is not checked"],
+  retwall: ["Drained backfill assumed — no water pressure; provide weep holes and a filter layer", "No seismic earth pressure (IS 1893 Part 3 / Mononobe–Okabe)", "Shear key not designed — widen the base or add a key when sliding governs", "Settlement and global (slip-circle) stability are not checked"],
+  combfoot: ["Column moments are not included — the footing is sized for axial loads (rigid footing, linear soil pressure)", "Settlement is not calculated (IS 8009)", "Transverse band width (column + 0.75 d each side) follows common practice, not an IS 456 clause"]
 };
 REG.audit = function (id) {
   var ids = REG.MOD[id] || [], rows = ids.map(REG.byId).filter(Boolean), w = REG.state(ids) || { st: "Calculated" }, gaps = (REG.GAPS[id] || []).slice();
@@ -6578,13 +7456,394 @@ RCC.beamDrawSvg = function (p, cs, eL, eR, bot, topL, topR, cut, sv, d) {
   return '<div class="dwgs">' + dws.map(function (dw) { return '<div class="dwgt">' + dw.title + '</div><div class="tw">' + DT.svg(dw, { maxW: 680, maxH: 300 }) + '</div>'; }).join("") + '</div>';
 };
 
+/* js/modx.js */
+/* v4.0 design modules: continuous beam (IS 456 cl 22.4.1 pattern loading, cl 37.1.1 redistribution), cantilever retaining wall
+   (Rankine earth pressure, IS 456 cl 20 stability), and two-column combined footing (IS 456 cl 34). Units kN, m, mm, N/mm². */
+
+/* ------------------------------------------------------------ CONTINUOUS BEAM */
+RCC.listNums = function (s) { return String(s || "").split(/[,;\s]+/).map(Number).filter(function (x) { return isFinite(x) && x > 0; }); };
+RCC.contBeam = function (p) {
+  var r = new Rep("Continuous Beam Design", "IS 456:2000 cl 22, 37, 40");
+  var Ls = RCC.listNums(p.spans), n = Ls.length;
+  if (!n) throw new Error("Give the span lengths, e.g. 4.5, 5, 4.5");
+  if (n > 12) throw new Error("Up to 12 spans");
+  var b = p.b, Dd = p.D, fck = p.fck, fy = p.fy, d = Dd - p.cover - p.stir - p.dia / 2, dc = p.cover + p.stir + p.dia / 2;
+  var gl = String(p.gk).split(/[,;\s]+/).map(Number).filter(isFinite), ql = String(p.qk).split(/[,;\s]+/).map(Number).filter(isFinite);
+  var sw = p.self === "no" ? 0 : 25 * b * Dd / 1e6;
+  var G = Ls.map(function (L, i) { return (gl.length ? (gl[i] !== undefined ? gl[i] : gl[gl.length - 1]) : 0) + sw; }), Q = Ls.map(function (L, i) { return ql.length ? (ql[i] !== undefined ? ql[i] : ql[ql.length - 1]) : 0; });
+  var xs = [0]; Ls.forEach(function (L) { xs.push(xs[xs.length - 1] + L); });
+  var endL = p.endL || "pinned", endR = p.endR || "pinned", sup = xs.map(function (x, i) { return i === 0 ? endL : i === n ? endR : "pinned"; });
+  if (endL === "free" && n < 2 || endR === "free" && n < 2) throw new Error("A free end needs at least two spans (the first or last span is then a cantilever)");
+  var Ec = 5000 * Math.sqrt(fck) * 1e3, EI = Ec * b * Math.pow(Dd, 3) / 12 * 1e-12, gf = 1.5, qf = 1.5;
+  r.h("1. Spans, supports and loads");
+  r.table(["Span", "L (m)", "gk (kN/m)", "qk (kN/m)", "wu = 1.5(gk + qk)"], Ls.map(function (L, i) { return [String(i + 1) + (sup[i] === "free" || sup[i + 1] === "free" ? " (cantilever)" : ""), U.f(L, 2), U.f(G[i], 2), U.f(Q[i], 2), U.f(gf * G[i] + qf * Q[i], 2)]; }));
+  r.row("Self weight included in gk", sw ? U.f(sw, 2) + " kN/m (25 b D)" : "no", "");
+  r.row("End supports (left – right)", B1.SUP[endL].label + " – " + B1.SUP[endR].label + "; interior supports simple (knife-edge)", "");
+  r.row("Effective depth d", U.f(d, 0), "mm");
+  /* load arrangements, IS 456 cl 22.4.1 */
+  var arr = [{ name: "All spans 1.5(G + Q)", q: Ls.map(function () { return 1; }) }];
+  var allowAll = Q.every(function (q, i) { return qf * q <= 0.75 * gf * G[i] + 1e-9; });
+  if (n > 1 && !(p.pattern === "off" || (p.pattern !== "on" && allowAll))) {
+    arr.push({ name: "Q on odd spans", q: Ls.map(function (L, i) { return i % 2 === 0 ? 1 : 0; }) }, { name: "Q on even spans", q: Ls.map(function (L, i) { return i % 2 === 1 ? 1 : 0; }) });
+    for (var i = 0; i + 1 < n; i++) arr.push({ name: "Q on spans " + (i + 1) + "–" + (i + 2), q: Ls.map(function (L, k) { return k === i || k === i + 1 ? 1 : 0; }) });
+  }
+  r.note(arr.length > 1 ? "Imposed load arranged per IS 456 cl 22.4.1: dead load on all spans with the imposed load on alternate spans (max sagging) and on two adjacent spans (max hogging at the support between them) — " + arr.length + " arrangements." : n > 1 ? (allowAll && p.pattern !== "on" ? "Design imposed load ≤ ¾ design dead load on every span — all spans loaded (cl 22.4.1(a), note)." : "Pattern loading switched off — all spans loaded.") : "Single span.");
+  var NP = 240, env = [], sols = [];
+  arr.forEach(function (a) {
+    var w = Ls.map(function (L, i) { return gf * G[i] + qf * Q[i] * a.q[i]; });
+    var s = B1.solve({ x: xs, sup: sup, w: w, EI: EI }); sols.push(s);
+  });
+  /* redistribution, cl 37.1.1: support moments reduced by δ, span moments by statics; resistance ≥ 70 % of the elastic envelope */
+  var del = Math.min(Math.max(+p.redist || 0, 0), 30) / 100;
+  function Mat(s, x) { return B1.at(s, x).M; }
+  function supM(s, j) { return Mat(s, xs[j]); }
+  var pts = []; Ls.forEach(function (L, i) { for (var k = 0; k <= NP; k++) pts.push({ sp: i, x: xs[i] + L * k / NP, t: k / NP }); });
+  pts.forEach(function (q) {
+    var mx = -Infinity, mn = Infinity, vmax = 0, emx = -Infinity, emn = Infinity;
+    sols.forEach(function (s) {
+      var xi = Math.min(Math.max(q.x, xs[q.sp] + 1e-7), xs[q.sp + 1] - 1e-7), m0 = Mat(s, xi), v = B1.at(s, xi).V;
+      emx = Math.max(emx, m0); emn = Math.min(emn, m0);
+      var red = m0;
+      if (del) { var ML = sup[q.sp] === "free" ? 0 : supM(s, q.sp), MR = sup[q.sp + 1] === "free" ? 0 : supM(s, q.sp + 1); red = m0 - del * (Math.min(ML, 0) * (1 - q.t) + Math.min(MR, 0) * q.t); }
+      mx = Math.max(mx, red); mn = Math.min(mn, red); vmax = Math.max(vmax, Math.abs(v));
+    });
+    if (del) { mx = Math.max(mx, 0.7 * emx); mn = Math.min(mn, 0.7 * emn); }
+    q.Mmax = mx; q.Mmin = mn; q.V = vmax; q.Emax = emx; q.Emin = emn;
+  });
+  if (del) r.note("Moment redistribution " + U.f(del * 100, 0) + " % (cl 37.1.1): support moments reduced and span moments increased by statics for every arrangement; the moments used are not less than 70 % of the elastic envelope (cl 37.1.1(b)); xu/d at the supports is limited to 0.6 − δ = " + U.f(0.6 - del, 2) + " (cl 37.1.1(d)).");
+  /* reactions envelope */
+  var reac = xs.map(function (x, j) { var mx2 = 0; sols.forEach(function (s) { mx2 = Math.max(mx2, s.reac[j].V); }); return mx2; });
+  r.table(["Support", "x (m)", "Max factored reaction (kN)", "Max hogging Mu (kNm)"], xs.map(function (x, j) {
+    var hm = 0; pts.forEach(function (q) { if (Math.abs(q.x - x) < 1e-6) hm = Math.max(hm, -q.Mmin); });
+    return [String(j + 1), U.f(x, 2), sup[j] === "free" ? "—" : U.f(reac[j], 1), U.f(hm, 1)];
+  }));
+  var Mlim = RCC.mulim(b, d, fck, fy), Amin = 0.85 * b * d / fy, Amax = 0.04 * b * Dd, dias = [12, 16, 20, 25];
+  function steel(Mu, where, sup2) {
+    if (Mu < 0.5) return { bars: { n: 2, dia: 12, area: 2 * D.barArea(12), text: "2 nos 12 mm φ" }, Ast: 0, nominal: true };
+    var xr = sup2 && del ? Math.min(RCC.xumax(fy), 0.6 - del) : RCC.xumax(fy), Ml = 0.36 * fck * b * xr * d * (d - 0.416 * xr * d) / 1e6, Ast, Asc = 0;
+    if (Mu <= Ml) Ast = RCC.astFlex(Mu, b, d, fck, fy);
+    else { var xu = xr * d, fsc = Math.abs(RCC.fs(0.0035 * (xu - dc) / xu, fy)), fcc = 0.446 * fck; Asc = (Mu - Ml) * 1e6 / ((fsc - fcc) * (d - dc)); Ast = 0.36 * fck * b * xu / (0.87 * fy) + Asc * (fsc - fcc) / (0.87 * fy); }
+    var bars = U.pickBars(Math.max(Ast, Amin), dias, 2, 8);
+    return { bars: bars, Ast: Ast, Asc: Asc, doubly: Asc > 0, Ml: Ml, cbars: Asc > 0 ? U.pickBars(Asc, dias, 2, 6) : null };
+  }
+  r.h("2. Moment and shear envelope");
+  var spanR = Ls.map(function (L, i) {
+    var sp = pts.filter(function (q) { return q.sp === i; }), ms = 0, xm = 0, vl = sp[0].V, vr = sp[sp.length - 1].V;
+    sp.forEach(function (q) { if (q.Mmax > ms) { ms = q.Mmax; xm = q.x - xs[i]; } });
+    return { L: L, Ms: ms, xm: xm, VL: vl, VR: vr, cant: sup[i] === "free" || sup[i + 1] === "free" };
+  });
+  var supR = xs.map(function (x, j) { var hm = 0; pts.forEach(function (q) { if (Math.abs(q.x - x) < 1e-6) hm = Math.max(hm, -q.Mmin); }); return hm; });
+  r.svg = RCC.contEnvSvg(pts, xs, sup);
+  r.h("3. Flexure");
+  var rows = [], ok = true;
+  spanR.forEach(function (s, i) { s.bot = steel(s.Ms, "Span " + (i + 1), false); rows.push(["Span " + (i + 1) + " bottom", U.f(s.Ms, 1), U.f(s.bot.Ast, 0), s.bot.bars.text + (s.bot.doubly ? " (+ " + s.bot.cbars.text + " top, doubly)" : "")]); });
+  var supS = supR.map(function (M0, j) { var st = steel(M0, "Support " + (j + 1), true); if (!st.nominal) rows.push(["Support " + (j + 1) + " top", U.f(M0, 1), U.f(st.Ast, 0), st.bars.text + (st.doubly ? " (+ " + st.cbars.text + " bottom, doubly)" : "")]); return st; });
+  r.table(["Section", "Mu (kNm)", "Ast req (mm²)", "Provide"], rows);
+  r.row("Mu,lim (singly reinforced)", U.f(Mlim, 1), "kNm", "Annex G-1.1(c)");
+  r.row("Minimum / maximum steel", U.f(Amin, 0) + " / " + U.f(Amax, 0), "mm²", "cl 26.5.1.1");
+  spanR.concat([]).forEach(function (s, i) { r.check("Span " + (i + 1) + ": Ast ≤ 0.04 bD", s.bot.bars.area <= Amax, U.f(s.bot.bars.area, 0) + " ≤ " + U.f(Amax, 0) + " mm²", "cl 26.5.1.1(b)"); });
+  supS.forEach(function (st, j) { if (!st.nominal) r.check("Support " + (j + 1) + ": Ast ≤ 0.04 bD", st.bars.area <= Amax, U.f(st.bars.area, 0) + " ≤ " + U.f(Amax, 0) + " mm²", "cl 26.5.1.1(b)"); });
+  r.h("4. Shear (at the support faces, critical section at d)");
+  var Asv = 2 * D.barArea(p.stir), tcm = RCC.taucmax(fck), svmax = Math.min(0.75 * d, 300), svmin0 = 0.87 * fy * Asv / (0.4 * b), srow = [];
+  spanR.forEach(function (s, i) {
+    [["left", s.VL, supS[i]], ["right", s.VR, supS[i + 1]]].forEach(function (e) {
+      if (e[1] < 1e-6) return;
+      var wu = 1.5 * (G[i] + Q[i]), Vd = Math.max(0, e[1] - wu * d / 1000), tv = Vd * 1e3 / (b * d), At = Math.max(e[2].bars.area, s.bot.bars.area / 4), tc = RCC.tauc(fck, 100 * e[2].bars.area / (b * d)), sv;
+      if (tv <= tc) sv = Math.min(svmin0, svmax); else { var Vus = (tv - tc) * b * d; sv = Math.min(0.87 * fy * Asv * d / Vus, svmax, svmin0); }
+      sv = sv >= 100 ? U.floorTo(sv, 25) : U.floorTo(sv, 5);
+      ok = ok && tv <= tcm;
+      r.check("Span " + (i + 1) + " " + e[0] + ": τv ≤ τc,max", tv <= tcm, U.f(tv, 3) + " ≤ " + tcm + " N/mm²", "Table 20");
+      srow.push(["Span " + (i + 1) + " " + e[0], U.f(e[1], 1), U.f(Vd, 1), U.f(tv, 3), U.f(tc, 3), "2L-" + p.stir + " @ " + sv]);
+      s["sv" + e[0]] = sv;
+    });
+  });
+  r.table(["Location", "Vu at support (kN)", "Vu at d (kN)", "τv", "τc", "Stirrups"], srow);
+  r.note("Stirrup spacing ≤ 0.75 d and 300 mm (cl 26.5.1.5); minimum shear steel 0.4 b sv/(0.87 fy) (cl 26.5.1.6). Use the support spacing up to the point where τv falls to τc, the minimum spacing beyond.");
+  r.h("5. Deflection (span/effective depth, cl 23.2.1)");
+  spanR.forEach(function (s, i) {
+    var basic = s.cant ? 7 : (n === 1 && sup[0] !== "fixed" && sup[1] !== "fixed") ? 20 : 26;
+    if (s.L > 10 && !s.cant) basic *= 10 / s.L;
+    var g = s.cant ? (supS[sup[i] === "free" ? i + 1 : i]) : s.bot, Ar = Math.max(g.Ast || 0, Amin), fs = 0.58 * fy * Math.min(Ar, g.bars.area) / g.bars.area;
+    var kt = RCC.kt(100 * g.bars.area / (b * d), fs), allow = basic * kt, act = s.L * 1000 / d;
+    r.check("Span " + (i + 1) + ": L/d ≤ " + U.f(basic, 1) + " × kt " + U.f(kt, 2), act <= allow, U.f(act, 1) + " ≤ " + U.f(allow, 1), "cl 23.2.1");
+  });
+  r.h("6. Crack width (service = Mu/1.5, IS 456 Annex F)");
+  var wlim = DT.wlim({ cv: { expo: p.exp || "moderate", nom: p.cover } }), cmin = p.cover + p.stir;
+  spanR.forEach(function (s, i) { if (s.bot.nominal) return; var cw = DT.crack(s.Ms / 1.5, b, Dd, d, s.bot.bars.n, s.bot.bars.dia, cmin, fck); r.check("Span " + (i + 1) + " soffit: wcr ≤ " + U.f(wlim, 2) + " mm", cw.w <= wlim + 1e-9, U.f(cw.w, 3) + " mm", "cl 35.3.2"); });
+  supS.forEach(function (st, j) { if (st.nominal) return; var cw = DT.crack(supR[j] / 1.5, b, Dd, d, st.bars.n, st.bars.dia, cmin, fck); r.check("Support " + (j + 1) + " top: wcr ≤ " + U.f(wlim, 2) + " mm", cw.w <= wlim + 1e-9, U.f(cw.w, 3) + " mm", "cl 35.3.2"); });
+  r.h("7. Curtailment (cl 26.2.3)");
+  var crow = [];
+  xs.forEach(function (x, j) {
+    var st = supS[j]; if (st.nominal) return;
+    var Ld = RCC.Ld(st.bars.dia, fy, fck), ext = [];
+    [[j - 1, -1], [j, 1]].forEach(function (sd) {
+      var i = sd[0]; if (i < 0 || i >= n) return;
+      var sp = pts.filter(function (q) { return q.sp === i; }), far = 0;
+      sp.forEach(function (q) { if (q.Mmin < -1e-6) far = Math.max(far, Math.abs(q.x - x)); });
+      var lead = Math.max(d / 1000, 12 * st.bars.dia / 1000, Ls[i] / 16);
+      ext.push((i < j ? "left" : "right") + " " + U.f(Math.min(far + lead, Ls[i]), 2) + " m");
+    });
+    crow.push(["Support " + (j + 1) + " top " + st.bars.text, ext.join(", "), "⅓ of the bars run to " + U.f(Math.max.apply(null, [0].concat(ext.map(function (e) { return parseFloat(e.split(" ")[1]); }))), 2) + " m; Ld = " + U.f(Ld, 0) + " mm"]);
+  });
+  spanR.forEach(function (s, i) { crow.push(["Span " + (i + 1) + " bottom " + s.bot.bars.text, "≥ ¼ of the bars into each support by ≥ Ld/3", "rest may stop at 0.15 L from interior supports when Mu permits"]); });
+  r.table(["Bars", "Top bars extend beyond the point of contraflexure by max(d, 12φ, L/16)", "Notes"], crow);
+  r.note("At simple end supports the positive bars satisfy Ld ≤ 1.3 M1/V + L0 (cl 26.2.3.3(c)); at interior supports ⅓ of the negative steel extends beyond the point of inflection by the larger of d, 12φ and L/16 (cl 26.2.3.4).");
+  r.sum("Beam", b + " × " + Dd + " mm, " + n + " span" + (n > 1 ? "s" : "") + " (" + Ls.map(function (L) { return U.f(L, 2); }).join(" + ") + " m)");
+  r.sum("Max sagging / hogging", U.f(Math.max.apply(null, spanR.map(function (s) { return s.Ms; })), 1) + " / " + U.f(Math.max.apply(null, supR), 1) + " kNm");
+  r.sum("Bottom steel", spanR.map(function (s, i) { return "S" + (i + 1) + ": " + s.bot.bars.text; }).join("; "));
+  r.sum("Top steel", supS.map(function (st, j) { return st.nominal ? null : "Sup" + (j + 1) + ": " + st.bars.text; }).filter(Boolean).join("; ") || "hangers 2 nos 12 mm φ");
+  r.res = { spans: spanR, sup: supS, supM: supR, reac: reac, pts: pts, d: d };
+  return r;
+};
+RCC.contEnvSvg = function (pts, xs, sup) {
+  var W = 640, H = 190, ml = 46, mr = 14, Lt = xs[xs.length - 1], sx = (W - ml - mr) / Lt;
+  function plot(keyA, keyB, title, unit, col, invert, mono) {
+    var vals = []; pts.forEach(function (q) { vals.push(q[keyA]); if (keyB) vals.push(q[keyB]); });
+    var mx = Math.max(1e-9, Math.max.apply(null, vals.map(Math.abs))), sy = (H / 2 - 34) / mx, y0 = H / 2 + 4;
+    function path(k, sg) { return "M" + ml + " " + y0 + pts.map(function (q) { return " L" + (ml + q.x * sx).toFixed(1) + " " + (y0 + (invert ? 1 : -1) * sg * q[k] * sy).toFixed(1); }).join("") + " L" + (ml + Lt * sx).toFixed(1) + " " + y0; }
+    var o = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="bmd" xmlns="http://www.w3.org/2000/svg"><text x="4" y="14" class="bt">' + title + '</text>';
+    o += '<path d="' + path(keyA, 1) + '" fill="' + col + '" fill-opacity=".15" stroke="' + col + '" stroke-width="1.6"/>';
+    if (keyB) o += '<path d="' + path(keyB, 1) + '" fill="' + col + '" fill-opacity=".08" stroke="' + col + '" stroke-width="1.2" stroke-dasharray="4 3"/>';
+    o += '<line x1="' + ml + '" y1="' + y0 + '" x2="' + (W - mr) + '" y2="' + y0 + '" stroke="#6b7a8a"/>';
+    xs.forEach(function (x, j) { var X = ml + x * sx; if (sup[j] !== "free") o += '<path d="M' + X + ' ' + (y0 + 1) + ' l-5 9 h10 z" fill="#6b7a8a"/>'; o += '<text x="' + (X - 6) + '" y="' + (H - 4) + '" class="bv">' + U.f(x, 1) + '</text>'; });
+    var iA = 0, iB = 0; pts.forEach(function (q, i) { if (q[keyA] > pts[iA][keyA]) iA = i; if ((keyB ? q[keyB] : q[keyA]) < (keyB ? pts[iB][keyB] : pts[iB][keyA])) iB = i; });
+    [[iA, keyA], [iB, keyB || keyA]].forEach(function (e) { var v = pts[e[0]][e[1]]; if (Math.abs(v) < mx * 0.03) return; var X = ml + pts[e[0]].x * sx, Y = y0 + (invert ? 1 : -1) * v * sy; o += '<text x="' + Math.min(W - 70, Math.max(ml, X - 18)).toFixed(1) + '" y="' + Math.min(H - 16, Math.max(26, Y + ((invert ? 1 : -1) * v > 0 ? 13 : -5))).toFixed(1) + '" class="bv">' + U.f(v, 1) + ' ' + unit + '</text>'; });
+    return o + '</svg>';
+  }
+  return '<div class="dwgs"><div class="dwgt">Factored envelopes over all load arrangements — sagging below the axis</div><div class="tw">' + plot("Mmax", "Mmin", "Bending moment envelope Mu", "kNm", "#1d4ed8", true) + plot("V", null, "Shear envelope |Vu|", "kN", "#c2410c", false) + '</div></div>';
+};
+
+/* ------------------------------------------------------------ CANTILEVER RETAINING WALL */
+RCC.retWall = function (p) {
+  var r = new Rep("Cantilever Retaining Wall", "IS 456:2000 cl 20, 34; Rankine earth pressure");
+  var H = p.H, gs = p.gs, phi = p.phi * Math.PI / 180, bet = (p.beta || 0) * Math.PI / 180, q = p.q || 0, mu = p.mu, sbc = p.sbc, fck = p.fck, fy = p.fy, gc = 25;
+  if (bet >= phi) throw new Error("Backfill slope must be less than the angle of internal friction");
+  var Ka = bet ? Math.cos(bet) * (Math.cos(bet) - Math.sqrt(Math.cos(bet) * Math.cos(bet) - Math.cos(phi) * Math.cos(phi))) / (Math.cos(bet) + Math.sqrt(Math.cos(bet) * Math.cos(bet) - Math.cos(phi) * Math.cos(phi))) : (1 - Math.sin(phi)) / (1 + Math.sin(phi));
+  var Kp = (1 + Math.sin(phi)) / (1 - Math.sin(phi)), Df = p.Df || 0;
+  r.h("1. Earth pressure (Rankine)");
+  r.eq("Ka = " + (bet ? "cos β (cos β − √(cos²β − cos²φ)) / (cos β + √(cos²β − cos²φ))" : "(1 − sin φ)/(1 + sin φ)") + " = " + U.f(Ka, 3) + " ; Kp = " + U.f(Kp, 3), "Rankine");
+  /* proportions: user values or the usual first trial (base width 0.5–0.7 H, toe ≈ B/3, base and stem ≈ H/12) */
+  var tb = p.tb > 0 ? p.tb / 1000 : U.ceilTo(Math.max(H / 12, 0.3), 0.05), tt = (p.ttop > 0 ? p.ttop : 200) / 1000, ts = p.tstem > 0 ? p.tstem / 1000 : U.ceilTo(Math.max(H / 12, tt + 0.05, 0.25), 0.025);
+  var B = p.B > 0 ? p.B : U.ceilTo(0.5 * H, 0.05), toe = p.toe > 0 ? p.toe : U.ceilTo(B / 3, 0.05), auto = !(p.B > 0);
+  var h = H - tb, st = null;
+  function stab(Bw, toeL) {
+    var heel = Bw - toeL - ts, Wk = [];
+    if (heel < 0.1) return null;
+    Wk.push(["Stem (rectangular part)", gc * tt * h, toeL + ts - tt / 2]);
+    if (ts > tt) Wk.push(["Stem (tapered part)", gc * (ts - tt) * h / 2, toeL + (ts - tt) * 2 / 3]);
+    Wk.push(["Base slab", gc * Bw * tb, Bw / 2]);
+    Wk.push(["Soil over the heel", gs * heel * h, toeL + ts + heel / 2]);
+    if (bet) Wk.push(["Sloping fill over the heel", gs * heel * heel * Math.tan(bet) / 2, toeL + ts + heel * 2 / 3]);
+    if (Df > tb) Wk.push(["Soil over the toe", gs * toeL * (Df - tb), toeL / 2]);
+    var Hs = H + (bet ? heel * Math.tan(bet) : 0), Pa = Ka * gs * Hs * Hs / 2, Pq = Ka * q * Hs, Pah = Pa * Math.cos(bet), Pav = Pa * Math.sin(bet);
+    var W = Wk.reduce(function (s, w) { return s + w[1]; }, 0), Mr = Wk.reduce(function (s, w) { return s + w[1] * w[2]; }, 0), Wq = q * heel, Mq = Wq * (toeL + ts + heel / 2);
+    if (Pav) { W += Pav; Mr += Pav * Bw; }
+    var Mo = Pah * Hs / 3, Moq = Pq * Hs / 2, Ht = Pah + Pq;
+    /* IS 456 cl 20.1: 0.9 × restoring ≥ 1.2 × overturning (earth) + 1.4 × overturning (surcharge); surcharge on the heel not taken as restoring */
+    var ovt = 0.9 * Mr / (1.2 * Mo + 1.4 * Moq), Pp = p.passive === "yes" ? Kp * gs * Df * Df / 2 : 0;
+    var sld = (0.9 * mu * W + Pp) / (1.4 * Pa * Math.cos(bet) + 1.4 * Pq);
+    /* service bearing pressure with surcharge */
+    var Wv = W + Wq, Mnet = Mr + Mq - Mo - Moq, xr = Mnet / Wv, e = Bw / 2 - xr, qmax, qmin, qheel, qtoe;
+    if (Math.abs(e) <= Bw / 6) { qmax = Wv / Bw * (1 + 6 * Math.abs(e) / Bw); qmin = Wv / Bw * (1 - 6 * Math.abs(e) / Bw); }
+    else { qmax = 2 * Wv / (3 * (Bw / 2 - Math.abs(e))); qmin = 0; }
+    qtoe = e >= 0 ? qmax : qmin; qheel = e >= 0 ? qmin : qmax;
+    return { Wk: Wk, W: W, Wq: Wq, Mr: Mr, Mq: Mq, Mo: Mo, Moq: Moq, Pa: Pa, Pq: Pq, Pah: Pah, Ht: Ht, ovt: ovt, sld: sld, Pp: Pp, e: e, xr: xr, qmax: qmax, qmin: qmin, qtoe: qtoe, qheel: qheel, heel: heel, Hs: Hs, B: Bw, toe: toeL, Wv: Wv };
+  }
+  for (var it = 0; it < 200; it++) {
+    st = stab(B, toe);
+    var good = st && st.ovt >= 1 && st.sld >= 1 && st.qmax <= sbc && st.qmin >= 0;
+    if (good || !auto) break;
+    B = U.ceilTo(B + 0.05, 0.05); if (!(p.toe > 0)) toe = U.ceilTo(B / 3, 0.05);
+  }
+  if (!st) throw new Error("The heel is too short for the stem — increase the base width or reduce the toe");
+  r.row("Height of retained earth above founding level H", U.f(H, 2), "m");
+  r.row("Soil: γ, φ, base friction μ", U.f(gs, 1) + " kN/m³, " + p.phi + "°, " + mu, "");
+  r.row("Surcharge q", U.f(q, 1), "kN/m²");
+  r.eq("Pa = Ka γ H²/2 = " + U.f(st.Pa, 2) + " kN/m at H/3 ; Pq = Ka q H = " + U.f(st.Pq, 2) + " kN/m at H/2" + (bet ? " (H at the heel end " + U.f(st.Hs, 2) + " m, inclined at β)" : ""), "");
+  r.h("2. Proportions" + (auto ? " (base widened until stable)" : ""));
+  r.row("Base width B / toe / heel", U.f(B, 2) + " / " + U.f(toe, 2) + " / " + U.f(st.heel, 2), "m");
+  r.row("Base thickness / stem at base / stem at top", U.f(tb * 1000, 0) + " / " + U.f(ts * 1000, 0) + " / " + U.f(tt * 1000, 0), "mm");
+  r.table(["Load (per m run)", "W (kN)", "Lever arm about the toe (m)", "Moment (kNm)"], st.Wk.map(function (w) { return [w[0], U.f(w[1], 2), U.f(w[2], 3), U.f(w[1] * w[2], 2)]; }).concat([["Total", U.f(st.W, 2), "", U.f(st.Mr, 2)]]));
+  r.h("3. Stability (IS 456 cl 20)");
+  r.eq("Overturning: 0.9 Mr / (1.2 Mo,earth + 1.4 Mo,surcharge) = 0.9 × " + U.f(st.Mr, 1) + " / (1.2 × " + U.f(st.Mo, 1) + " + 1.4 × " + U.f(st.Moq, 1) + ") = " + U.f(st.ovt, 2), "cl 20.1");
+  r.check("Overturning — ratio ≥ 1.0", st.ovt >= 1, U.f(st.ovt, 2) + " ≥ 1.0 (conventional Mr/Mo " + U.f(st.Mr / (st.Mo + st.Moq), 2) + ")", "cl 20.1");
+  r.eq("Sliding: (0.9 μ W" + (st.Pp ? " + Pp" : "") + ") / H = (0.9 × " + mu + " × " + U.f(st.W, 1) + (st.Pp ? " + " + U.f(st.Pp, 1) : "") + ") / " + U.f(st.Ht, 1) + " → factor " + U.f(st.sld * 1.4, 2) + " ≥ 1.4", "cl 20.2");
+  r.check("Sliding — factor ≥ 1.4", st.sld >= 1, U.f(st.sld * 1.4, 2) + " ≥ 1.4", "cl 20.2");
+  if (st.sld < 1 && !st.Pp) r.note("Sliding governs: widen the base, add a shear key below the base, or include passive resistance in front of the toe (Df " + U.f(Df, 2) + " m).");
+  r.eq("Resultant at " + U.f(st.xr, 3) + " m from the toe, e = " + U.f(st.e, 3) + " m (B/6 = " + U.f(B / 6, 3) + ") → q = " + U.f(st.qtoe, 1) + " kN/m² (toe) / " + U.f(st.qheel, 1) + " kN/m² (heel)", "");
+  r.check("Max bearing pressure ≤ SBC", st.qmax <= sbc, U.f(st.qmax, 1) + " ≤ " + sbc + " kN/m²", "");
+  r.check("No tension under the base (e ≤ B/6)", Math.abs(st.e) <= B / 6 + 1e-9, "e = " + U.f(st.e, 3) + " m", "");
+  /* structural design, factor 1.5 */
+  var cov = p.cover, dia = p.dia, wlim = 0;
+  function des(Mu, Dthk, name, ref) {
+    var dd = Dthk * 1000 - cov - dia / 2, Ast = Math.max(RCC.astFlex(Mu, 1000, dd, fck, fy), 0.0012 * 1000 * Dthk * 1000), Ml = RCC.mulim(1000, dd, fck, fy);
+    var sp = U.spacing(Ast, dia, Math.min(3 * dd, 300));
+    r.check(name + ": Mu ≤ Mu,lim", Mu <= Ml, U.f(Mu, 1) + " ≤ " + U.f(Ml, 1) + " kNm/m", ref || "Annex G");
+    r.row(name + " — steel", sp.text, "", "Ast " + U.f(Ast, 0) + " mm²/m (d = " + U.f(dd, 0) + " mm)");
+    return { d: dd, Ast: Ast, sp: sp };
+  }
+  function shear(Vu, dd, sp, name) {
+    var tv = Vu * 1e3 / (1000 * dd), k = U.interp([150, 300], [1.3, 1.0], Math.max(150, Math.min(300, dd + cov + dia / 2))), tc = k * RCC.tauc(fck, 100 * sp.area / (1000 * dd));
+    r.check(name + ": τv ≤ k τc (no shear steel)", tv <= tc, U.f(tv, 3) + " ≤ " + U.f(tc, 3) + " N/mm²", "cl 40.2.1.1");
+  }
+  r.h("4. Stem (cantilever from the base, factored 1.5)");
+  var Mst = 1.5 * (Ka * gs * Math.pow(h, 3) / 6 + Ka * q * h * h / 2), Vst = 1.5 * (Ka * gs * h * h / 2 + Ka * q * h);
+  r.eq("Mu = 1.5 (Ka γ h³/6 + Ka q h²/2) = " + U.f(Mst, 1) + " kNm/m ; Vu = " + U.f(Vst, 1) + " kN/m (h = " + U.f(h, 2) + " m)", "");
+  var sm = des(Mst, ts, "Stem, earth face (vertical bars)");
+  var Vd = 1.5 * (Ka * gs * Math.pow(Math.max(h - sm.d / 1000, 0), 2) / 2 + Ka * q * Math.max(h - sm.d / 1000, 0));
+  shear(Vd, sm.d, sm.sp, "Stem at d above the base");
+  /* curtail half the bars where the moment falls to half (moment ∝ depth³ for earth): depth z with M(z) = Mst/2 */
+  var zc = h; for (var z = 0; z <= h; z += 0.01) { var Mz = 1.5 * (Ka * gs * z * z * z / 6 + Ka * q * z * z / 2); if (Mz >= Mst / 2) { zc = z; break; } }
+  var Ld = RCC.Ld(dia, fy, fck), cutH = Math.max(0, h - zc - Math.max(sm.d / 1000, 12 * dia / 1000));
+  r.row("Curtail alternate stem bars at", U.f(cutH, 2) + " m above the base", "", "M = Mu/2 at " + U.f(h - zc, 2) + " m, less max(d, 12φ) (cl 26.2.3.1)");
+  var distS = U.spacing(0.0012 * 1000 * (tt + ts) / 2 * 1000, 8, Math.min(450, 5 * sm.d));
+  r.row("Stem distribution / front face (temperature) steel", distS.text + " each face, horizontal; front face vertical " + U.spacing(0.0012 * 1000 * ts * 1000 / 2, 8, 300).text, "", "0.12 % (cl 26.5.2.1)");
+  r.h("5. Heel slab (downward soil, surcharge and self weight less the upward pressure)");
+  var x0 = toe + ts, qAt = function (x) { return st.qtoe + (st.qheel - st.qtoe) * x / B; }, Mh = 0, Vh = 0, nn = 40;
+  var wdown = gs * h + q + gc * tb + (bet ? gs * st.heel * Math.tan(bet) / 2 : 0);
+  for (var i2 = 0; i2 < nn; i2++) { var xa = x0 + st.heel * (i2 + 0.5) / nn, dx = st.heel / nn, net = wdown - qAt(xa); Mh += net * dx * (xa - x0); Vh += net * dx; }
+  Mh = 1.5 * Math.max(Mh, 0); Vh = 1.5 * Math.max(Vh, 0);
+  r.eq("Net downward load on the heel → Mu = " + U.f(Mh, 1) + " kNm/m at the stem face (tension at the top), Vu = " + U.f(Vh, 1) + " kN/m", "");
+  var hs = des(Mh, tb, "Heel, top bars");
+  shear(Vh, hs.d, hs.sp, "Heel at the stem face");
+  r.h("6. Toe slab (upward pressure less self weight)");
+  var Mt = 0, Vt = 0, Vtd = 0, dT = (tb * 1000 - cov - dia / 2) / 1000;
+  for (i2 = 0; i2 < nn; i2++) { var xb = toe * (i2 + 0.5) / nn, dx2 = toe / nn, net2 = qAt(xb) - gc * tb; Mt += net2 * dx2 * (toe - xb); Vt += net2 * dx2; if (xb < toe - dT) Vtd += net2 * dx2; }
+  Mt = 1.5 * Math.max(Mt, 0); Vtd = 1.5 * Math.max(Vtd, 0);
+  r.eq("Mu = " + U.f(Mt, 1) + " kNm/m at the stem face (tension at the bottom); Vu at d from the face = " + U.f(Vtd, 1) + " kN/m", "");
+  var ts2 = des(Mt, tb, "Toe, bottom bars");
+  shear(Vtd, ts2.d, ts2.sp, "Toe at d from the face");
+  r.row("Base distribution steel", U.spacing(0.0012 * 1000 * tb * 1000, 10, 300).text + " both faces along the wall", "", "0.12 %");
+  r.row("Stem bars anchored into the base", "L-bars, leg " + U.f(Math.max(Ld - (tb * 1000 - cov), 12 * dia), 0) + " mm along the base", "", "Ld = " + U.f(Ld, 0) + " mm (cl 26.2.1)");
+  r.svg = RCC.wallSvg({ H: H, tb: tb, ts: ts, tt: tt, B: B, toe: toe, heel: st.heel, Df: Df, qtoe: st.qtoe, qheel: st.qheel, beta: bet });
+  r.note("Provide weep holes (≥ 75 mm at about 1.5 m centres) and a filter / drainage layer behind the stem so that no water pressure builds up — the design assumes drained backfill.");
+  r.sum("Wall", "H " + U.f(H, 2) + " m; base " + U.f(B, 2) + " m (toe " + U.f(toe, 2) + ", heel " + U.f(st.heel, 2) + "), " + U.f(tb * 1000, 0) + " mm thick; stem " + U.f(tt * 1000, 0) + "–" + U.f(ts * 1000, 0) + " mm");
+  r.sum("Stability", "overturning " + U.f(st.ovt, 2) + ", sliding " + U.f(st.sld * 1.4, 2) + ", qmax " + U.f(st.qmax, 0) + " kN/m²");
+  r.sum("Stem / heel / toe steel", sm.sp.text + " / " + hs.sp.text + " / " + ts2.sp.text);
+  r.res = { B: B, toe: toe, heel: st.heel, tb: tb, ts: ts, st: st, stem: sm, heelS: hs, toeS: ts2, Ka: Ka, Mst: Mst };
+  return r;
+};
+RCC.wallSvg = function (g) {
+  var W = 420, Hh = 300, pad = 40, sc = Math.min((W - 2 * pad) / g.B, (Hh - 70) / g.H), X = function (x) { return pad + x * sc; }, Y = function (y) { return Hh - 40 - y * sc; };
+  var h = g.H - g.tb, o = '<svg viewBox="0 0 ' + W + ' ' + Hh + '" class="bmd" xmlns="http://www.w3.org/2000/svg"><text x="4" y="14" class="bt">Section (per m run)</text>';
+  o += '<path d="M' + X(0) + ' ' + Y(0) + ' H' + X(g.B) + ' V' + Y(g.tb) + ' H' + X(g.toe + g.ts) + ' L' + X(g.toe + g.ts) + ' ' + Y(g.H) + ' H' + X(g.toe + g.ts - g.tt) + ' L' + X(g.toe) + ' ' + Y(g.tb) + ' H' + X(0) + ' Z" fill="#cbd5e1" stroke="#334155" stroke-width="1.5"/>';
+  o += '<path d="M' + X(g.toe + g.ts) + ' ' + Y(g.H) + ' L' + X(g.B) + ' ' + Y(g.H + g.heel * Math.tan(g.beta || 0)) + '" stroke="#a16207" stroke-dasharray="5 3"/><text x="' + (X(g.B) - 60) + '" y="' + (Y(g.H) - 6) + '" class="bv">backfill</text>';
+  var qs = Math.max(g.qtoe, g.qheel) || 1, k = 26 / qs;
+  o += '<path d="M' + X(0) + ' ' + (Y(0) + 4) + ' L' + X(0) + ' ' + (Y(0) + 4 + g.qtoe * k) + ' L' + X(g.B) + ' ' + (Y(0) + 4 + g.qheel * k) + ' L' + X(g.B) + ' ' + (Y(0) + 4) + ' Z" fill="#c2410c" fill-opacity=".2" stroke="#c2410c"/>';
+  o += '<text x="' + X(0) + '" y="' + (Hh - 2) + '" class="bv">' + U.f(g.qtoe, 0) + ' kN/m²</text><text x="' + (X(g.B) - 52) + '" y="' + (Hh - 2) + '" class="bv">' + U.f(g.qheel, 0) + ' kN/m²</text>';
+  o += '<text x="' + (X(g.B / 2) - 30) + '" y="' + (Y(0) - 4) + '" class="bv">B ' + U.f(g.B, 2) + ' m</text><text x="' + (X(g.toe + g.ts) + 6) + '" y="' + Y(g.H / 2) + '" class="bv">H ' + U.f(g.H, 2) + ' m</text>';
+  return '<div class="dwgs"><div class="tw">' + o + '</svg></div></div>';
+};
+
+/* ------------------------------------------------------------ COMBINED FOOTING (two columns) */
+RCC.combFooting = function (p) {
+  var r = new Rep("Combined Footing (two columns)", "IS 456:2000 cl 34");
+  var P1 = p.P1, P2 = p.P2, s = p.s, a1 = p.c1b / 1000, b1 = p.c1d / 1000, a2 = p.c2b / 1000, b2 = p.c2d / 1000, q = p.sbc, fck = p.fck, fy = p.fy, cov = p.cover, dia = p.dia;
+  var P = P1 + P2, xbar = P2 * s / P;
+  r.h("1. Plan size (resultant at the centre of the footing)");
+  r.eq("Resultant of the service loads from column 1: x̄ = P2 s / (P1 + P2) = " + U.f(P2, 1) + " × " + U.f(s, 2) + " / " + U.f(P, 1) + " = " + U.f(xbar, 3) + " m", "");
+  var A = P * (1 + p.sw / 100) / q, edge = p.edge === "line";
+  var aL = edge ? b1 / 2 : (p.projL > 0 ? p.projL : null), L;
+  if (aL === null) { L = U.ceilTo(2 * Math.max(xbar + b1 / 2 + 0.3, s - xbar + b2 / 2 + 0.3), 0.05); aL = L / 2 - xbar; }
+  else L = U.ceilTo(2 * (xbar + aL), 0.05);
+  var aR = L - aL - s;
+  if (aR < b2 / 2) { r.note("With the left projection fixed the right column would overhang the footing; the footing is not centred on the resultant (pressure varies) — check below."); aR = b2 / 2; L = aL + s + aR; }
+  var B = U.ceilTo(A / L, 0.05), e = (aL + xbar) - L / 2;
+  r.eq("Area = (P1 + P2)(1 + " + p.sw + " %) / SBC = " + U.f(A, 2) + " m² ; L = " + U.f(L, 2) + " m (projection " + U.f(aL, 2) + " m left of column 1" + (edge ? " — column 1 on the property line" : "") + ", " + U.f(aR, 2) + " m right of column 2) ; B = " + U.f(B, 2) + " m", "");
+  var qa = P * (1 + p.sw / 100) / (B * L), qmax = qa * (1 + 6 * Math.abs(e) / L);
+  r.check("Gross pressure ≤ SBC", qmax <= q * 1.0001, U.f(qmax, 1) + " ≤ " + q + " kN/m²" + (Math.abs(e) > 1e-3 ? " (eccentricity " + U.f(e, 3) + " m)" : ""), "");
+  var Pu1 = 1.5 * P1, Pu2 = 1.5 * P2, Pu = Pu1 + Pu2, qu = Pu / (B * L);
+  r.row("Factored net upward pressure qu", U.f(qu, 1), "kN/m²", "1.5 (P1 + P2) / (B L)");
+  /* longitudinal: beam of length L, upward w = qu B (uniform; with eccentricity linear), column loads spread over the column depth */
+  var NX = 400, xsA = [], Vx = [], Mx = [], wq = function (x) { var qe = qu * (1 + 12 * e * (x - L / 2) / (L * L)); return qe * B; };
+  var c1 = aL, c2 = aL + s;
+  for (var i = 0; i <= NX; i++) {
+    var x = L * i / NX, V = 0, M = 0, nn = 60;
+    for (var k = 0; k < nn; k++) { var xi = x * (k + 0.5) / nn, dx = x / nn; V += wq(xi) * dx; M += wq(xi) * dx * (x - xi); }
+    [[c1, b1, Pu1], [c2, b2, Pu2]].forEach(function (c) { var lo = c[0] - c[1] / 2, hi = c[0] + c[1] / 2; if (x <= lo) return; var ln = Math.min(x, hi) - lo, wcol = c[2] / c[1]; V -= wcol * ln; M -= wcol * ln * (x - (lo + ln / 2)); });
+    xsA.push(x); Vx.push(V); Mx.push(M);
+  }
+  var Mhog = 0, xh = 0, Msag = 0, xs2 = 0; Mx.forEach(function (m, i3) { if (-m > Mhog) { Mhog = -m; xh = xsA[i3]; } if (m > Msag) { Msag = m; xs2 = xsA[i3]; } });
+  r.h("2. Longitudinal bending (beam on the two columns, upward soil pressure)");
+  r.row("Max hogging moment (between the columns, tension at the top)", U.f(Mhog, 1) + " kNm at " + U.f(xh, 2) + " m", "");
+  r.row("Max sagging moment (at the columns, tension at the bottom)", U.f(Msag, 1) + " kNm at " + U.f(xs2, 2) + " m", "");
+  r.svg = RCC.cfSvg(xsA, Mx, Vx, L, c1, c2);
+  /* depth: punching at both columns, one-way shear at d from the faces, bending */
+  var kmu = RCC.mulim(1, 1, fck, fy) * 1e6, d = Math.max(U.ceilTo(Math.sqrt(Math.max(Mhog, Msag) * 1e6 / (kmu * B * 1000)), 25), 200), ok = false, chk = {};
+  function Vat(x) { var i4 = Math.round(Math.min(Math.max(x / L, 0), 1) * NX); return Math.abs(Vx[i4]); }
+  for (var it = 0; it < 120 && !ok; it++) {
+    var dm = d / 1000, ks1 = Math.min(1, 0.5 + Math.min(a1, b1) / Math.max(a1, b1)), ks2 = Math.min(1, 0.5 + Math.min(a2, b2) / Math.max(a2, b2)), tpa = 0.25 * Math.sqrt(fck);
+    /* column 1: 3-sided perimeter on the property line */
+    var bo1 = edge ? 2 * (b1 + dm / 2) + (a1 + dm) : 2 * ((a1 + dm) + (b1 + dm)), Ain1 = edge ? (b1 + dm / 2) * (a1 + dm) : (a1 + dm) * (b1 + dm), Vp1 = Pu1 - qu * Ain1, tp1 = Vp1 * 1e3 / (bo1 * 1000 * d);
+    var bo2 = 2 * ((a2 + dm) + (b2 + dm)), Vp2 = Pu2 - qu * (a2 + dm) * (b2 + dm), tp2 = Vp2 * 1e3 / (bo2 * 1000 * d);
+    var xs3 = [c1 + b1 / 2 + dm, c2 - b2 / 2 - dm, c1 - b1 / 2 - dm, c2 + b2 / 2 + dm].filter(function (x) { return x > 0 && x < L; });
+    var Vow = Math.max.apply(null, xs3.map(Vat).concat([0])), tvow = Vow * 1e3 / (B * 1000 * d);
+    var AstT = RCC.astFlex(Mhog, B * 1000, d, fck, fy), tc = RCC.tauc(fck, 100 * Math.max(AstT, 0.0012 * B * 1000 * (d + cov + dia)) / (B * 1000 * d));
+    chk = { tp1: tp1, tp2: tp2, tpa1: ks1 * tpa, tpa2: ks2 * tpa, tvow: tvow, tc: tc, Vow: Vow };
+    ok = tp1 <= ks1 * tpa && tp2 <= ks2 * tpa && tvow <= tc;
+    if (!ok) d += 25;
+  }
+  var Dtot = U.ceilTo(d + cov + dia / 2, 25);
+  r.h("3. Depth — punching and one-way shear");
+  r.row("Effective depth d / overall depth D", d + " / " + Dtot, "mm");
+  r.check("Punching at column 1" + (edge ? " (3-sided, on the property line)" : ""), chk.tp1 <= chk.tpa1, U.f(chk.tp1, 3) + " ≤ ks 0.25√fck = " + U.f(chk.tpa1, 3) + " N/mm²", "cl 31.6.3");
+  r.check("Punching at column 2", chk.tp2 <= chk.tpa2, U.f(chk.tp2, 3) + " ≤ " + U.f(chk.tpa2, 3) + " N/mm²", "cl 31.6.3");
+  r.check("One-way shear at d from the column faces", chk.tvow <= chk.tc, U.f(chk.tvow, 3) + " ≤ τc " + U.f(chk.tc, 3) + " N/mm² (Vu " + U.f(chk.Vow, 1) + " kN)", "cl 34.2.4.1(a)");
+  r.check("Mu ≤ Mu,lim", Math.max(Mhog, Msag) <= RCC.mulim(B * 1000, d, fck, fy), U.f(Math.max(Mhog, Msag), 1) + " ≤ " + U.f(RCC.mulim(B * 1000, d, fck, fy), 1) + " kNm", "");
+  r.h("4. Longitudinal steel (over the full width B)");
+  var Amin = 0.0012 * B * 1000 * Dtot, At = Math.max(RCC.astFlex(Mhog, B * 1000, d, fck, fy), Amin), Ab = Math.max(RCC.astFlex(Msag, B * 1000, d, fck, fy), Amin);
+  var nTop = U.spacing(At / B, dia, 300), nBot = U.spacing(Ab / B, dia, 300);
+  r.row("Top (between the columns)", nTop.text, "", "Ast " + U.f(At, 0) + " mm² over " + U.f(B, 2) + " m");
+  r.row("Bottom (under the columns)", nBot.text, "", "Ast " + U.f(Ab, 0) + " mm²; at least the minimum 0.12 % over the whole length");
+  r.h("5. Transverse steel — column bands (width = column + 0.75 d each side)");
+  [[1, a1, Pu1], [2, a2, Pu2]].forEach(function (c) {
+    var proj = (B - c[1]) / 2, Mt = c[2] / B * proj * proj / 2, bw = c[1] + 2 * 0.75 * d / 1000, dT = d - dia, Ast = Math.max(RCC.astFlex(Mt, bw * 1000, dT, fck, fy), 0.0012 * bw * 1000 * Dtot);
+    var sp = U.spacing(Ast / bw, dia, 300);
+    r.row("Column " + c[0] + ": Mu = (Pu/B)(B − b)²/2 = " + U.f(Mt, 1) + " kNm over a band " + U.f(bw, 2) + " m", sp.text, "", "Ast " + U.f(Ast, 0) + " mm²");
+  });
+  r.row("Elsewhere (transverse)", U.spacing(0.0012 * 1000 * Dtot, Math.min(dia, 10), 300).text, "", "0.12 %");
+  r.h("6. Bearing and anchorage");
+  [[1, a1, b1, Pu1], [2, a2, b2, Pu2]].forEach(function (c) {
+    var A1 = c[1] * c[2], A2 = Math.min(B * L, (c[1] + 4 * Dtot / 1000) * (c[2] + 4 * Dtot / 1000)), fbr = 0.45 * fck * Math.min(2, Math.sqrt(A2 / A1)), fa = c[3] * 1e3 / (A1 * 1e6);
+    r.check("Bearing under column " + c[0], fa <= fbr, U.f(fa, 2) + " ≤ " + U.f(fbr, 2) + " N/mm²", "cl 34.4");
+  });
+  var Ld = RCC.Ld(dia, fy, fck), up = Dtot - 2 * cov - 2 * dia;
+  [[1, aL - b1 / 2], [2, aR - b2 / 2]].forEach(function (c) {
+    var avail = Math.max(0, c[1] * 1000 - cov), straight = avail >= Ld, bent = avail + 8 * dia + up;
+    r.check("Anchorage of the bottom bars beyond column " + c[0] + (straight ? "" : " (bent up at the end)"), straight || bent >= Ld, U.f(straight ? avail : bent, 0) + " ≥ Ld " + U.f(Ld, 0) + " mm" + (straight ? "" : " (straight " + U.f(avail, 0) + " + 8φ + bend-up " + U.f(up, 0) + ")"), "cl 34.2.4.3, 26.2.2.1");
+  });
+  r.sum("Footing", U.f(L, 2) + " × " + U.f(B, 2) + " m, D = " + Dtot + " mm");
+  r.sum("Longitudinal", "top " + nTop.text + ", bottom " + nBot.text);
+  r.sum("Max pressure", U.f(qmax, 0) + " kN/m² (SBC " + q + ")");
+  r.res = { L: L, B: B, D: Dtot, d: d, aL: aL, aR: aR, Mhog: Mhog, Msag: Msag, chk: chk, top: nTop, bot: nBot };
+  return r;
+};
+RCC.cfSvg = function (xs, M, V, L, c1, c2) {
+  var W = 640, H = 170, ml = 46, mr = 14, sx = (W - ml - mr) / L;
+  function plot(vals, title, unit, col, invert) {
+    var mx = Math.max(1e-9, Math.max.apply(null, vals.map(Math.abs))), sy = (H / 2 - 34) / mx, y0 = H / 2 + 6;
+    var o = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="bmd" xmlns="http://www.w3.org/2000/svg"><text x="4" y="14" class="bt">' + title + '</text><path d="M' + ml + ' ' + y0 + vals.map(function (v, i) { return ' L' + (ml + xs[i] * sx).toFixed(1) + ' ' + (y0 + (invert ? 1 : -1) * v * sy).toFixed(1); }).join("") + ' L' + (ml + L * sx) + ' ' + y0 + ' Z" fill="' + col + '" fill-opacity=".18" stroke="' + col + '" stroke-width="1.6"/><line x1="' + ml + '" y1="' + y0 + '" x2="' + (W - mr) + '" y2="' + y0 + '" stroke="#6b7a8a"/>';
+    [c1, c2].forEach(function (c, k) { var X = ml + c * sx; o += '<path d="M' + X + ' ' + (y0 - 4) + ' v-14" stroke="#334155" stroke-width="3"/><text x="' + (X - 8) + '" y="' + (H - 4) + '" class="bv">C' + (k + 1) + '</text>'; });
+    var iA = 0, iB = 0; vals.forEach(function (v, i) { if (v > vals[iA]) iA = i; if (v < vals[iB]) iB = i; });
+    [iA, iB].forEach(function (i) { var v = vals[i]; if (Math.abs(v) < 0.03 * mx) return; var X = ml + xs[i] * sx, Y = y0 + (invert ? 1 : -1) * v * sy; o += '<text x="' + Math.min(W - 70, Math.max(ml, X - 18)).toFixed(1) + '" y="' + Math.min(H - 16, Math.max(26, Y + ((invert ? 1 : -1) * v > 0 ? 13 : -5))).toFixed(1) + '" class="bv">' + U.f(v, 1) + ' ' + unit + '</text>'; });
+    return o + '</svg>';
+  }
+  return '<div class="dwgs"><div class="dwgt">Longitudinal bending moment (sagging below the axis) and shear — factored</div><div class="tw">' + plot(M, "Bending moment Mu", "kNm", "#1d4ed8", true) + plot(V, "Shear force Vu", "kN", "#c2410c", false) + '</div></div>';
+};
+if (typeof module !== "undefined") module.exports = RCC;
+
 /* js/pipe.js */
 /* Analysis → seismic → design → detailing pipeline shared by the analysis screen, automatic design and the tests. */
 var PIPE = {};
 PIPE.steps = function (S, p, pd) {
   return [
     ["Solving load cases and combinations…", function () {
-      S.L = MD.cases(S.m, p); S.cb = MD.combos(S.L.cases, p.method);
+      if (S.geo && S.geo.std && p.stdLoads !== "app") {   /* loads of the STAAD file: the app's own seismic / wind generation stays off; zone from DEFINE 1893 LOAD for the detailing rules */
+        var d93 = S.geo.std.M.def1893; p.eq = false; p.rsa = false; p.wind = false;
+        if (d93) p.zone = d93.zone <= 0.1 ? "II" : d93.zone <= 0.16 ? "III" : d93.zone <= 0.24 ? "IV" : "V";
+        S.L = STD.cases(S.m, S.geo, p); S.cb = STD.combos(S.L, S.geo, p);
+      }
+      else { S.L = MD.cases(S.m, p); S.cb = MD.combos(S.L.cases, p.method); }
       S.res = FE.linear(S.m, S.L.cases, S.cb, { pdelta: pd, caseReac: true }); S.res.pd = pd; S.res.incMap = {}; S.cb.forEach(function (c) { S.res.incMap[c.name] = c.inc || 1; });
       S.se = null;
     }],
@@ -6642,6 +7901,7 @@ var MODS = {
     return r;
   },
   footing: function (p) { return RCC.footing(p); }, pile: function (p) { return FD.pile(p); }, raft: function (p) { return FD.raft(p); },
+  contbeam: function (p) { return RCC.contBeam(p); }, retwall: function (p) { return RCC.retWall(p); }, combfoot: function (p) { return RCC.combFooting(p); },
   strip: function (p) { return RCC.strip(p); }, stair: function (p) { return RCC.stair(p); }, truss: function (p) { return TR.design(p); },
   purlin: function (p) { return ST.purlin(p); }, tension: function (p) { return ST.tension(p); }, comp: function (p) {
     var q = Object.assign({}, p), kf = null;
@@ -7862,6 +9122,7 @@ var PDB = (function () {
     create: function (name, inputs) { var p = blank(name); if (inputs) p.inputs = clone(inputs); mem[p.id] = p; cur = p.id; persist(p); return p; },
     update: function (id, fields, act) { var p = mem[id]; if (!p) return null; Object.keys(fields).forEach(function (k) { p[k] = fields[k]; }); return save(p, act || "Details edited"); },
     setInputs: function (inputs) { var p = this.current(); p.inputs = clone(inputs); lsSet("isd_model2", JSON.stringify(inputs)); return save(p, null, true); },
+    setStd: function (name, text) { var p = this.current(); p.std = text ? { name: name, text: text } : null; return save(p, text ? "STAAD file imported: " + name : "STAAD file removed"); },
     setDxf: function (name, text) { var p = this.current(); p.dxf = text ? { name: name, text: text } : null; return save(p, text ? "DXF imported: " + name : "DXF removed"); },
     setSummary: function (s) { var p = this.current(); p.summary = s; p.engineRun = engine(); return save(p, null, true); },
     setReview: function (key, val) { var p = this.current(); p.review = p.review || {}; if (val) p.review[key] = val; else delete p.review[key]; return save(p, val ? "Review: " + key + " → " + val.state : "Review cleared: " + key); },
@@ -10019,7 +11280,7 @@ var HW = (function () {
 var PAR = (function () {
   var P = {}, src = null, srcP = null, url = null, pool = [], disabled = false, seq = 0, waiting = {};
   /* engine scripts: the same files the tests load (no screen code) */
-  P.ENGINE = ["data", "core", "lim", "units", "rcc", "wsm", "steel", "loads", "truss", "fem", "pushover", "dxf", "model", "se", "dt", "mat", "fdn", "reg", "beam1d", "beamx", "pipe", "boq", "elem", "est", "auto"];
+  P.ENGINE = ["data", "core", "lim", "units", "rcc", "wsm", "steel", "loads", "truss", "fem", "pushover", "dxf", "model", "std", "se", "dt", "mat", "fdn", "reg", "beam1d", "beamx", "modx", "pipe", "boq", "elem", "est", "auto"];
   var BOOT = [
     "var PDB = { current: function () { return self.__proj || null; } };",
     "function __strip(o, seen) { if (!o || typeof o !== 'object') return; if (seen.has(o)) return; seen.add(o); if (ArrayBuffer.isView(o)) return; var ks = Object.keys(o); for (var i = 0; i < ks.length; i++) { var v = o[ks[i]]; if (typeof v === 'function') delete o[ks[i]]; else if (v && typeof v === 'object') __strip(v, seen); } }",
@@ -10175,7 +11436,7 @@ var SU = (function () {
   var S = { geo: null, m: null, res: null, des: null, po: null, dx: null, L: null, sel: null, view: { yaw: -0.6, pitch: 0.45, zoom: 1, px: 0, py: 0 } };
   var DEF = {
     src: "gen", bx: "4, 4, 4", by: "5, 5", hs: "3.5, 3.2, 3.2", slabs: true, walls: false, brace: false, mesh: 1,
-    dmode: "3d", dunits: "auto", dmesh: 1, roles: {},
+    dmode: "3d", dunits: "auto", dmesh: 1, roles: {}, smesh: 0, ssurf: false, stdLoads: "file", stdCrack: false, stdShear: true,
     method: "lsm", mat: "rcc", fck: 25, fy: 500, fys: 250, colSec: "400x400", beamSec: "300x450", braceSec: "ISA 75x75x6", tSlab: 150, tWall: 200,
     crack: true, existing: false, pcCol: 2, pcBeam: 1, kcol: 1.2, base: "fixed", ksoil: 40000, fL: 2, fB: 2, supOver: "",
     ff: 1.5, ll: 3, ffRoof: 2.5, llRoof: 1.5, wall: 12, parapet: 3, bDL: 0, bLL: 0, bLLr: 0,
@@ -10201,8 +11462,9 @@ var SU = (function () {
   function save() { P = eff(); if (typeof PDB !== "undefined") PDB.setInputs(UV); else try { localStorage.setItem("isd_model2", JSON.stringify(UV)); } catch (e) {} }
   /* switching project: forget the previous model and results, restore the project's DXF */
   function resetFor(pr) {
-    S.pid = pr.id; S.geo = S.m = S.res = S.des = S.po = S.det = S.se = S.boq = S.autoRes = null; S.dx = null; S.dxName = null; S.sel = null; S.state = null;
+    S.pid = pr.id; S.geo = S.m = S.res = S.des = S.po = S.det = S.se = S.boq = S.autoRes = null; S.dx = null; S.dxName = null; S.sel = null; S.state = null; S.stdM = null; S.stdName = null; S.stdErr = null;
     if (pr.dxf && pr.dxf.text) { try { S.dx = DXF.parse(pr.dxf.text); S.dxName = pr.dxf.name; } catch (e) { S.dx = null; } }
+    if (pr.std && pr.std.text) { try { S.stdM = STD.parse(pr.std.text); S.stdName = pr.std.name; } catch (e) { S.stdM = null; } }
   }
   function set(k, v) { UV[k] = v; save(); }
   function dtxt(k) { var d = dflt(k); return typeof d === "boolean" ? (d ? "on" : "off") : String(d); }
@@ -10275,15 +11537,37 @@ var SU = (function () {
     $("bPO").onclick = runPushover;
     $("bAuto").onclick = runAuto;
     if (S.m) { status(); drawViewer(); if (S.res || S.po) renderResults(); }
-    else { try { if (P.src === "dxf" && S.dx) buildDxf(); else if (P.src !== "dxf") buildGen(true); } catch (e) {} }
+    else { try { if (P.src === "dxf" && S.dx) buildDxf(); else if (P.src === "std" && S.stdM) buildStd(true); else if (P.src === "gen") buildGen(true); } catch (e) {} }
   }
   var PIC = { p1: "geometry", p2: "material", p3: "loads", p4: "analyse", p5: "estimate" };
   function panel(id, t, body, open) {
     var m0 = /^(\d+)\s*·\s*(.*)$/.exec(t), num0 = m0 ? m0[1] : "", tt = m0 ? m0[2] : t;
     return '<section class="pnl' + (open ? " open" : "") + '" id="' + id + '"><h3><span class="pnum">' + (typeof IC !== "undefined" ? IC.svg(PIC[id] || "frame") : num0) + '</span><span class="pt">' + (num0 ? '<small>Step ' + num0 + '</small>' : '') + tt + '</span></h3><div class="pb">' + body + '</div></section>';
   }
-  function srcForm() { return '<div class="form">' + sel("src", "Model source", [["gen", "Parametric frame generator"], ["dxf", "Import DXF drawing"]]) + '<div id="srcbox" class="full">' + srcInner() + '</div></div>'; }
+  function srcForm() { return '<div class="form">' + sel("src", "Model source", [["gen", "Parametric frame generator"], ["dxf", "Import DXF drawing"], ["std", "Import STAAD.Pro input file (.std)"]]) + '<div id="srcbox" class="full">' + srcInner() + '</div></div>'; }
+  function stdInner() {
+    var M = S.stdM, h = '<div class="form inner"><label class="fld full"><span>STAAD.Pro input file (.std — STAAD Editor: File → Save, or the input listing as plain text)</span><input type="file" id="stdFile" accept=".std,.STD,.txt,text/plain,*/*"></label>' +
+      num("smesh", "Plate mesh size", "m", "0 = plates exactly as in the file (needed for a like-for-like comparison with STAAD); about 0.5 m for meaningful slab results") +
+      chk("ssurf", "Also import STAAD surfaces (meshed at the plate mesh size, 1 m if 0) — off by default: surfaces drawn on the same outline as plates duplicate them") +
+      sel("stdLoads", "Loads and combinations", [["file", "From the STAAD file (as STAAD analyses it)"], ["app", "This app's loads (Step 3) on the imported geometry"]]) +
+      chk("stdShear", "Shear deformation in members (STAAD includes it; shear area = full area for PRIS sections)") + chk("stdCrack", "Cracked-section factors (IS 1893 cl 6.4.3.1) — STAAD files are uncracked unless they say otherwise");
+    if (S.stdErr) h += '<div class="err full">' + esc(S.stdErr) + '</div>';
+    if (M) {
+      var nj = Object.keys(M.joints).length, nm = Object.keys(M.members).length, ne = Object.keys(M.elems).length, ns = Object.keys(M.surfs).length;
+      h += '<div class="full"><div class="lbl">' + esc(S.stdName || "STAAD file") + (M.title ? ' · ' + esc(M.title) : '') + '</div><div class="tw"><table><tr><th>Joints</th><th>Members</th><th>Plates</th><th>Surfaces</th><th>Load cases</th><th>Combinations</th><th>Vertical axis</th></tr><tr><td>' + nj + '</td><td>' + nm + '</td><td>' + ne + '</td><td>' + ns + '</td><td>' + M.loads.length + '</td><td>' + M.combos.length + '</td><td>' + (M.zup ? "Z (SET Z UP)" : "Y") + '</td></tr></table></div>' +
+        '<div class="tw"><table><tr><th>Case</th><th>Type</th><th>Title</th><th>Contents</th></tr>' + M.loads.map(function (L) {
+          var c = []; if (L.self.length) c.push("self weight"); if (L.joint.length) c.push("joint loads"); if (L.member.length) c.push(L.member.length + " member load line(s)"); if (L.elem.length) c.push("plate pressures"); if (L.floor.length) c.push("floor load"); if (L.eq.length) c.push("1893 " + L.eq.map(function (q) { return q.dir + " " + q.f; }).join(", ")); if (L.wind.length) c.push("wind " + L.wind.map(function (q) { return q.dir + " " + q.f; }).join(", ")); if (L.repeat.length) c.push("repeat load");
+          return '<tr><td>' + L.id + '</td><td>' + esc(L.type || "-") + '</td><td>' + esc(L.title || "") + '</td><td>' + esc(c.join("; ") || "—") + '</td></tr>'; }).join("") + '</table></div>' +
+        (M.combos.length ? '<div class="note">Combinations: ' + M.combos.map(function (c) { return c.id + " = " + Object.keys(c.f).map(function (k) { return c.f[k] + "×L" + k; }).join(" + "); }).map(esc).join(" · ") + '</div>' : '') +
+        (M.design.fc || M.design.fy ? '<div class="note">Concrete design in the file: FC ' + (M.design.fc || "-") + ' N/mm², FYMAIN ' + (M.design.fy || "-") + ' N/mm² — set as the concrete and rebar grades in Step 2' + (M.design.cover.CLEAR || M.design.cover.CLB ? '; cover ' + (M.design.cover.CLEAR || M.design.cover.CLB) + ' mm' : '') + '.</div>' : '') +
+        (M.warn.length ? '<div class="note">' + M.warn.map(esc).join("<br>") + '</div>' : '') + '</div>';
+    }
+    h += '<div class="btns"><button class="pri" id="bStd" type="button"' + (M ? "" : " disabled") + '>Build model from STAAD file</button></div>' +
+      '<div class="note full">Read: joint coordinates (incl. generation and REPEAT), member and plate incidences, STAAD surfaces, PRIS (YD/ZD, AX/IX/IY/IZ, circular) and Indian steel table sections, materials and CONSTANTS (E, ν, density, BETA), supports (FIXED, PINNED, FIXED BUT, springs), releases, MEMBER TRUSS, and loads: self weight, joint, member (UNI, CON, TRAP, LIN — global, local and projected), plate pressure, FLOOR LOAD (two-way 45° distribution to the bounding members), IS 1893 seismic from DEFINE 1893 LOAD, wind from DEFINE WIND LOAD, REPEAT LOAD and LOAD COMBINATION. Not read: member offsets, moving / time-history / spectrum loads, steel design parameters. The file is checked for common errors — see the model checks after building.</div></div>';
+    return h;
+  }
   function srcInner() {
+    if (P.src === "std") return stdInner();
     if (P.src === "gen") return '<div class="form inner">' + txt("bx", "Bay widths along X (m)", "comma separated") + txt("by", "Bay widths along Y (m)", "leave blank for a 2D plane frame") +
       txt("hs", "Storey heights, bottom up (m)") + num("mesh", "Shell mesh size", "m") + chk("slabs", "Slabs as shell elements") + chk("walls", "Shear walls in end bays (Y)") + chk("brace", "X-bracing in end bays") +
       '<div class="btns"><button class="pri" id="bGen" type="button">Generate model</button></div></div>';
@@ -10305,6 +11589,23 @@ var SU = (function () {
   }
   function bindSrc() {
     if ($("bGen")) $("bGen").onclick = function () { grab(document.getElementById("app")); try { buildGen(); } catch (e) { err(e); } };
+    if ($("stdFile")) $("stdFile").onchange = function (ev) {
+      var fl = ev.target.files[0]; if (!fl) return;
+      var rd = new FileReader();
+      rd.onload = function () {
+        var txt0 = String(rd.result);
+        try { S.stdM = STD.parse(txt0); S.stdName = fl.name; S.stdErr = null; } catch (e) { S.stdM = null; S.stdErr = e.message; }
+        if (S.stdM) {
+          var d = S.stdM.design; if (d.fc && [20, 25, 30, 35, 40].indexOf(Math.round(d.fc)) >= 0) UV.fck = Math.round(d.fc); if (d.fy && [415, 500, 550].indexOf(Math.round(d.fy)) >= 0) UV.fy = Math.round(d.fy);
+          save(); if (typeof PDB !== "undefined" && PDB.setStd) PDB.setStd(fl.name, txt0);
+          var b2 = document.querySelector("#p2 .pb"); if (b2) b2.innerHTML = propForm();
+          toast(Object.keys(S.stdM.members).length + " members, " + Object.keys(S.stdM.elems).length + " plates, " + S.stdM.loads.length + " load cases read");
+        }
+        $("srcbox").innerHTML = srcInner(); bindSrc();
+      };
+      rd.readAsText(fl);
+    };
+    if ($("bStd")) $("bStd").onclick = function () { grab(document.getElementById("app")); try { buildStd(); } catch (e) { err(e); } };
     if ($("dxfFile")) $("dxfFile").onchange = function (ev) {
       var fl = ev.target.files[0]; if (!fl) return;
       var rd = new FileReader();
@@ -10395,6 +11696,21 @@ var SU = (function () {
     var g = MD.generate({ bx: P.bx, by: P.by, hs: P.hs, twoD: !MD.list(P.by).length, slabs: P.slabs, walls: P.walls, brace: P.brace, mesh: P.mesh || 1 });
     setGeo(g); if (!quiet) toast("Model generated");
   }
+  function buildStd(quiet) {
+    if (!S.stdM) throw new Error("Choose a STAAD file first");
+    var g = STD.toGeo(S.stdM, { mesh: P.smesh > 0 ? P.smesh : 0, surfaces: !!P.ssurf, name: S.stdName });
+    setGeo(g);
+    try { S.stdAudit = STD.audit(S.stdM, g, S.m); } catch (e) { S.stdAudit = [{ sev: "info", t: "File checks not completed", d: e.message }]; }
+    status(); if (!quiet) toast("Model built from " + (S.stdName || "STAAD file"));
+  }
+  /* list of model checks as HTML */
+  function checksHtml(list, title) {
+    if (!list || !list.length) return "";
+    var ord = { high: 0, med: 1, info: 2, ok: 3 };
+    return '<div class="mchk"><h4>' + esc(title) + '</h4>' + list.slice().sort(function (a, b) { return ord[a.sev] - ord[b.sev]; }).map(function (c) {
+      return '<div class="chk ' + (c.sev === "ok" ? "ok" : c.sev === "info" ? "inf" : "no") + '"><span>' + (c.sev === "ok" ? "✔" : c.sev === "info" ? "ℹ" : c.sev === "med" ? "⚠" : "✘") + ' ' + esc(c.t) + (c.ref ? ' <i>' + esc(c.ref) + '</i>' : '') + '</span>' + (c.d ? '<small>' + esc(c.d) + '</small>' : '') + '</div>';
+    }).join("") + '</div>';
+  }
   function buildDxf() {
     if (!S.dx) throw new Error("Choose a DXF file first");
     var u = P.dunits === "auto" ? (DXF.UNITS[S.dx.units] || null) : { mm: 0.001, cm: 0.01, m: 1, ft: 0.3048, "in": 0.0254 }[P.dunits];
@@ -10412,6 +11728,7 @@ var SU = (function () {
     var h = '<div class="rep"><div class="sum"><div><span>Nodes</span><b>' + m.nodes.length + '</b></div><div><span>Frame elements</span><b>' + nf + (nf ? ' (' + Object.keys(cnt).map(function (k) { return cnt[k] + " " + k + "s"; }).join(", ") + ')' : '') + '</b></div>' +
       '<div><span>Shell elements</span><b>' + ns + '</b></div><div><span>Supports</span><b>' + nsup + '</b></div><div><span>Type</span><b>' + (m.twoD ? "2D plane frame (XZ)" : "3D space structure") + '</b></div></div>';
     if (m.warn && m.warn.length) h += '<div class="note">' + m.warn.map(esc).join("<br>") + '</div>';
+    if (S.geo && S.geo.std && S.stdAudit) h += checksHtml(S.stdAudit, "Checks of the STAAD file");
     h += '<div class="btns noprint"><button type="button" id="bExp">Export model DXF</button></div></div>';
     $("mstat").innerHTML = h;
     $("bExp").onclick = function () { var mm = { nodes: m.nodes, frames: m.frames.map(function (e) { return { n1: e.n1, n2: e.n2, layer: (e.type + " " + e.sec.name).toUpperCase() }; }), shells: m.shells, sup: m.sup }; download("model.dxf", DXF.write(mm)); };
@@ -10847,6 +12164,14 @@ var SU = (function () {
       if (S.limits && S.limits.length) h += '<div class="note"><b>' + (S.limits.some(function (x) { return x.hard; }) ? 'Existing structure — inputs outside the code limits:' : 'Code notes on the inputs:') + '</b> ' + S.limits.map(function (x) { return esc(x.msg + " (" + x.ref + ")"); }).join("<br>") + '</div>';
       if (dfl.length) h += '<div class="note"><b>Defaults used</b> (not entered): ' + esc(dfl.join(" · ")) + '</div>';
       if (S.L.notes.length) h += '<div class="note">' + S.L.notes.map(esc).join("<br>") + '</div>';
+      var mc = []; try { mc = STD.modelChecks(S); } catch (e) { mc = []; }
+      if (S.L.std) {
+        h += '<div class="note"><b>Loads from the STAAD file.</b> ' + Object.keys(S.L.titles).map(function (k) { return k + (S.L.titles[k] ? " = " + S.L.titles[k] : ""); }).map(esc).join(" · ") + '</div>';
+        Object.keys(S.L.stdEq).forEach(function (k) { var q = S.L.stdEq[k]; h += '<div class="eq">' + k + ' (1893 LOAD ' + esc(q.dir) + ' ' + q.f + '): weights from DEFINE 1893 LOAD W = ' + f(q.W, 0) + ' kN, h = ' + f(q.H, 2) + ' m, Ta = ' + f(q.T, 3) + ' s, Sa/g = ' + f(q.Sa, 3) + ', Ah = ' + f(q.Ahd, 4) + ', Vb = ' + f(q.Vb, 1) + ' kN (Z ' + q.Z + ', R ' + q.R + ', I ' + q.I + ', soil ' + q.soil + ')' + (S.L.Wt ? ' — dead + 25 % live gives W = ' + f(S.L.Wt, 0) + ' kN' : '') + '</div>'; });
+        Object.keys(S.L.stdWind).forEach(function (k) { h += '<div class="eq">' + k + ' wind: ' + S.L.stdWind[k].map(function (q) { return "WIND LOAD " + q.dir + " " + q.f + " → " + f(q.F, 1) + " kN"; }).join(", ") + ' (windward face width × storey height × intensity)</div>'; });
+      }
+      if (S.stdAudit && S.geo && S.geo.std) mc = S.stdAudit.concat(mc);
+      h += checksHtml(mc, "Model checks");
       if (r.warn && r.warn.length) h += '<div class="note"><b>Model warnings:</b> ' + r.warn.map(esc).join("<br>") + '</div>';
       Object.keys(S.L.eq).forEach(function (k) { var q = S.L.eq[k]; h += '<div class="eq">' + k + ': h = ' + f(q.H, 2) + ' m, d = ' + f(q.d, 1) + ' m, Ta = ' + f(q.T, 3) + ' s, Sa/g = ' + f(q.Sa, 3) + ', Ah = Z/2 · Sa/g / (R/I) = ' + f(q.Ah, 4) + (q.Ahd > q.Ah ? ' → min ' + f(q.Ahd, 4) + ' (Table 7)' : '') + ', W = ' + f(q.W, 0) + ' kN, <b>Vb = ' + f(q.Vb, 1) + ' kN</b></div>'; });
       Object.keys(S.L.wind).forEach(function (k) { var q = S.L.wind[k], cp = q.cpe; h += '<div class="eq">' + k + ': exposed width ' + f(q.B, 1) + ' m, total wind force ' + f(q.F, 1) + ' kN — Vz = Vb·k1·k2·k3·k4 (k1 ' + f(q.k1, 2) + '), pd = max(Kd·Ka·Kc, 0.7)·pz; ' + (cp ? 'Cpe windward ' + f(cp.ww, 2) + ', leeward ' + f(cp.lw, 2) + ' (IS 875-3 Table 5, h/w ' + f(cp.hw, 2) + ', l/w ' + f(cp.lwr, 2) + ', wind on the ' + (cp.onLong ? 'long' : 'short') + ' face) → net ' + f(cp.net, 2) + '; internal pressure ±' + f(q.cpi, 1) + ' cancels on the frame, cladding pressures ' + f(q.clad.pos, 2) + ' / ' + f(q.clad.neg, 2) + ' × pd' + (cp.note.length ? '. ' + esc(cp.note.join("; ")) : '') : 'force coefficient Cf ' + f(q.C, 2)) + (S.L.wtor && S.L.wtor[k] ? '; torsion sets 0.75·' + k + ' ± torque 0.75·Fi·0.15B' : '') + '</div>'; });
@@ -11176,11 +12501,31 @@ var SU = (function () {
       cb: n("Column size along X", 450, "mm"), cd: n("Column size along Y", 450, "mm"), sbc: n("Safe bearing capacity (net)", 200, "kN/m²"), ks: n("Modulus of subgrade reaction ks (0 = 120 × SBC)", 0, "kN/m³"),
       Df: n("Founding depth", 1.5, "m"), matT: n("Raft thickness (0 = smallest that passes)", 0, "mm"), matOff: n("Projection beyond the outer column faces", 0.5, "m"),
       setLim: n("Permissible settlement", 75, "mm", "IS 1904: raft on sand 75, clay 100"), matMesh: n("Mesh size", 0.5, "m"), lf: n("Load factor", 1.5, ""), fck: fck25, fy: fy } },
+    { id: "contbeam", grp: "RCC", icon: "┯", t: "Continuous Beam", d: "Any number of spans — pattern loading, redistribution, envelope design, curtailment", code: "IS 456 cl 22.4, 37.1", fn: function (p) { return MODS.contbeam(p); }, f: {
+      spans: { type: "text", label: "Span lengths, left to right", def: "4.5, 5, 4.5", unit: "m", help: "comma separated (up to 12 spans)" },
+      gk: { type: "text", label: "Dead load gk per span (excluding self weight)", def: "18", unit: "kN/m", help: "one value for all spans, or one per span" },
+      qk: { type: "text", label: "Imposed load qk per span", def: "10", unit: "kN/m", help: "one value for all spans, or one per span" },
+      self: sel("Add self weight 25 b D", [["yes", "Yes"], ["no", "No (included in gk)"]], "yes"),
+      endL: sel("Left end support", [["pinned", "Simple (pinned)"], ["fixed", "Fixed / monolithic"], ["free", "Free — cantilever span"]], "pinned"), endR: sel("Right end support", [["pinned", "Simple (pinned)"], ["fixed", "Fixed / monolithic"], ["free", "Free — cantilever span"]], "pinned"),
+      pattern: sel("Pattern imposed load (cl 22.4.1)", [["auto", "Auto — all spans loaded when 1.5 Q ≤ ¾ × 1.5 G"], ["on", "Always"], ["off", "Off"]], "auto"),
+      redist: n("Moment redistribution", 0, "%", "IS 456 cl 37.1.1: up to 30 %; xu/d at the supports ≤ 0.6 − δ"),
+      b: n("Width b", 300, "mm"), D: n("Overall depth D", 500, "mm"), exp: expo("moderate"), cover: n("Clear cover to stirrups", 25, "mm"), stir: bar("Stirrup dia", 8, "tie"), dia: bar("Main bar dia (for d)", 16, "main"), fck: fck25, fy: fy } },
+    { id: "retwall", grp: "Fdn", icon: "⌊", t: "Retaining Wall", d: "Cantilever wall — Rankine pressure, overturning, sliding, bearing, stem / heel / toe", code: "IS 456 cl 20", fn: function (p) { return MODS.retwall(p); }, f: {
+      H: n("Height of retained earth above founding level", 4, "m"), Df: n("Depth of the base below the ground in front", 1.0, "m"), q: n("Surcharge on the backfill", 10, "kN/m²", "traffic ≈ 10–12; nil 0"),
+      gs: n("Unit weight of soil γ", 18, "kN/m³"), phi: n("Angle of internal friction φ", 30, "°"), beta: n("Backfill slope β", 0, "°", "0 = level backfill"), mu: n("Base friction coefficient μ", 0.5, "", "0.5 typical for concrete on soil"),
+      sbc: n("Safe bearing capacity", 150, "kN/m²"), passive: sel("Passive resistance in front of the toe", [["no", "Ignore (conservative)"], ["yes", "Include (soil will not be removed)"]], "no"),
+      B: n("Base width (0 = auto)", 0, "m"), toe: n("Toe length (0 = B/3)", 0, "m"), tb: n("Base thickness (0 = auto)", 0, "mm"), ttop: n("Stem thickness at the top", 200, "mm"), tstem: n("Stem thickness at the base (0 = auto)", 0, "mm"),
+      exp: expo("moderate"), cover: n("Clear cover", 50, "mm", "earth face ≥ 50 mm"), dia: bar("Bar dia", 12, "ftg"), fck: fck25, fy: fy } },
+    { id: "combfoot", grp: "Fdn", icon: "▬", t: "Combined Footing", d: "Two columns on one rectangular footing — property line, punching, longitudinal & transverse steel", code: "IS 456 cl 34", fn: function (p) { return MODS.combfoot(p); }, f: {
+      P1: n("Column 1 service load P1", 800, "kN"), P2: n("Column 2 service load P2", 1200, "kN"), s: n("Column spacing (centre to centre)", 4, "m"),
+      c1b: n("Column 1 width (across the footing)", 400, "mm"), c1d: n("Column 1 depth (along the footing)", 400, "mm"), c2b: n("Column 2 width", 450, "mm"), c2d: n("Column 2 depth", 450, "mm"),
+      edge: sel("Column 1 position", [["free", "Free — footing may project"], ["line", "On a property line — no projection"]], "free"), projL: n("Projection beyond column 1 centre (0 = auto)", 0, "m"),
+      sbc: n("Safe bearing capacity", 200, "kN/m²"), sw: n("Self weight + backfill", 10, "% of P"), exp: expo("moderate"), cover: n("Clear cover", 50, "mm"), dia: bar("Bar dia", 16, "ftg"), fck: fck25, fy: fy } },
     { id: "strip", grp: "RCC", icon: "▁", t: "Strip / Wall Footing", d: "Under masonry walls", code: "IS 456 cl 34", fn: RCC.strip, f: {
       w: n("Wall load (service)", 150, "kN/m"), sbc: n("Safe bearing capacity", 150, "kN/m²"), sw: n("Self wt + backfill", 10, "% of w"), tw: n("Wall / block width", 350, "mm"),
       Bmin: n("Minimum width (optional)", 0, "m", "e.g. 0.76 m for 2'-6\""), Dmin: n("Minimum depth (optional)", 0, "mm", "IS 456 cl 34.1.2: ≥ 150 mm at the edge"), exp: expo("moderate"), cover: n("Clear cover", 50, "mm"), dia: bar("Bar dia", 8, "slab"), fck: fck25, fy: fy } },
     { id: "stair", grp: "RCC", icon: "↗", t: "Staircase", d: "Dog-legged / waist slab", code: "IS 456 cl 33", fn: RCC.stair, f: {
-      R: n("Riser", 150, "mm"), T: n("Tread", 250, "mm"), t: n("Waist thickness", 175, "mm"), L: n("Effective horizontal span", 3.5, "m"), LL: n("Live load", 3, "kN/m²", "3 residential, 5 public"),
+      R: n("Riser", 150, "mm"), T: n("Tread", 250, "mm"), t: n("Waist thickness", 175, "mm"), L: n("Effective horizontal span", 3.5, "m"), LL: n("Live load", 3, "kN/m²", "IS 875-2 Table 1: 3 dwellings, 4 office / educational, 5 assembly / retail"),
       FF: n("Finishes", 1, "kN/m²"), support: sel("End condition", [["ss", "Simply supported"], ["cont", "Continuous / monolithic"]], "ss"), exp: expo("mild"), cover: n("Clear cover", 20, "mm"), dia: bar("Bar dia", 10, "slab"), fck: fck, fy: fy } },
 
     { id: "truss", grp: "Steel", icon: "△", t: "Roof Truss", d: "Geometry, IS 875 loads, analysis & design", code: "IS 800 / 875", fn: TR.design, f: {
@@ -11719,7 +13064,7 @@ var SU = (function () {
       '<h4>What it does</h4><ul><li>Frame & shell FE analysis: linear static, P-Delta, modal and response spectrum (IS 1893:2016), accidental torsion, pushover</li>' +
       '<li>Design: IS 456 (limit state or working stress), IS 800, with worked calculations</li><li>Loads & durability: snow (IS 875 Pt 4), pattern imposed load, imposed-load reduction, covers for exposure and fire (IS 456 Table 16/16A)</li><li>Automatic design & detailing: storey-wise enlargement until every check passes</li>' +
       '<li>Detailing: IS 13920 beams, columns, joints, strong column–weak beam, shear walls, slabs, isolated footings; bar bending schedule (IS 2502)</li><li>Mat (raft) foundations: plate on compression-only soil springs, punching, one-way shear, flexure, settlement (IS 2950, IS 456, IS 1904)</li>' +
-      '<li>Outputs: Excel with live formulas, calculation report (print/PDF), drawing set DXF, STAAD.Pro input, BOQ of the whole building priced with JKSOR 2022 (rates inclusive of GST; contingencies and cess added) and reinforcement schedules</li>' +
+      '<li>Outputs: Excel with live formulas, calculation report (print/PDF), drawing set DXF, STAAD.Pro input (export, and import of .std files with model checks), BOQ of the whole building priced with JKSOR 2022 (rates inclusive of GST; contingencies and cess added) and reinforcement schedules</li>' +
       '<li>Projects: offline database with revisions, backups and an engineering verification mode with reviewer sign-off; engineering assistant</li><li>Standalone modules for beams, slabs, columns, footings, piles, rafts, stairs, steel members, connections, trusses and loads — input units SI / MKS / FPS, code limits on inputs, fix suggestions, and project elements with schedule, bar bending schedule and estimate</li><li>Design aids: SP 16 style charts and development-length tables</li></ul>' +
       '<h4>Not covered</h4><ul><li>Time-history analysis, combined footings, piled raft, beam-slab raft, consolidation settlement, full soil–structure interaction</li><li>Deflection and crack width in the frame design (use the beam and slab modules)</li><li>Full building wind pressure-coefficient workflow</li></ul>' +
       (window.REG ? REG.html(esc) : '') +

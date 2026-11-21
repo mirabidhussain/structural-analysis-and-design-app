@@ -126,9 +126,11 @@ MD.make = function (geo, p) {
   MD.supports(m, geo, p, warn);
   geo.frames.forEach(function (f) {
     var role = f.role === "brace" ? "brace" : f.role === "column" ? "column" : "beam";
-    var s = sec(defs[role], role, f.layer || ""), src = MD.parseSec(f.layer || "", p, role) ? "DXF layer" : "default";
+    var s = f.std ? STD.section(f.std, p, role) : sec(defs[role], role, f.layer || ""), src = f.std ? "STAAD file" : MD.parseSec(f.layer || "", p, role) ? "DXF layer" : "default";
     var A = m.nodes[f.n1], B = m.nodes[f.n2], L = Math.hypot(B.x - A.x, B.y - A.y, B.z - A.z);
     var e = { n1: f.n1, n2: f.n2, type: role, sec: s, layer: f.layer, L: L, pinned: role === "brace", src: src };
+    if (f.rel) e.rel = f.rel.slice();
+    if (f.sid !== undefined) { e.sid = f.sid; e.part = f.part; e.parts = f.parts; }
     if (s.kind === "steel") {   /* member buckling capacity for pushover */
       var r = s.row, rmin = s.shape === "L" ? r.rvv : r.ry, curve = s.shape === "L" ? "c" : "b";
       var Pc = s.A * 1e6 * ST.fcd(Math.max(L * 1000 / (rmin * 10), 1), s.fy, curve) / 1e3;
@@ -151,6 +153,7 @@ MD.make = function (geo, p) {
   var Ec = 5000 * Math.sqrt(p.fck) * 1000;
   geo.shells.forEach(function (s) {
     var h = DXF.secHint(s.layer || ""), t = (h && h.kind === "T" ? h.t : s.kind === "wall" ? p.tWall : p.tSlab) / 1000;
+    if (s.t0) { m.shells.push({ n: s.n, kind: s.kind, layer: s.layer, t: s.t0, sid: s.sid, mat: { E: s.mat0.E * (p.stdCrack ? (s.kind === "wall" ? 0.7 : 0.25) : 1), nu: s.mat0.nu, gamma: s.mat0.gamma } }); return; }   /* imported (STAAD) plate */
     m.shells.push({ n: s.n, kind: s.kind, layer: s.layer, t: t, mat: { E: Ec * (p.crack ? (s.kind === "wall" ? 0.7 : 0.25) : 1), nu: 0.2, gamma: 25 } });
   });
   m.warn = (geo.warn || []).concat(warn);
@@ -590,6 +593,7 @@ MD.supports = function (m, geo, p, warn) {
     if (allFix && base !== "fixed" && MD.SUPS[base]) { sup[k] = MD.SUPS[base].slice(); types[k] = base; if (base === "spring") spr[k] = K.slice(); }
     else { sup[k] = r.slice(); types[k] = allFix ? "fixed" : r[3] || r[4] ? "partial" : r[0] ? "pinned" : "roller"; }
   });
+  Object.keys(geo.spr || {}).forEach(function (k) { if (sup[k] && !spr[k]) { spr[k] = geo.spr[k].slice(); types[k] = "spring"; } });   /* springs from an imported file */
   MD.supRules(p.supOver).forEach(function (r) {
     if (r.err) { warn.push("Support rule line " + r.line + " ignored (use e.g. 'N12 = pinned', '3-5 = roller', 'N7 = spring' or 'N9 = free'): " + r.txt); return; }
     r.nodes.forEach(function (v) {

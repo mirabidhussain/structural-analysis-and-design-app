@@ -13,7 +13,7 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   const ids = await pg.evaluate(() => ISD.modules.map(m => m.id));
   ok('Home lists all design modules', ids.length >= 15, ids.length + ' modules');
   await pg.fill('#q', 'footing'); const vis = await pg.evaluate(() => [...document.querySelectorAll('.card.mod')].filter(c => !c.hidden).map(c => c.getAttribute('href')));
-  ok('Home search filters the modules', vis.length === 2 && vis.indexOf('#footing') >= 0 && vis.indexOf('#strip') >= 0, vis.join(' '));
+  ok('Home search filters the modules', vis.length === 3 && vis.indexOf('#footing') >= 0 && vis.indexOf('#strip') >= 0 && vis.indexOf('#combfoot') >= 0, vis.join(' '));
   await pg.fill('#q', ''); await pg.evaluate(() => document.querySelector('#fchips [data-g=Steel]').click());
   ok('Home category chips', await pg.evaluate(() => [...document.querySelectorAll('.card.mod')].filter(c => !c.hidden).length === 6));
   await pg.evaluate(() => document.querySelector('#fchips [data-g=all]').click());
@@ -245,6 +245,26 @@ function ok(n, c, i) { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') 
   await pg.evaluate(() => { location.hash = '#beam'; }); await pg.waitForSelector('#f'); await pg.click('button.pri'); await pg.waitForSelector('#out .rep', { timeout: 30000 }); await pg.waitForTimeout(300);
   const aud = await pg.evaluate(() => { const a = document.querySelector('#out .audit'); return a ? { chip: a.querySelector('.vchip').textContent, stamp: !!a.querySelector('.stamp'), gaps: a.querySelectorAll('.ag li').length, crack: /wcr/.test(document.querySelector('#out').textContent) } : null; });
   ok('Member report carries the design audit: verification state, items not covered and the not-for-construction stamp; beam crack widths reported', aud && aud.chip === 'Calculated' && aud.stamp && aud.gaps >= 3 && aud.crack, JSON.stringify(aud));
+  /* v4.0: continuous beam envelope, retaining wall and combined footing drawings, STAAD import with model checks */
+  for (const [id, re] of [['contbeam', /Bending moment envelope/], ['retwall', /Section \(per m run\)/], ['combfoot', /Longitudinal bending moment/]]) {
+    await pg.evaluate(i => { location.hash = '#' + i; }, id); await pg.waitForSelector('#f'); await pg.click('button.pri'); await pg.waitForSelector('#out .rep', { timeout: 30000 });
+    const v = await pg.evaluate(() => ({ svg: document.querySelectorAll('#out svg.bmd').length, txt: document.querySelector('#out').textContent, pass: !!document.querySelector('#out .badge.pass'), aud: !!document.querySelector('#out .audit') }));
+    ok('v4 module ' + id + ' designs, draws and carries the design audit', v.svg >= 1 && re.test(v.txt) && v.pass && v.aud, JSON.stringify({ svg: v.svg, pass: v.pass, aud: v.aud }));
+  }
+  await pg.evaluate(() => { location.hash = '#model'; }); await pg.waitForSelector('[data-k=src]');
+  await pg.evaluate(() => { const e = document.querySelector('[data-k=src]'); e.value = 'std'; e.dispatchEvent(new Event('change', { bubbles: true })); });
+  await pg.waitForSelector('#stdFile');
+  await pg.setInputFiles('#stdFile', __dirname + '/g5.std'); await pg.waitForSelector('#bStd:not([disabled])', { timeout: 20000 });
+  const stp = await pg.evaluate(() => ({ t: document.getElementById("srcbox").textContent, fck: SU.ctx().params().fck, fy: SU.ctx().params().fy }));
+  ok('STAAD file read: 285 members, 18 plates, 6 load cases, 4 combinations; FC 25 / FYMAIN 415 taken as the grades', /285/.test(stp.t) && /18/.test(stp.t) && stp.fck === 25 && stp.fy === 415, JSON.stringify({ fck: stp.fck, fy: stp.fy }));
+  await pg.evaluate(() => { const e = document.querySelector('[data-k=ssurf]'); if (e.checked) e.click(); });
+  await pg.click('#bStd'); await pg.waitForSelector('#mstat .mchk', { timeout: 30000 });
+  const fc = await pg.evaluate(() => document.querySelector('#mstat .mchk').textContent);
+  ok('STAAD file checks flag the cancelling wind cases, the low seismic weight and the missing 1.5(DL + LL)', /Wind loads cancel/.test(fc) && /Seismic weight low/.test(fc) && /No 1\.5\(DL \+ LL\)/.test(fc), fc.slice(0, 160));
+  await pg.click('#bAna'); await pg.waitForSelector('#results .mchk', { timeout: 180000 });
+  const ar = await pg.evaluate(() => ({ eq: [...document.querySelectorAll('#results .eq')].map(e => e.textContent).slice(0, 1).join(''), t: document.getElementById('results').textContent, nb: SU.state().m.frames.length, cb: SU.state().cb.map(c => c.name).join('|') }));
+  ok('STAAD model analysed with the file\'s loads and combinations; model checks shown', ar.nb === 285 && /C7/.test(ar.cb) && /Loads from the STAAD file/.test(ar.t) && /Vb = 20[67]\.\d/.test(ar.t) && /zero net horizontal force/.test(ar.t), ar.cb + ' ' + JSON.stringify({ nb: ar.nb, ld: /Loads from the STAAD file/.test(ar.t), vb: /Vb = 20[67]\.\d/.test(ar.t), zero: /zero net horizontal force/.test(ar.t), eq: ar.eq }));
+  await pg.evaluate(() => { const e = document.querySelector('[data-k=src]'); e.value = 'gen'; e.dispatchEvent(new Event('change', { bubbles: true })); });
   ok('No JavaScript errors', errs.length === 0, errs.slice(0, 3).join(' | '));
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);

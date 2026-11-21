@@ -63,11 +63,31 @@
       cb: n("Column size along X", 450, "mm"), cd: n("Column size along Y", 450, "mm"), sbc: n("Safe bearing capacity (net)", 200, "kN/m²"), ks: n("Modulus of subgrade reaction ks (0 = 120 × SBC)", 0, "kN/m³"),
       Df: n("Founding depth", 1.5, "m"), matT: n("Raft thickness (0 = smallest that passes)", 0, "mm"), matOff: n("Projection beyond the outer column faces", 0.5, "m"),
       setLim: n("Permissible settlement", 75, "mm", "IS 1904: raft on sand 75, clay 100"), matMesh: n("Mesh size", 0.5, "m"), lf: n("Load factor", 1.5, ""), fck: fck25, fy: fy } },
+    { id: "contbeam", grp: "RCC", icon: "┯", t: "Continuous Beam", d: "Any number of spans — pattern loading, redistribution, envelope design, curtailment", code: "IS 456 cl 22.4, 37.1", fn: function (p) { return MODS.contbeam(p); }, f: {
+      spans: { type: "text", label: "Span lengths, left to right", def: "4.5, 5, 4.5", unit: "m", help: "comma separated (up to 12 spans)" },
+      gk: { type: "text", label: "Dead load gk per span (excluding self weight)", def: "18", unit: "kN/m", help: "one value for all spans, or one per span" },
+      qk: { type: "text", label: "Imposed load qk per span", def: "10", unit: "kN/m", help: "one value for all spans, or one per span" },
+      self: sel("Add self weight 25 b D", [["yes", "Yes"], ["no", "No (included in gk)"]], "yes"),
+      endL: sel("Left end support", [["pinned", "Simple (pinned)"], ["fixed", "Fixed / monolithic"], ["free", "Free — cantilever span"]], "pinned"), endR: sel("Right end support", [["pinned", "Simple (pinned)"], ["fixed", "Fixed / monolithic"], ["free", "Free — cantilever span"]], "pinned"),
+      pattern: sel("Pattern imposed load (cl 22.4.1)", [["auto", "Auto — all spans loaded when 1.5 Q ≤ ¾ × 1.5 G"], ["on", "Always"], ["off", "Off"]], "auto"),
+      redist: n("Moment redistribution", 0, "%", "IS 456 cl 37.1.1: up to 30 %; xu/d at the supports ≤ 0.6 − δ"),
+      b: n("Width b", 300, "mm"), D: n("Overall depth D", 500, "mm"), exp: expo("moderate"), cover: n("Clear cover to stirrups", 25, "mm"), stir: bar("Stirrup dia", 8, "tie"), dia: bar("Main bar dia (for d)", 16, "main"), fck: fck25, fy: fy } },
+    { id: "retwall", grp: "Fdn", icon: "⌊", t: "Retaining Wall", d: "Cantilever wall — Rankine pressure, overturning, sliding, bearing, stem / heel / toe", code: "IS 456 cl 20", fn: function (p) { return MODS.retwall(p); }, f: {
+      H: n("Height of retained earth above founding level", 4, "m"), Df: n("Depth of the base below the ground in front", 1.0, "m"), q: n("Surcharge on the backfill", 10, "kN/m²", "traffic ≈ 10–12; nil 0"),
+      gs: n("Unit weight of soil γ", 18, "kN/m³"), phi: n("Angle of internal friction φ", 30, "°"), beta: n("Backfill slope β", 0, "°", "0 = level backfill"), mu: n("Base friction coefficient μ", 0.5, "", "0.5 typical for concrete on soil"),
+      sbc: n("Safe bearing capacity", 150, "kN/m²"), passive: sel("Passive resistance in front of the toe", [["no", "Ignore (conservative)"], ["yes", "Include (soil will not be removed)"]], "no"),
+      B: n("Base width (0 = auto)", 0, "m"), toe: n("Toe length (0 = B/3)", 0, "m"), tb: n("Base thickness (0 = auto)", 0, "mm"), ttop: n("Stem thickness at the top", 200, "mm"), tstem: n("Stem thickness at the base (0 = auto)", 0, "mm"),
+      exp: expo("moderate"), cover: n("Clear cover", 50, "mm", "earth face ≥ 50 mm"), dia: bar("Bar dia", 12, "ftg"), fck: fck25, fy: fy } },
+    { id: "combfoot", grp: "Fdn", icon: "▬", t: "Combined Footing", d: "Two columns on one rectangular footing — property line, punching, longitudinal & transverse steel", code: "IS 456 cl 34", fn: function (p) { return MODS.combfoot(p); }, f: {
+      P1: n("Column 1 service load P1", 800, "kN"), P2: n("Column 2 service load P2", 1200, "kN"), s: n("Column spacing (centre to centre)", 4, "m"),
+      c1b: n("Column 1 width (across the footing)", 400, "mm"), c1d: n("Column 1 depth (along the footing)", 400, "mm"), c2b: n("Column 2 width", 450, "mm"), c2d: n("Column 2 depth", 450, "mm"),
+      edge: sel("Column 1 position", [["free", "Free — footing may project"], ["line", "On a property line — no projection"]], "free"), projL: n("Projection beyond column 1 centre (0 = auto)", 0, "m"),
+      sbc: n("Safe bearing capacity", 200, "kN/m²"), sw: n("Self weight + backfill", 10, "% of P"), exp: expo("moderate"), cover: n("Clear cover", 50, "mm"), dia: bar("Bar dia", 16, "ftg"), fck: fck25, fy: fy } },
     { id: "strip", grp: "RCC", icon: "▁", t: "Strip / Wall Footing", d: "Under masonry walls", code: "IS 456 cl 34", fn: RCC.strip, f: {
       w: n("Wall load (service)", 150, "kN/m"), sbc: n("Safe bearing capacity", 150, "kN/m²"), sw: n("Self wt + backfill", 10, "% of w"), tw: n("Wall / block width", 350, "mm"),
       Bmin: n("Minimum width (optional)", 0, "m", "e.g. 0.76 m for 2'-6\""), Dmin: n("Minimum depth (optional)", 0, "mm", "IS 456 cl 34.1.2: ≥ 150 mm at the edge"), exp: expo("moderate"), cover: n("Clear cover", 50, "mm"), dia: bar("Bar dia", 8, "slab"), fck: fck25, fy: fy } },
     { id: "stair", grp: "RCC", icon: "↗", t: "Staircase", d: "Dog-legged / waist slab", code: "IS 456 cl 33", fn: RCC.stair, f: {
-      R: n("Riser", 150, "mm"), T: n("Tread", 250, "mm"), t: n("Waist thickness", 175, "mm"), L: n("Effective horizontal span", 3.5, "m"), LL: n("Live load", 3, "kN/m²", "3 residential, 5 public"),
+      R: n("Riser", 150, "mm"), T: n("Tread", 250, "mm"), t: n("Waist thickness", 175, "mm"), L: n("Effective horizontal span", 3.5, "m"), LL: n("Live load", 3, "kN/m²", "IS 875-2 Table 1: 3 dwellings, 4 office / educational, 5 assembly / retail"),
       FF: n("Finishes", 1, "kN/m²"), support: sel("End condition", [["ss", "Simply supported"], ["cont", "Continuous / monolithic"]], "ss"), exp: expo("mild"), cover: n("Clear cover", 20, "mm"), dia: bar("Bar dia", 10, "slab"), fck: fck, fy: fy } },
 
     { id: "truss", grp: "Steel", icon: "△", t: "Roof Truss", d: "Geometry, IS 875 loads, analysis & design", code: "IS 800 / 875", fn: TR.design, f: {
@@ -606,7 +626,7 @@
       '<h4>What it does</h4><ul><li>Frame & shell FE analysis: linear static, P-Delta, modal and response spectrum (IS 1893:2016), accidental torsion, pushover</li>' +
       '<li>Design: IS 456 (limit state or working stress), IS 800, with worked calculations</li><li>Loads & durability: snow (IS 875 Pt 4), pattern imposed load, imposed-load reduction, covers for exposure and fire (IS 456 Table 16/16A)</li><li>Automatic design & detailing: storey-wise enlargement until every check passes</li>' +
       '<li>Detailing: IS 13920 beams, columns, joints, strong column–weak beam, shear walls, slabs, isolated footings; bar bending schedule (IS 2502)</li><li>Mat (raft) foundations: plate on compression-only soil springs, punching, one-way shear, flexure, settlement (IS 2950, IS 456, IS 1904)</li>' +
-      '<li>Outputs: Excel with live formulas, calculation report (print/PDF), drawing set DXF, STAAD.Pro input, BOQ of the whole building priced with JKSOR 2022 (rates inclusive of GST; contingencies and cess added) and reinforcement schedules</li>' +
+      '<li>Outputs: Excel with live formulas, calculation report (print/PDF), drawing set DXF, STAAD.Pro input (export, and import of .std files with model checks), BOQ of the whole building priced with JKSOR 2022 (rates inclusive of GST; contingencies and cess added) and reinforcement schedules</li>' +
       '<li>Projects: offline database with revisions, backups and an engineering verification mode with reviewer sign-off; engineering assistant</li><li>Standalone modules for beams, slabs, columns, footings, piles, rafts, stairs, steel members, connections, trusses and loads — input units SI / MKS / FPS, code limits on inputs, fix suggestions, and project elements with schedule, bar bending schedule and estimate</li><li>Design aids: SP 16 style charts and development-length tables</li></ul>' +
       '<h4>Not covered</h4><ul><li>Time-history analysis, combined footings, piled raft, beam-slab raft, consolidation settlement, full soil–structure interaction</li><li>Deflection and crack width in the frame design (use the beam and slab modules)</li><li>Full building wind pressure-coefficient workflow</li></ul>' +
       (window.REG ? REG.html(esc) : '') +

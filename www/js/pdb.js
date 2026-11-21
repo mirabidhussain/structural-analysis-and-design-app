@@ -75,6 +75,7 @@ var PDB = (function () {
     create: function (name, inputs) { var p = blank(name); if (inputs) p.inputs = clone(inputs); mem[p.id] = p; cur = p.id; persist(p); return p; },
     update: function (id, fields, act) { var p = mem[id]; if (!p) return null; Object.keys(fields).forEach(function (k) { p[k] = fields[k]; }); return save(p, act || "Details edited"); },
     setInputs: function (inputs) { var p = this.current(); p.inputs = clone(inputs); lsSet("isd_model2", JSON.stringify(inputs)); return save(p, null, true); },
+    setStd: function (name, text) { var p = this.current(); p.std = text ? { name: name, text: text } : null; return save(p, text ? "STAAD file imported: " + name : "STAAD file removed"); },
     setDxf: function (name, text) { var p = this.current(); p.dxf = text ? { name: name, text: text } : null; return save(p, text ? "DXF imported: " + name : "DXF removed"); },
     setSummary: function (s) { var p = this.current(); p.summary = s; p.engineRun = engine(); return save(p, null, true); },
     setReview: function (key, val) { var p = this.current(); p.review = p.review || {}; if (val) p.review[key] = val; else delete p.review[key]; return save(p, val ? "Review: " + key + " → " + val.state : "Review cleared: " + key); },

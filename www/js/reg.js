@@ -2,7 +2,7 @@
    Status: Verified = agrees with an independent benchmark in test/*.js; Calculated = implemented from the code clauses, checked
    for internal consistency but not against an independent benchmark; Simplified = stated approximation; Not implemented. */
 var REG = {};
-REG.ENGINE = "3.12";
+REG.ENGINE = "4.0";
 REG.STANDARDS = [
   ["IS 456:2000", "Plain and reinforced concrete — code of practice (Fourth Revision), with amendments", "In use", "Limit state and working stress (Annex B) design, detailing rules"],
   ["IS 13920:2016", "Ductile design and detailing of RC structures subjected to seismic forces (First Revision)", "In use", "Applied in zones III–V: beams cl 6, columns cl 7–8, joints cl 9, walls cl 10"],
@@ -84,12 +84,19 @@ REG.CHECKS = [
   ["RCC design", "Long-term deflection (IS 456 Annex C: shrinkage and creep) and vibration of floors", "Not implemented", "The span / depth rule of cl 23.2.1 is the code's deemed-to-satisfy check; calculate deflections for long spans, cantilevers over 10 m and brittle finishes"],
   ["Steel design", "Combined axial force and bending interaction (cl 9.3) — independent benchmark", "Calculated", "Implemented from the clauses; no published worked example compared yet"],
   ["Foundations", "Punching with unbalanced moment transfer (IS 456 cl 31.6.2.2) — mat foundation", "Verified", "acceptance.js T13–T14: interior and edge column polar moments and shear fractions equal the closed forms; pile caps and isolated footings check punching from the axial load"],
-  ["Audit", "Design audit on every report: verification state, checks not covered, not-for-construction stamp", "Verified", "acceptance.js T19–T20; UI test; frame report stamped until all items are reviewed and the status is Checked or Issued"]
+  ["Audit", "Design audit on every report: verification state, checks not covered, not-for-construction stamp", "Verified", "acceptance.js T19–T20; UI test; frame report stamped until all items are reviewed and the status is Checked or Issued"],
+  ["Analysis", "Member loads: point, partial and linearly varying (trapezoidal / triangular) loads on frame members", "Verified", "fem_verify.js 9: fixed-end moments Pab²/L², moment under a point load, triangular-load Mmax = wL²/(9√3), partial-UDL reactions; equal to a split model with a nodal load"],
+  ["Analysis", "Shear deformation of members (Timoshenko, shear areas Avy / Avz) — used for STAAD imports", "Verified", "fem_verify.js 8: cantilever tip PL³/3EI + PL/(G·Av) and fixed-beam mid-span deflection to closed form"],
+  ["Import", "STAAD.Pro input (.std): geometry, sections, materials, supports, releases, self weight, joint / member / plate / floor loads, IS 1893 and wind loads, repeat loads, combinations", "Verified", "std_verify.js: hand results for point / partial / floor (two-way 45°) loads, unit conversion, Z-up, generation, 1893 base shear Ah·W; G+5 report re-analysed: beam 133 dead-load end forces and the 1893 seismic weight (10 979 kN) agree with STAAD's printed output. Wind from DEFINE WIND LOAD applied to the windward face per storey — simplified against STAAD's exposed-area method"],
+  ["Import", "Model checks: cancelling load cases, columns in tension under gravity, unloaded beams, seismic weight vs dead + 25/50 % live, missing 1.5(DL+LL), EQ + WL together, no reversals, large or duplicate plates, self weight counted twice", "Verified", "std_verify.js 5 and the G+5 STAAD file: every error found by hand in that report is flagged"],
+  ["RCC design", "Continuous beam: IS 456 cl 22.4.1 load arrangements, envelope, cl 37.1.1 redistribution (≤ 30 %, 70 % of the elastic envelope, xu/d ≤ 0.6 − δ), flexure, shear, deflection, crack width, curtailment", "Verified", "v4_verify.js: two-span wL²/8 and 9wL²/128, three-span 0.1G + 0.117Q at the support and 0.025G + 0.075Q in the middle span, 20 % redistribution, cantilever end wL²/2"],
+  ["Foundations", "Cantilever retaining wall: Rankine Ka (level and sloping backfill), IS 456 cl 20.1 overturning and cl 20.2 sliding, base pressure, stem / heel / toe design", "Calculated", "v4_verify.js: weights, restoring moment, stability ratios, toe pressure and stem moment equal independent statics; Ka for β = 15°. No published worked example reproduced yet"],
+  ["Foundations", "Combined footing (two columns): centred on the resultant or on a property line, longitudinal bending by statics, punching (3-sided at the boundary), one-way shear, transverse column bands", "Calculated", "v4_verify.js: resultant at the centre, hogging moment equal to statics (wx²/2 − Pu1(x − a)); column band width column + 0.75 d each side (practice, not code)"]
 ];
 /* stable ids of REG.CHECKS rows, used by the verification mode */
 REG.IDS = ["frame", "shell", "pdelta", "pushover", "modelchk", "spectrum", "statbase", "modal", "rsa", "torsion", "irreg", "mmc", "timehist",
   "rcbeam", "rccol", "rcslab", "rcwallel", "rcwall", "servic", "stfcd", "stltb", "stklen", "dtbeam", "dtcol", "scwb", "joint", "dtslab", "bbs",
-  "foot", "footpress", "mat", "matsoil", "pilecap", "pilelat", "pilegrp", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto", "inlim", "fixes", "units", "elements", "slabauto", "dxfmore", "perf", "aids", "beam1d", "framesup", "beamends", "cantslab", "efflen", "trussbear", "servlt", "stcomb", "punchmt", "audit"];
+  "foot", "footpress", "mat", "matsoil", "pilecap", "pilelat", "pilegrp", "foundmore", "wind", "wsmwall", "snow", "pattern", "llred", "cover", "boq", "auto", "inlim", "fixes", "units", "elements", "slabauto", "dxfmore", "perf", "aids", "beam1d", "framesup", "beamends", "cantslab", "efflen", "trussbear", "servlt", "stcomb", "punchmt", "audit", "memload", "timosh", "stdimp", "stdchk", "contbeam", "retwall", "combfoot"];
 REG.byId = function (id) { var i = REG.IDS.indexOf(id); return i >= 0 ? { id: id, area: REG.CHECKS[i][0], t: REG.CHECKS[i][1], st: REG.CHECKS[i][2], ev: REG.CHECKS[i][3] } : null; };
 REG.RANK = { "Not implemented": 0, Simplified: 1, Approximate: 1, Calculated: 2, Verified: 3 };
 /* checks behind each kind of result; the weakest decides the result's verification state */
@@ -111,7 +118,8 @@ if (typeof module !== "undefined") module.exports = REG;
    engineer has checked it — the app never issues one by itself */
 REG.MOD = { beam: ["beam1d", "beamends", "rcbeam", "servic"], slab: ["slabauto", "cantslab", "dtslab"], slab1: ["slabauto", "cantslab"], slab2: ["slabauto", "dtslab"], column: ["rccol", "efflen"],
   footing: ["foot", "footpress"], strip: ["foot", "footpress"], pile: ["pilecap", "pilelat", "pilegrp"], raft: ["mat", "matsoil"], stair: ["dtslab"], truss: ["frame", "stfcd", "trussbear", "wind"],
-  purlin: ["stltb"], tension: [], comp: ["stfcd", "efflen"], sbeam: ["stltb", "efflen"], bolts: [], roof: ["wind", "snow"], seismic: ["statbase", "spectrum"] };
+  purlin: ["stltb"], tension: [], comp: ["stfcd", "efflen"], sbeam: ["stltb", "efflen"], bolts: [], roof: ["wind", "snow"], seismic: ["statbase", "spectrum"],
+  contbeam: ["beam1d", "contbeam", "rcbeam", "servic"], retwall: ["retwall"], combfoot: ["combfoot", "foot"] };
 REG.GAPS = {
   beam: ["Long-term deflection is not calculated (IS 456 Annex C) — the span / effective depth rule of cl 23.2.1 is used, as the code allows", "Crack width uses the service moment taken as factored ÷ 1.5", "Loads are entered by the designer — confirm them against IS 875 and the layout"],
   slab: ["Crack width is not calculated — bar spacing limits of cl 26.3.3 control cracking", "Long-term deflection is not calculated — span / depth rule of cl 23.2.1 / 24.1"],
@@ -126,7 +134,10 @@ REG.GAPS = {
   truss: ["Connections other than the gusset check are not designed", "Wind pressure coefficients for the roof are taken from the generator inputs — confirm against IS 875-3 Tables 6, 7"],
   roof: ["Snow drift and unbalanced snow (IS 875-4) are not modelled"],
   seismic: ["Equivalent static method only — use dynamic analysis where IS 1893 cl 7.7.1 requires it"],
-  tension: [], comp: [], sbeam: ["Web bearing and buckling under concentrated loads are not checked"], bolts: [], purlin: []
+  tension: [], comp: [], sbeam: ["Web bearing and buckling under concentrated loads are not checked"], bolts: [], purlin: [],
+  contbeam: ["Interior supports are knife-edge: columns monolithic with the beam (frame action) are not modelled — use the frame analysis for that", "Long-term deflection is not calculated — span / effective depth rule of cl 23.2.1", "Torsion from eccentric loads or edge slabs is not checked"],
+  retwall: ["Drained backfill assumed — no water pressure; provide weep holes and a filter layer", "No seismic earth pressure (IS 1893 Part 3 / Mononobe–Okabe)", "Shear key not designed — widen the base or add a key when sliding governs", "Settlement and global (slip-circle) stability are not checked"],
+  combfoot: ["Column moments are not included — the footing is sized for axial loads (rigid footing, linear soil pressure)", "Settlement is not calculated (IS 8009)", "Transverse band width (column + 0.75 d each side) follows common practice, not an IS 456 clause"]
 };
 REG.audit = function (id) {
   var ids = REG.MOD[id] || [], rows = ids.map(REG.byId).filter(Boolean), w = REG.state(ids) || { st: "Calculated" }, gaps = (REG.GAPS[id] || []).slice();
