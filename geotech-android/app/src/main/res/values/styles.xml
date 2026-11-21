@@ -1,0 +1,10 @@
+<resources>
+    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">#121418</item>
+        <item name="android:colorPrimaryDark">#121418</item>
+        <item name="android:colorAccent">#B5862A</item>
+        <item name="android:statusBarColor">#121418</item>
+        <item name="android:navigationBarColor">#121418</item>
+        <item name="android:windowBackground">@drawable/splash</item>
+    </style>
+</resources>

@@ -31,6 +31,8 @@ jobs:
         run: node test/v4_verify.js | tee v4.txt && ! grep -q FAIL v4.txt
       - name: IS StructModeller engine and DXF round trip into IS StructDesign
         run: node modeller/test/core_test.js
+      - name: IS GeoTech engine against published values
+        run: node geotech/test/core_test.js
       - name: Sample design report (diagnostic, not pass/fail)
         run: node test/smoke.js
 
@@ -51,6 +53,8 @@ jobs:
       - run: node test/ui_ci.js
       - name: IS StructModeller browser test
         run: python modeller/build.py && node modeller/test/ui_test.js
+      - name: IS GeoTech browser test
+        run: python geotech/build.py && node geotech/test/ui_test.js
 
   excel:
     name: Excel formulas recomputed by LibreOffice

@@ -3,7 +3,7 @@ name: Deploy web app to GitHub Pages
 on:
   push:
     branches: [ main ]
-    paths: [ 'www/**', 'build.py', 'versions/**', 'modeller/www/**', '.github/workflows/pages.yml' ]
+    paths: [ 'www/**', 'build.py', 'versions/**', 'modeller/www/**', 'geotech/www/**', '.github/workflows/pages.yml' ]
   workflow_dispatch:
 
 permissions:
@@ -34,6 +34,7 @@ jobs:
           cp dist/index.html site/standalone.html
           cp -r versions site/versions
           mkdir -p site/modeller && cp -r modeller/www/* site/modeller/
+          mkdir -p site/geotech && cp -r geotech/www/* site/geotech/
       - uses: actions/configure-pages@v5
         with:
           enablement: true

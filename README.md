@@ -4,6 +4,8 @@ Offline Android app for structural design to Indian Standards (limit state metho
 
 **Companion app — [IS StructModeller](modeller/README.md):** model a building on grids and storeys, then export a 3D analysis DXF that imports straight into IS StructDesign, or 2D framing plans for CAD. Releases are tagged `modeller-v…`.
 
+**Companion app — [IS GeoTech](geotech/README.md):** borehole data, soil classification, bearing capacity (IS 6403), settlement (IS 8009), pressure bulb and plate load tests. Releases are tagged `geotech-v…`.
+
 | Area | Modules | Code |
 |---|---|---|
 | RCC | Beam, one-way slab, two-way slab (Table 26/27), column (strain compatibility + Bresler biaxial, slender), isolated footing, strip/wall footing, staircase | IS 456:2000 |

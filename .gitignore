@@ -16,3 +16,8 @@ modeller-android/.gradle/
 modeller-android/build/
 modeller-android/app/build/
 modeller-android/local.properties
+dist-geotech/
+geotech-android/.gradle/
+geotech-android/build/
+geotech-android/app/build/
+geotech-android/local.properties
